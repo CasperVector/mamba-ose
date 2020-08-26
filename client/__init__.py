@@ -1,0 +1,2 @@
+logger = None
+config = None
