@@ -1,5 +1,6 @@
 module Dashboard {
     sequence<byte> bytes;
+    sequence<string> strings;
 
     exception UnauthorizedError {
         string reason;
@@ -11,9 +12,30 @@ module Dashboard {
         void stdout(bytes s);
     };
 
-    interface DataClient{
-        void dataUpdate(string id, string json);
-        void clear();
+    struct DataFrame {
+        string name;
+        bytes value;
+        double timestamp;
+    };
+
+    enum DataType { Float, String };
+    sequence<int> Shape;
+
+    struct DataDescriptor {
+        string name;
+        DataType type;
+        Shape shape;
+    };
+
+    sequence<DataDescriptor> DataDescriptors;
+    sequence<DataFrame> DataFrames;
+
+    enum ScanExitStatus { Success, Abort, Fail };
+
+    interface DataClient {
+        void scanStart(string id, DataDescriptors keys);
+        void dataUpdate(DataFrames data);
+        void scanEnd(ScanExitStatus status);
     };
 
     // --- Server Side ---
@@ -40,7 +62,7 @@ module Dashboard {
 
     interface DataHost {
         void registerClient(DataClient* client) throws UnauthorizedError;
-        void subscribe(string item_name) throws UnauthorizedError;
+        void subscribe(strings items) throws UnauthorizedError;
         void subscribeAll() throws UnauthorizedError;
     };
 };

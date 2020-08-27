@@ -24,6 +24,9 @@ __name__ = 'Dashboard'
 if '_t_bytes' not in _M_Dashboard.__dict__:
     _M_Dashboard._t_bytes = IcePy.defineSequence('::Dashboard::bytes', (), IcePy._t_byte)
 
+if '_t_strings' not in _M_Dashboard.__dict__:
+    _M_Dashboard._t_strings = IcePy.defineSequence('::Dashboard::strings', (), IcePy._t_string)
+
 if 'UnauthorizedError' not in _M_Dashboard.__dict__:
     _M_Dashboard.UnauthorizedError = Ice.createTempClass()
     class UnauthorizedError(Ice.UserException):
@@ -106,23 +109,245 @@ if 'TerminalClientPrx' not in _M_Dashboard.__dict__:
     _M_Dashboard.TerminalClient = TerminalClient
     del TerminalClient
 
+if 'DataFrame' not in _M_Dashboard.__dict__:
+    _M_Dashboard.DataFrame = Ice.createTempClass()
+    class DataFrame(object):
+        def __init__(self, name='', value=None, timestamp=0.0):
+            self.name = name
+            self.value = value
+            self.timestamp = timestamp
+
+        def __eq__(self, other):
+            if other is None:
+                return False
+            elif not isinstance(other, _M_Dashboard.DataFrame):
+                return NotImplemented
+            else:
+                if self.name != other.name:
+                    return False
+                if self.value != other.value:
+                    return False
+                if self.timestamp != other.timestamp:
+                    return False
+                return True
+
+        def __ne__(self, other):
+            return not self.__eq__(other)
+
+        def __str__(self):
+            return IcePy.stringify(self, _M_Dashboard._t_DataFrame)
+
+        __repr__ = __str__
+
+    _M_Dashboard._t_DataFrame = IcePy.defineStruct('::Dashboard::DataFrame', DataFrame, (), (
+        ('name', (), IcePy._t_string),
+        ('value', (), _M_Dashboard._t_bytes),
+        ('timestamp', (), IcePy._t_double)
+    ))
+
+    _M_Dashboard.DataFrame = DataFrame
+    del DataFrame
+
+if 'DataType' not in _M_Dashboard.__dict__:
+    _M_Dashboard.DataType = Ice.createTempClass()
+    class DataType(Ice.EnumBase):
+
+        def __init__(self, _n, _v):
+            Ice.EnumBase.__init__(self, _n, _v)
+
+        def valueOf(self, _n):
+            if _n in self._enumerators:
+                return self._enumerators[_n]
+            return None
+        valueOf = classmethod(valueOf)
+
+    DataType.Float = DataType("Float", 0)
+    DataType.String = DataType("String", 1)
+    DataType._enumerators = { 0:DataType.Float, 1:DataType.String }
+
+    _M_Dashboard._t_DataType = IcePy.defineEnum('::Dashboard::DataType', DataType, (), DataType._enumerators)
+
+    _M_Dashboard.DataType = DataType
+    del DataType
+
+if '_t_Shape' not in _M_Dashboard.__dict__:
+    _M_Dashboard._t_Shape = IcePy.defineSequence('::Dashboard::Shape', (), IcePy._t_int)
+
+if 'DataDescriptor' not in _M_Dashboard.__dict__:
+    _M_Dashboard.DataDescriptor = Ice.createTempClass()
+    class DataDescriptor(object):
+        def __init__(self, name='', type=_M_Dashboard.DataType.Float, shape=None):
+            self.name = name
+            self.type = type
+            self.shape = shape
+
+        def __hash__(self):
+            _h = 0
+            _h = 5 * _h + Ice.getHash(self.name)
+            _h = 5 * _h + Ice.getHash(self.type)
+            if self.shape:
+                for _i0 in self.shape:
+                    _h = 5 * _h + Ice.getHash(_i0)
+            return _h % 0x7fffffff
+
+        def __compare(self, other):
+            if other is None:
+                return 1
+            elif not isinstance(other, _M_Dashboard.DataDescriptor):
+                return NotImplemented
+            else:
+                if self.name is None or other.name is None:
+                    if self.name != other.name:
+                        return (-1 if self.name is None else 1)
+                else:
+                    if self.name < other.name:
+                        return -1
+                    elif self.name > other.name:
+                        return 1
+                if self.type is None or other.type is None:
+                    if self.type != other.type:
+                        return (-1 if self.type is None else 1)
+                else:
+                    if self.type < other.type:
+                        return -1
+                    elif self.type > other.type:
+                        return 1
+                if self.shape is None or other.shape is None:
+                    if self.shape != other.shape:
+                        return (-1 if self.shape is None else 1)
+                else:
+                    if self.shape < other.shape:
+                        return -1
+                    elif self.shape > other.shape:
+                        return 1
+                return 0
+
+        def __lt__(self, other):
+            r = self.__compare(other)
+            if r is NotImplemented:
+                return r
+            else:
+                return r < 0
+
+        def __le__(self, other):
+            r = self.__compare(other)
+            if r is NotImplemented:
+                return r
+            else:
+                return r <= 0
+
+        def __gt__(self, other):
+            r = self.__compare(other)
+            if r is NotImplemented:
+                return r
+            else:
+                return r > 0
+
+        def __ge__(self, other):
+            r = self.__compare(other)
+            if r is NotImplemented:
+                return r
+            else:
+                return r >= 0
+
+        def __eq__(self, other):
+            r = self.__compare(other)
+            if r is NotImplemented:
+                return r
+            else:
+                return r == 0
+
+        def __ne__(self, other):
+            r = self.__compare(other)
+            if r is NotImplemented:
+                return r
+            else:
+                return r != 0
+
+        def __str__(self):
+            return IcePy.stringify(self, _M_Dashboard._t_DataDescriptor)
+
+        __repr__ = __str__
+
+    _M_Dashboard._t_DataDescriptor = IcePy.defineStruct('::Dashboard::DataDescriptor', DataDescriptor, (), (
+        ('name', (), IcePy._t_string),
+        ('type', (), _M_Dashboard._t_DataType),
+        ('shape', (), _M_Dashboard._t_Shape)
+    ))
+
+    _M_Dashboard.DataDescriptor = DataDescriptor
+    del DataDescriptor
+
+if '_t_DataDescriptors' not in _M_Dashboard.__dict__:
+    _M_Dashboard._t_DataDescriptors = IcePy.defineSequence('::Dashboard::DataDescriptors', (), _M_Dashboard._t_DataDescriptor)
+
+if '_t_DataFrames' not in _M_Dashboard.__dict__:
+    _M_Dashboard._t_DataFrames = IcePy.defineSequence('::Dashboard::DataFrames', (), _M_Dashboard._t_DataFrame)
+
+if 'ScanExitStatus' not in _M_Dashboard.__dict__:
+    _M_Dashboard.ScanExitStatus = Ice.createTempClass()
+    class ScanExitStatus(Ice.EnumBase):
+
+        def __init__(self, _n, _v):
+            Ice.EnumBase.__init__(self, _n, _v)
+
+        def valueOf(self, _n):
+            if _n in self._enumerators:
+                return self._enumerators[_n]
+            return None
+        valueOf = classmethod(valueOf)
+
+    ScanExitStatus.Success = ScanExitStatus("Success", 0)
+    ScanExitStatus.Abort = ScanExitStatus("Abort", 1)
+    ScanExitStatus.Fail = ScanExitStatus("Fail", 2)
+    ScanExitStatus._enumerators = { 0:ScanExitStatus.Success, 1:ScanExitStatus.Abort, 2:ScanExitStatus.Fail }
+
+    _M_Dashboard._t_ScanExitStatus = IcePy.defineEnum('::Dashboard::ScanExitStatus', ScanExitStatus, (), ScanExitStatus._enumerators)
+
+    _M_Dashboard.ScanExitStatus = ScanExitStatus
+    del ScanExitStatus
+
 _M_Dashboard._t_DataClient = IcePy.defineValue('::Dashboard::DataClient', Ice.Value, -1, (), False, True, None, ())
 
 if 'DataClientPrx' not in _M_Dashboard.__dict__:
     _M_Dashboard.DataClientPrx = Ice.createTempClass()
     class DataClientPrx(Ice.ObjectPrx):
 
-        def dataUpdate(self, id, json, context=None):
-            return _M_Dashboard.DataClient._op_dataUpdate.invoke(self, ((id, json), context))
+        def scanStart(self, id, keys, context=None):
+            return _M_Dashboard.DataClient._op_scanStart.invoke(self, ((id, keys), context))
 
-        def dataUpdateAsync(self, id, json, context=None):
-            return _M_Dashboard.DataClient._op_dataUpdate.invokeAsync(self, ((id, json), context))
+        def scanStartAsync(self, id, keys, context=None):
+            return _M_Dashboard.DataClient._op_scanStart.invokeAsync(self, ((id, keys), context))
 
-        def begin_dataUpdate(self, id, json, _response=None, _ex=None, _sent=None, context=None):
-            return _M_Dashboard.DataClient._op_dataUpdate.begin(self, ((id, json), _response, _ex, _sent, context))
+        def begin_scanStart(self, id, keys, _response=None, _ex=None, _sent=None, context=None):
+            return _M_Dashboard.DataClient._op_scanStart.begin(self, ((id, keys), _response, _ex, _sent, context))
+
+        def end_scanStart(self, _r):
+            return _M_Dashboard.DataClient._op_scanStart.end(self, _r)
+
+        def dataUpdate(self, data, context=None):
+            return _M_Dashboard.DataClient._op_dataUpdate.invoke(self, ((data, ), context))
+
+        def dataUpdateAsync(self, data, context=None):
+            return _M_Dashboard.DataClient._op_dataUpdate.invokeAsync(self, ((data, ), context))
+
+        def begin_dataUpdate(self, data, _response=None, _ex=None, _sent=None, context=None):
+            return _M_Dashboard.DataClient._op_dataUpdate.begin(self, ((data, ), _response, _ex, _sent, context))
 
         def end_dataUpdate(self, _r):
             return _M_Dashboard.DataClient._op_dataUpdate.end(self, _r)
+
+        def scanEnd(self, status, context=None):
+            return _M_Dashboard.DataClient._op_scanEnd.invoke(self, ((status, ), context))
+
+        def scanEndAsync(self, status, context=None):
+            return _M_Dashboard.DataClient._op_scanEnd.invokeAsync(self, ((status, ), context))
+
+        def begin_scanEnd(self, status, _response=None, _ex=None, _sent=None, context=None):
+            return _M_Dashboard.DataClient._op_scanEnd.begin(self, ((status, ), _response, _ex, _sent, context))
+
+        def end_scanEnd(self, _r):
+            return _M_Dashboard.DataClient._op_scanEnd.end(self, _r)
 
         @staticmethod
         def checkedCast(proxy, facetOrContext=None, context=None):
@@ -153,8 +378,14 @@ if 'DataClientPrx' not in _M_Dashboard.__dict__:
         def ice_staticId():
             return '::Dashboard::DataClient'
 
-        def dataUpdate(self, id, json, current=None):
+        def scanStart(self, id, keys, current=None):
+            raise NotImplementedError("servant method 'scanStart' not implemented")
+
+        def dataUpdate(self, data, current=None):
             raise NotImplementedError("servant method 'dataUpdate' not implemented")
+
+        def scanEnd(self, status, current=None):
+            raise NotImplementedError("servant method 'scanEnd' not implemented")
 
         def __str__(self):
             return IcePy.stringify(self, _M_Dashboard._t_DataClientDisp)
@@ -164,7 +395,9 @@ if 'DataClientPrx' not in _M_Dashboard.__dict__:
     _M_Dashboard._t_DataClientDisp = IcePy.defineClass('::Dashboard::DataClient', DataClient, (), None, ())
     DataClient._ice_type = _M_Dashboard._t_DataClientDisp
 
-    DataClient._op_dataUpdate = IcePy.Operation('dataUpdate', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), IcePy._t_string, False, 0), ((), IcePy._t_string, False, 0)), (), None, ())
+    DataClient._op_scanStart = IcePy.Operation('scanStart', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), IcePy._t_string, False, 0), ((), _M_Dashboard._t_DataDescriptors, False, 0)), (), None, ())
+    DataClient._op_dataUpdate = IcePy.Operation('dataUpdate', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), _M_Dashboard._t_DataFrames, False, 0),), (), None, ())
+    DataClient._op_scanEnd = IcePy.Operation('scanEnd', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), _M_Dashboard._t_ScanExitStatus, False, 0),), (), None, ())
 
     _M_Dashboard.DataClient = DataClient
     del DataClient
@@ -460,17 +693,41 @@ if 'DataHostPrx' not in _M_Dashboard.__dict__:
     _M_Dashboard.DataHostPrx = Ice.createTempClass()
     class DataHostPrx(Ice.ObjectPrx):
 
-        def subscribe(self, id, context=None):
-            return _M_Dashboard.DataHost._op_subscribe.invoke(self, ((id, ), context))
+        def registerClient(self, client, context=None):
+            return _M_Dashboard.DataHost._op_registerClient.invoke(self, ((client, ), context))
 
-        def subscribeAsync(self, id, context=None):
-            return _M_Dashboard.DataHost._op_subscribe.invokeAsync(self, ((id, ), context))
+        def registerClientAsync(self, client, context=None):
+            return _M_Dashboard.DataHost._op_registerClient.invokeAsync(self, ((client, ), context))
 
-        def begin_subscribe(self, id, _response=None, _ex=None, _sent=None, context=None):
-            return _M_Dashboard.DataHost._op_subscribe.begin(self, ((id, ), _response, _ex, _sent, context))
+        def begin_registerClient(self, client, _response=None, _ex=None, _sent=None, context=None):
+            return _M_Dashboard.DataHost._op_registerClient.begin(self, ((client, ), _response, _ex, _sent, context))
+
+        def end_registerClient(self, _r):
+            return _M_Dashboard.DataHost._op_registerClient.end(self, _r)
+
+        def subscribe(self, items, context=None):
+            return _M_Dashboard.DataHost._op_subscribe.invoke(self, ((items, ), context))
+
+        def subscribeAsync(self, items, context=None):
+            return _M_Dashboard.DataHost._op_subscribe.invokeAsync(self, ((items, ), context))
+
+        def begin_subscribe(self, items, _response=None, _ex=None, _sent=None, context=None):
+            return _M_Dashboard.DataHost._op_subscribe.begin(self, ((items, ), _response, _ex, _sent, context))
 
         def end_subscribe(self, _r):
             return _M_Dashboard.DataHost._op_subscribe.end(self, _r)
+
+        def subscribeAll(self, context=None):
+            return _M_Dashboard.DataHost._op_subscribeAll.invoke(self, ((), context))
+
+        def subscribeAllAsync(self, context=None):
+            return _M_Dashboard.DataHost._op_subscribeAll.invokeAsync(self, ((), context))
+
+        def begin_subscribeAll(self, _response=None, _ex=None, _sent=None, context=None):
+            return _M_Dashboard.DataHost._op_subscribeAll.begin(self, ((), _response, _ex, _sent, context))
+
+        def end_subscribeAll(self, _r):
+            return _M_Dashboard.DataHost._op_subscribeAll.end(self, _r)
 
         @staticmethod
         def checkedCast(proxy, facetOrContext=None, context=None):
@@ -501,8 +758,14 @@ if 'DataHostPrx' not in _M_Dashboard.__dict__:
         def ice_staticId():
             return '::Dashboard::DataHost'
 
-        def subscribe(self, id, current=None):
+        def registerClient(self, client, current=None):
+            raise NotImplementedError("servant method 'registerClient' not implemented")
+
+        def subscribe(self, items, current=None):
             raise NotImplementedError("servant method 'subscribe' not implemented")
+
+        def subscribeAll(self, current=None):
+            raise NotImplementedError("servant method 'subscribeAll' not implemented")
 
         def __str__(self):
             return IcePy.stringify(self, _M_Dashboard._t_DataHostDisp)
@@ -512,7 +775,9 @@ if 'DataHostPrx' not in _M_Dashboard.__dict__:
     _M_Dashboard._t_DataHostDisp = IcePy.defineClass('::Dashboard::DataHost', DataHost, (), None, ())
     DataHost._ice_type = _M_Dashboard._t_DataHostDisp
 
-    DataHost._op_subscribe = IcePy.Operation('subscribe', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), IcePy._t_string, False, 0),), (), None, (_M_Dashboard._t_UnauthorizedError,))
+    DataHost._op_registerClient = IcePy.Operation('registerClient', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), _M_Dashboard._t_DataClientPrx, False, 0),), (), None, (_M_Dashboard._t_UnauthorizedError,))
+    DataHost._op_subscribe = IcePy.Operation('subscribe', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), _M_Dashboard._t_strings, False, 0),), (), None, (_M_Dashboard._t_UnauthorizedError,))
+    DataHost._op_subscribeAll = IcePy.Operation('subscribeAll', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (), (), None, (_M_Dashboard._t_UnauthorizedError,))
 
     _M_Dashboard.DataHost = DataHost
     del DataHost
