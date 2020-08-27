@@ -40,7 +40,10 @@ class TerminalHostI(Dashboard.TerminalHost):
     def registerClient(self, client: Dashboard.TerminalClient, current):
         self.logger.info("Terminal client connected: "
                          + Ice.identityToString(client.ice_getIdentity()))
-        self.clients.append(client.ice_fixed(current.con))
+        client = client.ice_fixed(current.con)
+        self.clients.append(client)
+        current.con.setCloseCallback(
+            lambda conn: self._connection_closed_callback(client))
         self.spawn()
 
     def spawn(self):
@@ -79,10 +82,13 @@ class TerminalHostI(Dashboard.TerminalHost):
             try:
                 client.stdout(s)
             except Ice.CloseConnectionException:
-                self.logger.info("Lost connection with client: " +
-                                 Ice.identityToString(client.ice_getIdentity())
-                                 )
-                self.clients.remove(client)
+                self._connection_closed_callback(client)
+
+    def _connection_closed_callback(self, client):
+        self.logger.info("Lost connection with client: " +
+                         Ice.identityToString(client.ice_getIdentity())
+                         )
+        self.clients.remove(client)
 
     def _terminated_callback(self):
         self.event_hdl.event_emitter_con = None

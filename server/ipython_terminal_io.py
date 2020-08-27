@@ -39,4 +39,9 @@ class IPythonTerminalIO(TerminalIO):
                                         )
 
                 banner = "** Mamba's IPython shell, with bluesky integration"
-                ipshell(banner)
+                self._run_ipshell(ipshell, banner)
+
+    def _run_ipshell(self, ipshell, banner):
+        # avoid polluting the rest of the scope
+        # NOTE: prepare user environment here
+        ipshell(banner)

@@ -20,7 +20,15 @@ if __name__ == "__main__":
     utils.setup_logger(logger)
     ice_endpoint = utils.get_host_endpoint()
 
-    with Ice.initialize(sys.argv) as communicator:
+    ice_props = Ice.createProperties()
+    ice_props.setProperty("Ice.ACM.Close", "0")  # CloseOff
+    ice_props.setProperty("Ice.ACM.Heartbeat", "3")  # HeartbeatAlways
+    ice_props.setProperty("Ice.ACM.Timeout", "30")
+
+    ice_init_data = Ice.InitializationData()
+    ice_init_data.properties = ice_props
+
+    with Ice.initialize(ice_init_data) as communicator:
         QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
         app = QApplication([])
 
