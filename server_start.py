@@ -5,12 +5,29 @@ import Ice
 import server
 import server.session_manager as session_manager
 import server.terminal_host as terminal
+import server.data_router as data_router
 import utils
 
+# --- Ice properties setup ---
+
 ice_props = Ice.createProperties()
+
+# ACM setup for bidirectional connections.
 ice_props.setProperty("Ice.ACM.Close", "4")  # CloseOnIdleForceful
 ice_props.setProperty("Ice.ACM.Heartbeat", "0")  # HeartbeatOff
 ice_props.setProperty("Ice.ACM.Timeout", "30")
+
+# Increase the thread pool, to handle nested RPC calls
+# If the thread pool is exhausted, new RPC call will block the server.
+# When a deadlock happens, one can use
+#    ice_props.setProperty("Ice.Trace.ThreadPool", "1")
+# to see the what's going on in the thread pool.
+# See https://doc.zeroc.com/ice/3.6/client-server-features/the-ice-threading-model/nested-invocations
+# for more information.
+ice_props.setProperty("Ice.ThreadPool.Client.Size", "1")
+ice_props.setProperty("Ice.ThreadPool.Client.SizeMax", "10")
+ice_props.setProperty("ice.ThreadPool.Server.Size", "1")
+ice_props.setProperty("Ice.ThreadPool.Server.SizeMax", "10")
 
 ice_init_data = Ice.InitializationData()
 ice_init_data.properties = ice_props
@@ -27,6 +44,7 @@ with Ice.initialize(ice_init_data) as ic:
 
     session_manager.initialize(ic, adapter)
     terminal.initialize(ic, adapter)
+    data_router.initialize(ic, adapter)
 
     adapter.activate()
 

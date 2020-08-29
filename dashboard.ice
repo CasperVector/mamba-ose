@@ -27,13 +27,13 @@ module Dashboard {
         Shape shape;
     };
 
-    sequence<DataDescriptor> DataDescriptors;
+    dictionary<string, DataDescriptor> DataDescriptors;
     sequence<DataFrame> DataFrames;
 
     enum ScanExitStatus { Success, Abort, Fail };
 
     interface DataClient {
-        void scanStart(string id, DataDescriptors keys);
+        void scanStart(int id, DataDescriptors keys);
         void dataUpdate(DataFrames data);
         void scanEnd(ScanExitStatus status);
     };
@@ -60,9 +60,14 @@ module Dashboard {
         void leaveExecution(string result);
     };
 
-    interface DataHost {
+    interface DataRouter {
         void registerClient(DataClient* client) throws UnauthorizedError;
         void subscribe(strings items) throws UnauthorizedError;
         void subscribeAll() throws UnauthorizedError;
+
+        // --- method for the data producer ---
+        void scanStart(int id, DataDescriptors keys) throws UnauthorizedError;
+        void pushData(DataFrames frames) throws UnauthorizedError;
+        void scanEnd(ScanExitStatus status) throws UnauthorizedError;
     };
 };

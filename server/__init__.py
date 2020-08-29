@@ -4,6 +4,9 @@ logger = None
 config = None
 session = None
 
+terminal = None
+terminal_con = None
+data_router = None
 
 def verify(f):
     """decorator"""

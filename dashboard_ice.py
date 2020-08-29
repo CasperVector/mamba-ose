@@ -279,7 +279,7 @@ if 'DataDescriptor' not in _M_Dashboard.__dict__:
     del DataDescriptor
 
 if '_t_DataDescriptors' not in _M_Dashboard.__dict__:
-    _M_Dashboard._t_DataDescriptors = IcePy.defineSequence('::Dashboard::DataDescriptors', (), _M_Dashboard._t_DataDescriptor)
+    _M_Dashboard._t_DataDescriptors = IcePy.defineDictionary('::Dashboard::DataDescriptors', (), IcePy._t_string, _M_Dashboard._t_DataDescriptor)
 
 if '_t_DataFrames' not in _M_Dashboard.__dict__:
     _M_Dashboard._t_DataFrames = IcePy.defineSequence('::Dashboard::DataFrames', (), _M_Dashboard._t_DataFrame)
@@ -395,7 +395,7 @@ if 'DataClientPrx' not in _M_Dashboard.__dict__:
     _M_Dashboard._t_DataClientDisp = IcePy.defineClass('::Dashboard::DataClient', DataClient, (), None, ())
     DataClient._ice_type = _M_Dashboard._t_DataClientDisp
 
-    DataClient._op_scanStart = IcePy.Operation('scanStart', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), IcePy._t_string, False, 0), ((), _M_Dashboard._t_DataDescriptors, False, 0)), (), None, ())
+    DataClient._op_scanStart = IcePy.Operation('scanStart', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), IcePy._t_int, False, 0), ((), _M_Dashboard._t_DataDescriptors, False, 0)), (), None, ())
     DataClient._op_dataUpdate = IcePy.Operation('dataUpdate', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), _M_Dashboard._t_DataFrames, False, 0),), (), None, ())
     DataClient._op_scanEnd = IcePy.Operation('scanEnd', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), _M_Dashboard._t_ScanExitStatus, False, 0),), (), None, ())
 
@@ -687,76 +687,112 @@ if 'TerminalEventHandlerPrx' not in _M_Dashboard.__dict__:
     _M_Dashboard.TerminalEventHandler = TerminalEventHandler
     del TerminalEventHandler
 
-_M_Dashboard._t_DataHost = IcePy.defineValue('::Dashboard::DataHost', Ice.Value, -1, (), False, True, None, ())
+_M_Dashboard._t_DataRouter = IcePy.defineValue('::Dashboard::DataRouter', Ice.Value, -1, (), False, True, None, ())
 
-if 'DataHostPrx' not in _M_Dashboard.__dict__:
-    _M_Dashboard.DataHostPrx = Ice.createTempClass()
-    class DataHostPrx(Ice.ObjectPrx):
+if 'DataRouterPrx' not in _M_Dashboard.__dict__:
+    _M_Dashboard.DataRouterPrx = Ice.createTempClass()
+    class DataRouterPrx(Ice.ObjectPrx):
 
         def registerClient(self, client, context=None):
-            return _M_Dashboard.DataHost._op_registerClient.invoke(self, ((client, ), context))
+            return _M_Dashboard.DataRouter._op_registerClient.invoke(self, ((client, ), context))
 
         def registerClientAsync(self, client, context=None):
-            return _M_Dashboard.DataHost._op_registerClient.invokeAsync(self, ((client, ), context))
+            return _M_Dashboard.DataRouter._op_registerClient.invokeAsync(self, ((client, ), context))
 
         def begin_registerClient(self, client, _response=None, _ex=None, _sent=None, context=None):
-            return _M_Dashboard.DataHost._op_registerClient.begin(self, ((client, ), _response, _ex, _sent, context))
+            return _M_Dashboard.DataRouter._op_registerClient.begin(self, ((client, ), _response, _ex, _sent, context))
 
         def end_registerClient(self, _r):
-            return _M_Dashboard.DataHost._op_registerClient.end(self, _r)
+            return _M_Dashboard.DataRouter._op_registerClient.end(self, _r)
 
         def subscribe(self, items, context=None):
-            return _M_Dashboard.DataHost._op_subscribe.invoke(self, ((items, ), context))
+            return _M_Dashboard.DataRouter._op_subscribe.invoke(self, ((items, ), context))
 
         def subscribeAsync(self, items, context=None):
-            return _M_Dashboard.DataHost._op_subscribe.invokeAsync(self, ((items, ), context))
+            return _M_Dashboard.DataRouter._op_subscribe.invokeAsync(self, ((items, ), context))
 
         def begin_subscribe(self, items, _response=None, _ex=None, _sent=None, context=None):
-            return _M_Dashboard.DataHost._op_subscribe.begin(self, ((items, ), _response, _ex, _sent, context))
+            return _M_Dashboard.DataRouter._op_subscribe.begin(self, ((items, ), _response, _ex, _sent, context))
 
         def end_subscribe(self, _r):
-            return _M_Dashboard.DataHost._op_subscribe.end(self, _r)
+            return _M_Dashboard.DataRouter._op_subscribe.end(self, _r)
 
         def subscribeAll(self, context=None):
-            return _M_Dashboard.DataHost._op_subscribeAll.invoke(self, ((), context))
+            return _M_Dashboard.DataRouter._op_subscribeAll.invoke(self, ((), context))
 
         def subscribeAllAsync(self, context=None):
-            return _M_Dashboard.DataHost._op_subscribeAll.invokeAsync(self, ((), context))
+            return _M_Dashboard.DataRouter._op_subscribeAll.invokeAsync(self, ((), context))
 
         def begin_subscribeAll(self, _response=None, _ex=None, _sent=None, context=None):
-            return _M_Dashboard.DataHost._op_subscribeAll.begin(self, ((), _response, _ex, _sent, context))
+            return _M_Dashboard.DataRouter._op_subscribeAll.begin(self, ((), _response, _ex, _sent, context))
 
         def end_subscribeAll(self, _r):
-            return _M_Dashboard.DataHost._op_subscribeAll.end(self, _r)
+            return _M_Dashboard.DataRouter._op_subscribeAll.end(self, _r)
+
+        def scanStart(self, id, keys, context=None):
+            return _M_Dashboard.DataRouter._op_scanStart.invoke(self, ((id, keys), context))
+
+        def scanStartAsync(self, id, keys, context=None):
+            return _M_Dashboard.DataRouter._op_scanStart.invokeAsync(self, ((id, keys), context))
+
+        def begin_scanStart(self, id, keys, _response=None, _ex=None, _sent=None, context=None):
+            return _M_Dashboard.DataRouter._op_scanStart.begin(self, ((id, keys), _response, _ex, _sent, context))
+
+        def end_scanStart(self, _r):
+            return _M_Dashboard.DataRouter._op_scanStart.end(self, _r)
+
+        def pushData(self, frames, context=None):
+            return _M_Dashboard.DataRouter._op_pushData.invoke(self, ((frames, ), context))
+
+        def pushDataAsync(self, frames, context=None):
+            return _M_Dashboard.DataRouter._op_pushData.invokeAsync(self, ((frames, ), context))
+
+        def begin_pushData(self, frames, _response=None, _ex=None, _sent=None, context=None):
+            return _M_Dashboard.DataRouter._op_pushData.begin(self, ((frames, ), _response, _ex, _sent, context))
+
+        def end_pushData(self, _r):
+            return _M_Dashboard.DataRouter._op_pushData.end(self, _r)
+
+        def scanEnd(self, status, context=None):
+            return _M_Dashboard.DataRouter._op_scanEnd.invoke(self, ((status, ), context))
+
+        def scanEndAsync(self, status, context=None):
+            return _M_Dashboard.DataRouter._op_scanEnd.invokeAsync(self, ((status, ), context))
+
+        def begin_scanEnd(self, status, _response=None, _ex=None, _sent=None, context=None):
+            return _M_Dashboard.DataRouter._op_scanEnd.begin(self, ((status, ), _response, _ex, _sent, context))
+
+        def end_scanEnd(self, _r):
+            return _M_Dashboard.DataRouter._op_scanEnd.end(self, _r)
 
         @staticmethod
         def checkedCast(proxy, facetOrContext=None, context=None):
-            return _M_Dashboard.DataHostPrx.ice_checkedCast(proxy, '::Dashboard::DataHost', facetOrContext, context)
+            return _M_Dashboard.DataRouterPrx.ice_checkedCast(proxy, '::Dashboard::DataRouter', facetOrContext, context)
 
         @staticmethod
         def uncheckedCast(proxy, facet=None):
-            return _M_Dashboard.DataHostPrx.ice_uncheckedCast(proxy, facet)
+            return _M_Dashboard.DataRouterPrx.ice_uncheckedCast(proxy, facet)
 
         @staticmethod
         def ice_staticId():
-            return '::Dashboard::DataHost'
-    _M_Dashboard._t_DataHostPrx = IcePy.defineProxy('::Dashboard::DataHost', DataHostPrx)
+            return '::Dashboard::DataRouter'
+    _M_Dashboard._t_DataRouterPrx = IcePy.defineProxy('::Dashboard::DataRouter', DataRouterPrx)
 
-    _M_Dashboard.DataHostPrx = DataHostPrx
-    del DataHostPrx
+    _M_Dashboard.DataRouterPrx = DataRouterPrx
+    del DataRouterPrx
 
-    _M_Dashboard.DataHost = Ice.createTempClass()
-    class DataHost(Ice.Object):
+    _M_Dashboard.DataRouter = Ice.createTempClass()
+    class DataRouter(Ice.Object):
 
         def ice_ids(self, current=None):
-            return ('::Dashboard::DataHost', '::Ice::Object')
+            return ('::Dashboard::DataRouter', '::Ice::Object')
 
         def ice_id(self, current=None):
-            return '::Dashboard::DataHost'
+            return '::Dashboard::DataRouter'
 
         @staticmethod
         def ice_staticId():
-            return '::Dashboard::DataHost'
+            return '::Dashboard::DataRouter'
 
         def registerClient(self, client, current=None):
             raise NotImplementedError("servant method 'registerClient' not implemented")
@@ -767,19 +803,31 @@ if 'DataHostPrx' not in _M_Dashboard.__dict__:
         def subscribeAll(self, current=None):
             raise NotImplementedError("servant method 'subscribeAll' not implemented")
 
+        def scanStart(self, id, keys, current=None):
+            raise NotImplementedError("servant method 'scanStart' not implemented")
+
+        def pushData(self, frames, current=None):
+            raise NotImplementedError("servant method 'pushData' not implemented")
+
+        def scanEnd(self, status, current=None):
+            raise NotImplementedError("servant method 'scanEnd' not implemented")
+
         def __str__(self):
-            return IcePy.stringify(self, _M_Dashboard._t_DataHostDisp)
+            return IcePy.stringify(self, _M_Dashboard._t_DataRouterDisp)
 
         __repr__ = __str__
 
-    _M_Dashboard._t_DataHostDisp = IcePy.defineClass('::Dashboard::DataHost', DataHost, (), None, ())
-    DataHost._ice_type = _M_Dashboard._t_DataHostDisp
+    _M_Dashboard._t_DataRouterDisp = IcePy.defineClass('::Dashboard::DataRouter', DataRouter, (), None, ())
+    DataRouter._ice_type = _M_Dashboard._t_DataRouterDisp
 
-    DataHost._op_registerClient = IcePy.Operation('registerClient', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), _M_Dashboard._t_DataClientPrx, False, 0),), (), None, (_M_Dashboard._t_UnauthorizedError,))
-    DataHost._op_subscribe = IcePy.Operation('subscribe', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), _M_Dashboard._t_strings, False, 0),), (), None, (_M_Dashboard._t_UnauthorizedError,))
-    DataHost._op_subscribeAll = IcePy.Operation('subscribeAll', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (), (), None, (_M_Dashboard._t_UnauthorizedError,))
+    DataRouter._op_registerClient = IcePy.Operation('registerClient', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), _M_Dashboard._t_DataClientPrx, False, 0),), (), None, (_M_Dashboard._t_UnauthorizedError,))
+    DataRouter._op_subscribe = IcePy.Operation('subscribe', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), _M_Dashboard._t_strings, False, 0),), (), None, (_M_Dashboard._t_UnauthorizedError,))
+    DataRouter._op_subscribeAll = IcePy.Operation('subscribeAll', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (), (), None, (_M_Dashboard._t_UnauthorizedError,))
+    DataRouter._op_scanStart = IcePy.Operation('scanStart', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), IcePy._t_int, False, 0), ((), _M_Dashboard._t_DataDescriptors, False, 0)), (), None, (_M_Dashboard._t_UnauthorizedError,))
+    DataRouter._op_pushData = IcePy.Operation('pushData', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), _M_Dashboard._t_DataFrames, False, 0),), (), None, (_M_Dashboard._t_UnauthorizedError,))
+    DataRouter._op_scanEnd = IcePy.Operation('scanEnd', Ice.OperationMode.Normal, Ice.OperationMode.Normal, False, None, (), (((), _M_Dashboard._t_ScanExitStatus, False, 0),), (), None, (_M_Dashboard._t_UnauthorizedError,))
 
-    _M_Dashboard.DataHost = DataHost
-    del DataHost
+    _M_Dashboard.DataRouter = DataRouter
+    del DataRouter
 
 # End of module Dashboard

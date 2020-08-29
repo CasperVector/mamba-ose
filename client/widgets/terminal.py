@@ -2,6 +2,8 @@ import Dashboard
 
 from pyqterm import Terminal
 
+import client
+
 
 class TerminalWidget(Terminal, Dashboard.TerminalClient):
     def __init__(self, communicator, ice_endpoint, logger):
@@ -18,12 +20,14 @@ class TerminalWidget(Terminal, Dashboard.TerminalClient):
         self.resize(400, 250)
 
     def register_client_instance(self):
-        adp = self.communicator.createObjectAdapter("")
-        proxy = Dashboard.TerminalClientPrx\
-            .uncheckedCast(adp.addWithUUID(self))
-        adp.activate()
+        if client.client_adapter is None:
+            client.client_adapter = self.communicator.createObjectAdapter("")
+            self.host.ice_getConnection().setAdapter(client.client_adapter)
+            client.client_adapter.activate()
 
-        self.host.ice_getConnection().setAdapter(adp)
+        proxy = Dashboard.TerminalClientPrx.uncheckedCast(
+            client.client_adapter.addWithUUID(self))
+
         self.host.registerClient(proxy)
 
     def stdout(self, s, current):

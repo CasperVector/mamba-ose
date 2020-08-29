@@ -10,7 +10,6 @@ import utils
 from .ipython_terminal_io import IPythonTerminalIO
 
 client_verify = server.verify
-terminal = None
 
 
 def event_verify(f):
@@ -115,7 +114,7 @@ class TerminalEventHandlerI(Dashboard.TerminalEventHandler):
     def attach(self, token, current):
         if not self.event_emitter_con and token == self.event_token:
             self.event_token = None
-            self.event_emitter_con = current.con
+            server.terminal_con = self.event_emitter_con = current.con
             self.logger.info("Terminal event emitter attached.")
         else:
             self.logger.info("Invalid terminal event emitter attach request.")
@@ -133,12 +132,10 @@ class TerminalEventHandlerI(Dashboard.TerminalEventHandler):
 
 
 def initialize(communicator, adapter):
-    global terminal
-
     event_hdl = TerminalEventHandlerI(server.logger)
-    terminal = TerminalHostI(event_hdl, server.logger)
+    server.terminal = TerminalHostI(event_hdl, server.logger)
 
-    adapter.add(terminal,
+    adapter.add(server.terminal,
                 communicator.stringToIdentity("TerminalHost"))
     adapter.add(event_hdl,
                 communicator.stringToIdentity("TerminalEventHandler"))
