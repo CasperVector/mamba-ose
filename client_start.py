@@ -41,11 +41,19 @@ if __name__ == "__main__":
         QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
         app = QApplication([])
 
+        # We have adapted a connection-based authentication method,
+        # which means all communication has be done with a single connection.
+        # It requires:
+        #  1. The established connection must not be closed all the time.
+        #  2. All proxy has to be created with the very connection that the
+        #     session.login happens (which is identified by name "MambaClient").
         client.session = SessionManagerPrx.checkedCast(
-            communicator.stringToProxy(f"SessionManager:{ice_endpoint}"))
+            communicator.stringToProxy(f"SessionManager:{ice_endpoint}")
+                        .ice_connectionId("MambaClient"))
 
         # TODO: login window
-        client.session.login("user", "pw")
+        client.credentials = ("user", "password")
+        client.session.login(client.credentials[0], client.credentials[1])
 
         client.data_client = DataClientI(communicator, ice_endpoint, logger)
 
@@ -61,9 +69,14 @@ if __name__ == "__main__":
                           PlotWidget.get_init_func(client.data_client,
                                                    client.logger)
                           )
+            mw.add_widget("Plot2",
+                          PlotWidget.get_init_func(client.data_client,
+                                                   client.logger)
+                          )
             mw.set_layout({
-                "top": "Terminal",
-                "right": "Plot1"
+                ("left", "Terminal"),
+                ("right", "Plot1"),
+                ("right", "Plot2")
             })
 
             mw.show()

@@ -11,7 +11,9 @@ class TerminalWidget(Terminal, Dashboard.TerminalClient):
 
         self.communicator = communicator
         self.host = Dashboard.TerminalHostPrx.checkedCast(
-            communicator.stringToProxy(f"TerminalHost:{ice_endpoint}"))
+            communicator.stringToProxy(f"TerminalHost:{ice_endpoint}")
+                        .ice_connectionId("MambaClient")
+        )
         self.register_client_instance()
 
         self.stdin_callback = self.host.stdin

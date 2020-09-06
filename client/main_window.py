@@ -30,7 +30,7 @@ class MainWindow(QMainWindow):
             "right": Qt.RightDockWidgetArea
         }
 
-        for area, widgets in layout.items():
+        for area, widgets in layout:
             if area not in ["top", "bottom", "left", "right"]:
                 raise ValueError("Unknown docking area.")
 

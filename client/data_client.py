@@ -14,7 +14,9 @@ class DataClientI(DataClient):
         self.logger = logger
         self.communicator = communicator
         self.host = DataRouterPrx.checkedCast(
-            communicator.stringToProxy(f"DataRouter:{ice_endpoint}"))
+            communicator.stringToProxy(f"DataRouter:{ice_endpoint}")
+                        .ice_connectionId("MambaClient")
+        )
 
         self.scan_id = 0
         self.data_descriptors = {}

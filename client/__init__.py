@@ -1,6 +1,8 @@
 logger = None
 config = None
+
+credentials = ("", "")
 session = None
-data_client = None
 
 client_adapter = None
+data_client = None

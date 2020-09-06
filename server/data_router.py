@@ -75,7 +75,7 @@ class DataRouterI(DataRouter):
 
     @terminal_verify
     def pushData(self, frames, current):
-        self.logger.info(f"Data frames received")
+        self.logger.info(f"Data frames received from bluesky callback")
         for client in self.clients:
             to_send = []
             for frame in frames:
@@ -83,11 +83,12 @@ class DataRouterI(DataRouter):
                 if key in self.subscription[client] or \
                         "*" in self.subscription[client]:
                     to_send.append(frame)
-            try:
-                self.logger.info(f"Forward data frames to {client}")
-                client.dataUpdate(to_send)
-            except Ice.CloseConnectionException:
-                self._connection_closed_callback(client)
+            if to_send:
+                try:
+                    self.logger.info(f"Forward data frames to {client}")
+                    client.dataUpdate(to_send)
+                except Ice.CloseConnectionException:
+                    self._connection_closed_callback(client)
 
     @terminal_verify
     def scanEnd(self, status, current):

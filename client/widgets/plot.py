@@ -37,6 +37,7 @@ class PlotWidget(QWidget):
 
         self.axs = self.figure.subplots()
         self.figure.set_tight_layout(True)
+        self.legend = self.figure.legend()
 
         self.data_sets = {}
         self.lines = {}
@@ -53,15 +54,17 @@ class PlotWidget(QWidget):
     def show_data_source_dialog(self):
         data_source_select_dialog = PlotDataSubscribeDialog(self)
         name, color = data_source_select_dialog.display()
-        if name not in self.data_sets:
-            self.data_client.request_data(name, partial(self.update_data, name))
-            self.data_sets[name] = {
-                'x': [],
-                'y': [],
-                'label': name,
-            }
-        color_hex = hex(color.rgba())
-        self.data_sets[name]['color'] = "#" + color_hex[4:] + color_hex[2:4]
+        if name:
+            if name not in self.data_sets:
+                self.data_client.request_data(name, partial(self.update_data,
+                                                            name))
+                self.data_sets[name] = {
+                    'x': [],
+                    'y': [],
+                    'label': name,
+                }
+            color_hex = hex(color.rgba())
+            self.data_sets[name]['color'] = "#" + color_hex[4:] + color_hex[2:4]
 
     def update_data(self, name, value, timestamp):
         assert name in self.data_sets
@@ -78,22 +81,17 @@ class PlotWidget(QWidget):
         self.plot()
 
     def plot(self):
+        self.legend.remove()
         for name, data_set in self.data_sets.items():
-            if name not in self.lines:
-                self.lines[name],  = self.axs.plot(
-                    data_set['x'],
-                    data_set['y'],
-                    color=data_set["color"],
-                    label=data_set['label']
-                )
-                self.figure.legend()
-            else:
-                self.lines[name], = self.axs.plot(
-                    data_set['x'],
-                    data_set['y'],
-                    color=data_set["color"],
-                    label=data_set['label']
-                )
+            for line in self.lines[name]:
+                line.remove()
+            self.lines[name] = self.axs.plot(
+                data_set['x'],
+                data_set['y'],
+                color=data_set["color"],
+                label=data_set['label']
+            )
+        self.legend = self.figure.legend()
         self.canvas.draw()
 
 
@@ -110,7 +108,7 @@ class PlotDataSubscribeDialog(QDialog):
         color_select_label = QLabel("Line Color")
         self.line_color_select = QPushButton("Select...")
         self.line_color_select.clicked.connect(self.select_color_clicked)
-        self.line_color_pixmap = QPixmap(20, 20)
+        self.line_color_pixmap = QPixmap(10, 10)
         self.line_color_pixmap.fill(self.color)
         self.line_color_select.setIcon(QIcon(self.line_color_pixmap))
 
@@ -126,8 +124,14 @@ class PlotDataSubscribeDialog(QDialog):
 
         self.setLayout(self.layout)
 
+        self.ok_btn.setFocus()
+
     def select_color_clicked(self):
         self.color = self.color_dia.getColor(self.color)
+
+        self.raise_()
+        self.activateWindow()
+
         self.line_color_pixmap.fill(self.color)
         self.line_color_select.setIcon(QIcon(self.line_color_pixmap))
 
