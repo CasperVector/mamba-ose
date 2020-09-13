@@ -108,6 +108,14 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
 - [x] IPython prompt enhancement (https://github.com/ipython/ipython/pull/10500/files, https://ipython.readthedocs.io/en/stable/config/details.html#custom-prompts)
 - [x] pyqterm: bug fixes and allow customized escape sequence
 - [x] Bluesky data callback
+- [x] Slice interface refactored - _2020.9.13_
+- [x] DeviceQuery interface, handle device config query request - _2020.9.13_
+- [ ] Server: DeviceManager
+  - [ ] cache device descriptions
+  - [ ] relay config query request
+  - [ ] set config value interface
+  - [ ] periodically push reading back? (DataRouter?)
+- [ ] Client: DeviceConfigDialog
 - [ ] Client: plot widgets improvement
   - [ ] draw multiple lines on the same plot
   - [ ] customizable x-axis
@@ -115,3 +123,4 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
   - [ ] Server: EPICS host? ophyd?
   - [ ] Client: motor control panel widget
 - [ ] Experiment control navbar (pause, continue, halt)
+- [ ] Documentation
