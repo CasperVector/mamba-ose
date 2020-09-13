@@ -7,13 +7,13 @@ from Dashboard import SessionManagerPrx
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QCoreApplication
 
-import client
+import mamba_client
 import utils
-import client
-from client.main_window import MainWindow
-from client.widgets.terminal import TerminalWidget
-from client.widgets.plot import PlotWidget
-from client.data_client import DataClientI
+import mamba_client
+from mamba_client.main_window import MainWindow
+from mamba_client.widgets.terminal import TerminalWidget
+from mamba_client.widgets.plot import PlotWidget
+from mamba_client.data_client import DataClientI
 
 # --- Ice properties setup ---
 
@@ -31,9 +31,9 @@ ice_init_data = Ice.InitializationData()
 ice_init_data.properties = ice_props
 
 if __name__ == "__main__":
-    client.logger = logger = logging.getLogger()
+    mamba_client.logger = logger = logging.getLogger()
 
-    client.config = utils.load_config("client_config.yaml")
+    mamba_client.config = utils.load_config("client_config.yaml")
     utils.setup_logger(logger)
     ice_endpoint = utils.get_host_endpoint()
 
@@ -47,15 +47,15 @@ if __name__ == "__main__":
         #  1. The established connection must not be closed all the time.
         #  2. All proxy has to be created with the very connection that the
         #     session.login happens (which is identified by name "MambaClient").
-        client.session = SessionManagerPrx.checkedCast(
+        mamba_client.session = SessionManagerPrx.checkedCast(
             communicator.stringToProxy(f"SessionManager:{ice_endpoint}")
                         .ice_connectionId("MambaClient"))
 
         # TODO: login window
-        client.credentials = ("user", "password")
-        client.session.login(client.credentials[0], client.credentials[1])
+        mamba_client.credentials = ("user", "password")
+        mamba_client.session.login(mamba_client.credentials[0], mamba_client.credentials[1])
 
-        client.data_client = DataClientI(communicator, ice_endpoint, logger)
+        mamba_client.data_client = DataClientI(communicator, ice_endpoint, logger)
 
         try:
             mw = MainWindow()
@@ -63,15 +63,15 @@ if __name__ == "__main__":
             mw.add_widget("Terminal",
                           TerminalWidget.get_init_func(communicator,
                                                        ice_endpoint,
-                                                       client.logger)
+                                                       mamba_client.logger)
                           )
             mw.add_widget("Plot1",
-                          PlotWidget.get_init_func(client.data_client,
-                                                   client.logger)
+                          PlotWidget.get_init_func(mamba_client.data_client,
+                                                   mamba_client.logger)
                           )
             mw.add_widget("Plot2",
-                          PlotWidget.get_init_func(client.data_client,
-                                                   client.logger)
+                          PlotWidget.get_init_func(mamba_client.data_client,
+                                                   mamba_client.logger)
                           )
             mw.set_layout({
                 ("left", "Terminal"),
@@ -84,4 +84,4 @@ if __name__ == "__main__":
             app.exec_()
 
         finally:
-            client.session.logout()
+            mamba_client.session.logout()

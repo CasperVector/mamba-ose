@@ -9,7 +9,7 @@ from matplotlib.backends.backend_qt5agg import (
     NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
 
-from client.data_client import DataClientI
+from mamba_client.data_client import DataClientI
 
 
 DEFAULT_COLOR = QColor("blue")
