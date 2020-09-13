@@ -7,7 +7,7 @@ import MambaICE.Dashboard as Dashboard
 import mamba_server
 import utils
 
-from mamba_server.experiment_subproc.ipython_terminal_io import IPythonTerminalIO
+from mamba_server.experiment_subproc.subprocess_spawn import IPythonTerminalIO
 
 client_verify = mamba_server.verify
 
@@ -43,6 +43,7 @@ class TerminalHostI(Dashboard.TerminalHost):
         self.clients.append(client)
         current.con.setCloseCallback(
             lambda conn: self._connection_closed_callback(client))
+
         self.spawn()
 
     def spawn(self):

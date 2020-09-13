@@ -1,7 +1,6 @@
 import logging
 
 from .session_manager import verify
-from .device_manager import DeviceType
 
 try:
     logger

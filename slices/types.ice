@@ -30,5 +30,14 @@ module MambaICE {
         double timestamp;
     }
     sequence<TypedDataFrame> TypedDataFrames;
+
+    struct DeviceEntry {
+        string name;
+        DeviceType type;
+        DataDescriptors configs;
+        DataDescriptors readings;
+    };
+
+    sequence<DeviceEntry> DeviceEntries;
 };
 

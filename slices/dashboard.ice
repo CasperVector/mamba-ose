@@ -11,7 +11,6 @@ module MambaICE {
         enum ScanExitStatus { Success, Abort, Fail };
 
         // --- Client Side ---
-
         interface TerminalClient {
             void stdout(bytes s);
         };
@@ -56,8 +55,13 @@ module MambaICE {
         };
 
         interface DeviceManager {
+            DeviceEntries listDevices();
             strings getDevicesByType(string type);
             TypedDataFrames getDeviceConfigurations(string name);
+            TypedDataFrames getDeviceReadings(string name);
+
+            // --- method for experiment subprocess ---
+            void addDevices(DeviceEntries entries);
         };
     };
 };

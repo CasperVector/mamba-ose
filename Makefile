@@ -1,9 +1,12 @@
 .PHONY: clean all ice
-all: ice
+all: ice logs
 
 ice:
-	slice2py -Islices/ slices/types.ice slices/dashboard.ice slices/experiment.ice
+	slice2py --underscore -Islices/ slices/types.ice slices/dashboard.ice slices/experiment.ice
+
+logs:
+	mkdir logs/
 
 clean:
-	rm -rf Dashboard/
-	rm -f dashboard_ice.py
+	rm -rf MambaICE/
+	rm -rf logs/
