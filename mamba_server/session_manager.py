@@ -1,12 +1,24 @@
-import Dashboard
+from functools import wraps
 
-import server
+import Dashboard
+import mamba_server
+
+
+def verify(f):
+    """decorator"""
+    @wraps(f)
+    def wrapper(*args):
+        current = args[-1]
+        mamba_server.session.verify(current)
+        f(*args)
+
+    return wrapper
 
 
 class SessionManagerI(Dashboard.SessionManager):
-    def __init__(self, logger):
+    def __init__(self):
         self.authorized_conns = {}
-        self.logger = logger
+        self.logger = mamba_server.logger
 
     def login(self, username, password, current):
         # pretend to do some verification...
@@ -28,9 +40,9 @@ class SessionManagerI(Dashboard.SessionManager):
 
 
 def initialize(communicator, adapter):
-    server.session = SessionManagerI(server.logger)
+    mamba_server.session = SessionManagerI()
 
-    adapter.add(server.session,
+    adapter.add(mamba_server.session,
                 communicator.stringToIdentity("SessionManager"))
 
-    server.logger.info("SessionManager initialized.")
+    mamba_server.logger.info("SessionManager initialized.")

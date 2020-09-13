@@ -3,8 +3,8 @@
 import yaml
 import logging
 
-import client
-import server
+import mamba_client
+import mamba_server
 
 
 class AttrDict(dict):
@@ -44,23 +44,23 @@ def format_endpoint(host, port, protocol='tcp'):
 
 def get_host_endpoint():
     return format_endpoint(
-        client.config['network']['host_address'],
-        client.config['network']['host_port'],
-        client.config['network']['protocol']
+        mamba_client.config['network']['host_address'],
+        mamba_client.config['network']['host_port'],
+        mamba_client.config['network']['protocol']
     )
 
 
 def get_bind_endpoint():
     return format_endpoint(
-        server.config['network']['bind_address'],
-        server.config['network']['bind_port'],
-        server.config['network']['protocol']
+        mamba_server.config['network']['bind_address'],
+        mamba_server.config['network']['bind_port'],
+        mamba_server.config['network']['protocol']
     )
 
 
 def get_access_endpoint():
     return format_endpoint(
-        server.config['network']['access_address'],
-        server.config['network']['bind_port'],
-        server.config['network']['protocol']
+        mamba_server.config['network']['access_address'],
+        mamba_server.config['network']['bind_port'],
+        mamba_server.config['network']['protocol']
     )

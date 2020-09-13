@@ -2,7 +2,7 @@ import Dashboard
 
 from pyqterm import Terminal
 
-import client
+import mamba_client
 
 
 class TerminalWidget(Terminal, Dashboard.TerminalClient):
@@ -22,13 +22,13 @@ class TerminalWidget(Terminal, Dashboard.TerminalClient):
         self.resize(400, 250)
 
     def register_client_instance(self):
-        if client.client_adapter is None:
-            client.client_adapter = self.communicator.createObjectAdapter("")
-            self.host.ice_getConnection().setAdapter(client.client_adapter)
-            client.client_adapter.activate()
+        if mamba_client.client_adapter is None:
+            mamba_client.client_adapter = self.communicator.createObjectAdapter("")
+            self.host.ice_getConnection().setAdapter(mamba_client.client_adapter)
+            mamba_client.client_adapter.activate()
 
         proxy = Dashboard.TerminalClientPrx.uncheckedCast(
-            client.client_adapter.addWithUUID(self))
+            mamba_client.client_adapter.addWithUUID(self))
 
         self.host.registerClient(proxy)
 

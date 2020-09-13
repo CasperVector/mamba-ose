@@ -4,7 +4,7 @@ from datetime import datetime
 from Dashboard import (DataClient, DataRouterPrx, DataClientPrx, DataDescriptor,
                        DataFrame, DataType)
 
-import client
+import mamba_client
 
 
 class DataClientI(DataClient):
@@ -25,13 +25,13 @@ class DataClientI(DataClient):
         self.register_client_instance()
 
     def register_client_instance(self):
-        if client.client_adapter is None:
-            client.client_adapter = self.communicator.createObjectAdapter("")
-            self.host.ice_getConnection().setAdapter(client.client_adapter)
-            client.client_adapter.activate()
+        if mamba_client.client_adapter is None:
+            mamba_client.client_adapter = self.communicator.createObjectAdapter("")
+            self.host.ice_getConnection().setAdapter(mamba_client.client_adapter)
+            mamba_client.client_adapter.activate()
 
         proxy = DataClientPrx.uncheckedCast(
-            client.client_adapter.addWithUUID(self))
+            mamba_client.client_adapter.addWithUUID(self))
 
         self.host.registerClient(proxy)
 
@@ -40,7 +40,7 @@ class DataClientI(DataClient):
             self.data_callbacks[name] = [callback]
             self.host.subscribe(list(self.data_callbacks.keys()))
         else:
-            self.data_callback.append(callback)
+            self.data_callback[name].append(callback)
 
     def data_callback_invoke(self, name, *args):
         if name in self.data_callbacks:

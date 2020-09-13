@@ -1,11 +1,12 @@
 from functools import wraps
 
 import Ice
-from Dashboard import DataRouter, DataClient, UnauthorizedError, DataDescriptor, DataType
+from Dashboard import (DataRouter, DataClient, UnauthorizedError,
+                       DataDescriptor, DataType)
 
-import server
+import mamba_server
 
-client_verify = server.verify
+client_verify = mamba_server.verify
 
 
 def terminal_verify(f):
@@ -13,7 +14,7 @@ def terminal_verify(f):
     @wraps(f)
     def wrapper(self, *args):
         current = args[-1]
-        if server.terminal_con == current.con:
+        if mamba_server.terminal_con == current.con:
             f(self, *args)
         else:
             raise UnauthorizedError()
@@ -22,8 +23,8 @@ def terminal_verify(f):
 
 
 class DataRouterI(DataRouter):
-    def __init__(self, logger):
-        self.logger = logger
+    def __init__(self):
+        self.logger = mamba_server.logger
         self.clients = []
         self.conn_to_client = {}
         self.subscription = {}
@@ -32,7 +33,7 @@ class DataRouterI(DataRouter):
 
     @client_verify
     def registerClient(self, client: DataClient, current):
-        self.logger.info("Data client connected: "
+        self.logger.info("Data mamba_client connected: "
                          + Ice.identityToString(client.ice_getIdentity()))
         client = client.ice_fixed(current.con)
         self.clients.append(client)
@@ -100,7 +101,7 @@ class DataRouterI(DataRouter):
                 self._connection_closed_callback(client)
 
     def _connection_closed_callback(self, client):
-        self.logger.info("Lost connection with client: " +
+        self.logger.info("Lost connection with mamba_client: " +
                          Ice.identityToString(client.ice_getIdentity())
                          )
         self.clients.remove(client)
@@ -114,9 +115,9 @@ class DataRouterI(DataRouter):
 
 
 def initialize(communicator, adapter):
-    server.data_router = DataRouterI(server.logger)
+    mamba_server.data_router = DataRouterI()
 
-    adapter.add(server.data_router,
+    adapter.add(mamba_server.data_router,
                 communicator.stringToIdentity("DataRouter"))
 
-    server.logger.info("DataHost initialized.")
+    mamba_server.logger.info("DataHost initialized.")

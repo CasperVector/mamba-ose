@@ -4,12 +4,12 @@ import threading
 import Ice
 import Dashboard
 
-import server
+import mamba_server
 import utils
 
-from .ipython_terminal_io import IPythonTerminalIO
+from mamba_server.experiment_subproc.ipython_terminal_io import IPythonTerminalIO
 
-client_verify = server.verify
+client_verify = mamba_server.verify
 
 
 def event_verify(f):
@@ -26,10 +26,10 @@ def event_verify(f):
 
 
 class TerminalHostI(Dashboard.TerminalHost):
-    def __init__(self, event_hdl, logger):
+    def __init__(self, event_hdl):
         self.terminal = None
         self.clients = []
-        self.logger = logger
+        self.logger = mamba_server.logger
         self.event_hdl = event_hdl
 
         self.event_token = None
@@ -37,7 +37,7 @@ class TerminalHostI(Dashboard.TerminalHost):
 
     @client_verify
     def registerClient(self, client: Dashboard.TerminalClient, current):
-        self.logger.info("Terminal client connected: "
+        self.logger.info("Terminal mamba_client connected: "
                          + Ice.identityToString(client.ice_getIdentity()))
         client = client.ice_fixed(current.con)
         self.clients.append(client)
@@ -97,10 +97,10 @@ class TerminalHostI(Dashboard.TerminalHost):
 
 
 class TerminalEventHandlerI(Dashboard.TerminalEventHandler):
-    def __init__(self, logger):
+    def __init__(self):
         self.event_token = None
         self.event_emitter_con = None
-        self.logger = logger
+        self.logger = mamba_server.logger
         self.idle = threading.Event()
         self.idle.set()
 
@@ -114,7 +114,7 @@ class TerminalEventHandlerI(Dashboard.TerminalEventHandler):
     def attach(self, token, current):
         if not self.event_emitter_con and token == self.event_token:
             self.event_token = None
-            server.terminal_con = self.event_emitter_con = current.con
+            mamba_server.terminal_con = self.event_emitter_con = current.con
             self.logger.info("Terminal event emitter attached.")
         else:
             self.logger.info("Invalid terminal event emitter attach request.")
@@ -132,12 +132,12 @@ class TerminalEventHandlerI(Dashboard.TerminalEventHandler):
 
 
 def initialize(communicator, adapter):
-    event_hdl = TerminalEventHandlerI(server.logger)
-    server.terminal = TerminalHostI(event_hdl, server.logger)
+    event_hdl = TerminalEventHandlerI()
+    mamba_server.terminal = TerminalHostI(event_hdl)
 
-    adapter.add(server.terminal,
+    adapter.add(mamba_server.terminal,
                 communicator.stringToIdentity("TerminalHost"))
     adapter.add(event_hdl,
                 communicator.stringToIdentity("TerminalEventHandler"))
 
-    server.logger.info("TerminalHost, TerminalEventHandler initialized.")
+    mamba_server.logger.info("TerminalHost, TerminalEventHandler initialized.")
