@@ -1,0 +1,93 @@
+digraph G {
+    center=1;
+    rankdir=LR;
+    rank=same;
+    node [style="rounded,filled",color=black,shape=box,fillcolor=white];
+
+    subgraph cluster00 {
+		label = "Client PC";
+
+        subgraph cluster11 {
+            style=filled;
+            color=lightgrey;
+            label="Client"
+
+            subgraph cluster22 {
+                style=filled;
+                color=grey;
+                label = "Widgets";
+
+                TerminalWidget;
+                PlotWidget;
+                DeviceConfigDialog;
+            }
+
+            subgraph cluster23 {
+                color=grey;
+                label="";
+
+                Main;
+                DataClient;
+            }
+        }
+    }
+
+    subgraph cluster01 {
+        label = "IPC";
+
+        subgraph cluster20 {
+            style=filled;
+            color=lightgrey;
+            label = "Server";
+
+            SessionManager;
+            TerminalHost;
+            DataRouter;
+            DeviceHost;
+        }
+
+        subgraph cluster21{
+            style=filled;
+            color=lightgrey;
+            label = "Experiment Subprocess";
+
+            subgraph cluster31{
+                style=filled;
+                color=grey;
+                label = "";
+
+                IPython;
+                bluesky;
+                DataDispatchCallback;
+                DeviceQuery;
+
+                IPython -> DeviceQuery [dir=both, constraint=false];
+                bluesky -> IPython [dir=both, constraint=false];
+                bluesky -> DataDispatchCallback [constraint=false];
+            }
+
+            subgraph cluster32{
+                style=filled;
+                color=grey;
+                label = "Devices";
+
+                ophyd;
+            }
+
+            bluesky -> ophyd [dir=both];
+            DeviceQuery -> ophyd [dir=both];
+        }
+    }
+
+	Main -> SessionManager;
+	PlotWidget -> DataClient [dir=both];
+	TerminalWidget -> TerminalHost [dir=both];
+	TerminalHost -> IPython [dir=both];
+	DeviceConfigDialog -> DeviceHost [dir=both];
+
+	DataClient -> DataRouter [dir=both];
+	DataDispatchCallback -> DataRouter;
+	DeviceHost -> DeviceQuery [dir=both];
+}
+
+
