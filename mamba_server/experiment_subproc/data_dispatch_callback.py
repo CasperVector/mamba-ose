@@ -1,7 +1,7 @@
 import struct
 
-from Dashboard import (DataRouterPrx, DataDescriptor, DataFrame, ScanExitStatus,
-                       DataType)
+from MambaICE import DataFrame, DataType, DataDescriptor
+from MambaICE.Dashboard import DataRouterPrx, ScanExitStatus
 
 from bluesky.callbacks.core import CallbackBase, make_class_safe
 

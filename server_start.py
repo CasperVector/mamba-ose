@@ -26,7 +26,7 @@ ice_props.setProperty("Ice.ACM.Timeout", "30")
 # for more information.
 ice_props.setProperty("Ice.ThreadPool.Client.Size", "1")
 ice_props.setProperty("Ice.ThreadPool.Client.SizeMax", "10")
-ice_props.setProperty("ice.ThreadPool.Server.Size", "1")
+ice_props.setProperty("Ice.ThreadPool.Server.Size", "1")
 ice_props.setProperty("Ice.ThreadPool.Server.SizeMax", "10")
 
 ice_init_data = Ice.InitializationData()

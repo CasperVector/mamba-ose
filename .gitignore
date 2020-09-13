@@ -1,6 +1,6 @@
 # igonre compiled slice
 *_ice.py
-Dashboard/
+MambaICE/
 
 *.swp
 *.o

@@ -1,4 +1,4 @@
-import Dashboard
+import MambaICE.Dashboard as Dashboard
 
 from pyqterm import Terminal
 

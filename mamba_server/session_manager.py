@@ -1,6 +1,6 @@
 from functools import wraps
 
-import Dashboard
+import MambaICE.Dashboard as Dashboard
 import mamba_server
 
 

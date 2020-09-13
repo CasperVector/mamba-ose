@@ -2,7 +2,7 @@ from functools import wraps
 import threading
 
 import Ice
-import Dashboard
+import MambaICE.Dashboard as Dashboard
 
 import mamba_server
 import utils

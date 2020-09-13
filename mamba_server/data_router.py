@@ -1,8 +1,7 @@
 from functools import wraps
 
 import Ice
-from Dashboard import (DataRouter, DataClient, UnauthorizedError,
-                       DataDescriptor, DataType)
+from MambaICE.Dashboard import DataRouter, DataClient, UnauthorizedError
 
 import mamba_server
 

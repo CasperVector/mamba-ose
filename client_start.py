@@ -2,7 +2,7 @@ import sys
 import logging
 
 import Ice
-from Dashboard import SessionManagerPrx
+from MambaICE.Dashboard import SessionManagerPrx
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QCoreApplication

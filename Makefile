@@ -1,7 +1,8 @@
-dashboard_ice.py: dashboard.ice
-	slice2py dashboard.ice
+.PHONY: clean all ice
+all: ice
 
-.PHONY: clean
+ice:
+	slice2py -Islices/ slices/types.ice slices/dashboard.ice slices/experiment.ice
 
 clean:
 	rm -rf Dashboard/
