@@ -1,7 +1,10 @@
+# igonre compiled slice
+*_ice.py
+Dashboard/
+
 *.swp
 *.o
 *.x
-virtualenvs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
