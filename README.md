@@ -23,11 +23,11 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
 
 1. Clone this repo
 
-      ```bash
+   ```bash
    git clone http://heps-se.ihep.ac.cn/gengyd/mamba.git
    cd mamba
    python -m venv venv # Create a new virtual environment
-      ```
+   ```
 
 2. bluesky need to be installed first. See [bluesky's tutorial](https://blueskyproject.io/bluesky/tutorial.html) (remember to install everything with `venv/bin/python3 -m pip`).
 
@@ -39,12 +39,18 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
 
 4. Install pyqterm
 
-      ```bash
+   ```bash
    git clone https://github.com/TerryGeng/pyqterm
    (cd pyqterm && ../venv/bin/python setup.py develop)
-      ```
+   ```
 
-5. Run the server
+5. Make compiled ICE slices (must have gnu make installed. Windows users should consider install MinGW)
+
+    ```bash
+    make
+    ```
+
+6. Run the server
 
    ```
    venv/bin/python3 server_start.py
@@ -74,21 +80,18 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
    (cd pyqterm && ../venv/bin/python setup.py develop)
    ```
 
-4. Compile ICE's Slice interface description into python code
+5. Make compiled ICE slices (must have gnu make installed. Windows users should consider install MinGW)
 
-   ```bash
-   venv/bin/slice2py dashboard.ice
-   ```
+    ```bash
+    make
+    ```
 
-5. Correctly set the IP address of the server inside `client_config.yaml`:
+6. Correctly set the IP address of the server inside `client_config.yaml`:
 
    ```yaml
    ---
    network:
      host_address: 127.0.0.1 # <--- edit this line
-     host_port: 10076
-     protocol: tcp
-   
    ```
 
 6. Run the client
