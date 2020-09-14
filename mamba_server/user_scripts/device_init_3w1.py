@@ -8,10 +8,9 @@
 from typing import Dict, Any
 
 from . import DeviceType
-from utils import AttrDict
 from ophyd import EpicsMotor
 
-__registered_device: Dict[DeviceType, Dict[str, Any]]
+__registered_devices: Dict[DeviceType, Dict[str, Any]]
 
 # motors = AttrDict(
 #     {
@@ -27,16 +26,18 @@ __registered_device: Dict[DeviceType, Dict[str, Any]]
 #     }
 # )
 
-from ophyd.sim import motor1, motor2
+from ophyd.sim import motor1, motor2, det
 
-motors = AttrDict(
-    {
-        'mSampleX': motor1,
-        'mSampleZ': motor2,
-    }
-)
+motors = {
+    'mSampleX': motor1,
+    'mSampleZ': motor2,
+}
+
+dets = {
+    'det': det,
+}
 
 __registered_devices = {
     DeviceType.Motor: motors,
-    DeviceType.Detector: {}
+    DeviceType.Detector: dets
 }

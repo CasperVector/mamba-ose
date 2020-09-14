@@ -111,6 +111,8 @@ class DeviceQueryI(dict, DeviceQuery):
             if cpt.kind & kind:
                 field = list(cpt.describe().values())[0]
                 _type = self._to_type(field['dtype'])
+                if 'enum_strs' in field:
+                    _type = DataType.String
                 field_val = list(cpt.read().values())[0]
                 fields.append(
                     TypedDataFrame(
@@ -154,11 +156,12 @@ class DeviceQueryI(dict, DeviceQuery):
 
     @staticmethod
     def _pack(_type, value):
-        if _type == 'number':
+        assert isinstance(_type, DataType)
+        if _type == DataType.Float:
             return struct.pack("d", float(value))
-        elif _type == 'integer':
+        elif _type == DataType.Integer:
             return struct.pack("i", int(value))
-        elif _type == 'string':
+        elif _type == DataType.String:
             return value.encode('utf-8')
 
 

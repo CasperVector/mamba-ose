@@ -3,8 +3,21 @@ import logging
 from importlib import import_module
 
 import Ice
-from MambaICE.Dashboard import (TerminalEventHandlerPrx, DataRouterPrx,
-                                DeviceManagerPrx)
+import MambaICE
+
+if hasattr(MambaICE, 'DeviceType'):
+    from MambaICE import DeviceType
+else:
+    from MambaICE.types_ice import DeviceType
+
+if hasattr(MambaICE.Dashboard, 'TerminalEventHandlerPrx') and \
+        hasattr(MambaICE.Dashboard, 'DataRouterPrx') and \
+        hasattr(MambaICE.Dashboard, 'DeviceManagerPrx'):
+    from MambaICE.Dashboard import (TerminalEventHandlerPrx, DataRouterPrx,
+                                    DeviceManagerPrx)
+else:
+    from MambaICE.dashboard_ice import (TerminalEventHandlerPrx, DataRouterPrx,
+                                        DeviceManagerPrx)
 
 from pyqterm import TerminalIO
 
@@ -72,7 +85,7 @@ def start_experiment_subprocess(host_endpoint, event_hdl_token):
 
         experiment_subproc.device_manager = DeviceManagerPrx.checkedCast(
             communicator.stringToProxy(f"DeviceManager:{host_endpoint}")
-            .ice_connectionId("MambaExperimentSubproc")
+                .ice_connectionId("MambaExperimentSubproc")
         )
 
         while True:
@@ -117,6 +130,10 @@ def _run_ipshell(ipshell, banner, data_callback):
             experiment_subproc.device_query_obj.push_devices_to_host(
                 experiment_subproc.device_manager
             )
+            motors = utils.AttrDict(
+                init_module.__registered_devices[DeviceType.Motor])
+            dets = utils.AttrDict(
+                init_module.__registered_devices[DeviceType.Detector])
         except KeyError:
             print("ERROR: Failed to load devices")
     else:
@@ -143,6 +160,7 @@ class IPythonTerminalIO(TerminalIO):
                  event_hdl_token, logger):
         super().__init__(cols, rows, logger=logger)
         self.banner = ""
+        self.logger = logger
 
         self.host_endpoint = host_endpoint
         self.event_hdl_token = event_hdl_token
