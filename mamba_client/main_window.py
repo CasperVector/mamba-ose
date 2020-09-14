@@ -9,13 +9,10 @@ class MainWindow(QMainWindow):
         self.widget_factory = {}
         self.docks = {}
 
-        self.setDockNestingEnabled(True)
+        self.menus = {}
 
-    def init_menubar(self):
-        bar = self.menuBar()
-        # TODO
-        file = bar.addMenu("File")
-        file.addAction("New")
+        self.setWindowTitle("Mamba")
+        self.setDockNestingEnabled(True)
 
     def add_widget(self, name, widget_init_func):
         self.widget_factory[name] = widget_init_func
@@ -54,3 +51,10 @@ class MainWindow(QMainWindow):
                     self.splitDockWidget(last_widget, self.docks[widget],
                                          Qt.Horizontal)
                 last_widget = self.docks[widget]
+
+    def add_menu_item(self, menu, action):
+        if menu not in self.menus:
+            bar = self.menuBar()
+            self.menus[menu] = bar.addMenu(menu)
+
+        self.menus[menu].addAction(action)
