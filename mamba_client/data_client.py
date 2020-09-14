@@ -71,9 +71,9 @@ class DataClientI(DataClient):
     def _to_value(value, _type):
         assert isinstance(_type, DataType)
         if _type == DataType.Float:
-            return struct.unpack("d", value)
+            return struct.unpack("d", value)[0]
         elif _type == DataType.Integer:
-            return struct.unpack("i", value)
+            return struct.unpack("i", value)[0]
         elif _type == DataType.String:
             return value.decode("utf-8")
 
