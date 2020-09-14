@@ -1,5 +1,7 @@
 from functools import wraps
 
+import IcePy
+
 import MambaICE.Dashboard as Dashboard
 import mamba_server
 
@@ -9,8 +11,9 @@ def verify(f):
     @wraps(f)
     def wrapper(*args):
         current = args[-1]
-        mamba_server.session.verify(current)
-        f(*args)
+        if current and isinstance(current, IcePy.Current):
+            mamba_server.session.verify(current)
+        return f(*args)
 
     return wrapper
 

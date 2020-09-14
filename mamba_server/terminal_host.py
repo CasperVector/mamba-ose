@@ -26,7 +26,7 @@ def event_verify(f):
 
 
 class TerminalHostI(Dashboard.TerminalHost):
-    def __init__(self, event_hdl):
+    def __init__(self, event_hdl: 'TerminalEventHandlerI'):
         self.terminal = None
         self.clients = []
         self.logger = mamba_server.logger
@@ -66,11 +66,12 @@ class TerminalHostI(Dashboard.TerminalHost):
                              "emitters to attach.")
 
     @client_verify
-    def emitCommand(self, cmd, current):
-        self.terminal.stdin(current.encode('utf-8'))
+    def emitCommand(self, cmd, current=None):
+        self.event_hdl.idle.wait()
+        self.terminal.write(b'\x15' + cmd.encode('utf-8') + b'\r')
 
     @client_verify
-    def stdin(self, s: bytes, current):
+    def stdin(self, s: bytes, current=None):
         self.terminal.write(s)
 
     @client_verify

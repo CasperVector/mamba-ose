@@ -4,16 +4,16 @@ import logging
 import Ice
 from MambaICE.Dashboard import SessionManagerPrx, DeviceManagerPrx
 
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QAction
 from PyQt5.QtCore import Qt, QCoreApplication
 
-import mamba_client
 import utils
 import mamba_client
 from mamba_client.main_window import MainWindow
 from mamba_client.widgets.terminal import TerminalWidget
 from mamba_client.widgets.plot import PlotWidget
 from mamba_client.data_client import DataClientI
+from mamba_client.dialogs.device_config import DeviceConfigDialog
 
 # --- Ice properties setup ---
 
@@ -64,6 +64,11 @@ if __name__ == "__main__":
         try:
             mw = MainWindow()
 
+            mw.add_menu_item("Device",
+                             DeviceConfigDialog.get_action(
+                                 mamba_client.device_manager,
+                                 mw)
+                             )
             mw.add_widget("Terminal",
                           TerminalWidget.get_init_func(communicator,
                                                        ice_endpoint,

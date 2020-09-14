@@ -59,6 +59,7 @@ module MambaICE {
             strings getDevicesByType(string type);
             TypedDataFrames getDeviceConfigurations(string name);
             TypedDataFrames getDeviceReadings(string name);
+            void setDeviceConfiguration(string name, DataFrame frame);
 
             // --- method for experiment subprocess ---
             void addDevices(DeviceEntries entries);

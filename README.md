@@ -113,18 +113,20 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
 - [x] Server: DeviceManager - _2020.9.14_
   - [x] cache device descriptions - _2020.9.14_
   - [x] relay config query request - _2020.9.14_
-  - [ ] set config value interface
+  - [x] set config value interface - _2020.9.14_
   - [ ] periodically push reading back? (DataRouter?)
-- [ ] Client: DeviceConfigDialog
+- [x] Client: DeviceConfigDialog - _2020.9.14_
 - [ ] Motor control panel
-  - [ ] Server: EPICS host? ophyd?
-  - [ ] Client: motor control panel widget
-- [ ] Experiment control navbar (pause, continue, halt)
-- [ ] **Scan metadata storage**
-- [ ] Documentation
+- [ ] Server: File storing mechanism
+  - [ ] Scan metadata storage
+  - [ ] AreaDetector save into files
+- [ ] Client: Scan mechanics design widget
+  - [ ] Experiment control navbar (pause, continue, halt)
+- [ ] Client: 2D visualization
 - [ ] Client: plot widgets improvement
   - [ ] draw multiple lines on the same plot
   - [ ] customizable x-axis
 - [ ] Terminal buffer on server-side
 - [ ] Subprocess logging mechanism
 - [ ] DataType.Array
+- [ ] Documentation
