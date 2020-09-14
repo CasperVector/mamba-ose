@@ -6,6 +6,7 @@ import mamba_server
 import mamba_server.session_manager as session_manager
 import mamba_server.terminal_host as terminal
 import mamba_server.data_router as data_router
+import mamba_server.device_manager as device_manager
 import utils
 
 # --- Ice properties setup ---
@@ -47,6 +48,7 @@ with Ice.initialize(ice_init_data) as ic:
     session_manager.initialize(ic, adapter)
     terminal.initialize(ic, adapter)
     data_router.initialize(ic, adapter)
+    device_manager.initialize(ic, adapter)
 
     adapter.activate()
 

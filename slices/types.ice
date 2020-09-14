@@ -13,7 +13,7 @@ module MambaICE {
         DataType type;
         Shape shape;
     };
-    dictionary<string, DataDescriptor> DataDescriptors;
+    sequence<DataDescriptor> DataDescriptors;
 
     struct DataFrame {
         string name;

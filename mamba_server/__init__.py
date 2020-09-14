@@ -15,3 +15,4 @@ session = None
 terminal = None
 terminal_con = None
 data_router = None
+device_manager = None

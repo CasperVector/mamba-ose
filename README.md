@@ -110,17 +110,21 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
 - [x] Bluesky data callback
 - [x] Slice interface refactored - _2020.9.13_
 - [x] DeviceQuery interface, handle device config query request - _2020.9.13_
-- [ ] Server: DeviceManager
-  - [ ] cache device descriptions
-  - [ ] relay config query request
+- [x] Server: DeviceManager - _2020.9.14_
+  - [x] cache device descriptions - _2020.9.14_
+  - [x] relay config query request - _2020.9.14_
   - [ ] set config value interface
   - [ ] periodically push reading back? (DataRouter?)
 - [ ] Client: DeviceConfigDialog
-- [ ] Client: plot widgets improvement
-  - [ ] draw multiple lines on the same plot
-  - [ ] customizable x-axis
 - [ ] Motor control panel
   - [ ] Server: EPICS host? ophyd?
   - [ ] Client: motor control panel widget
 - [ ] Experiment control navbar (pause, continue, halt)
+- [ ] **Scan metadata storage**
 - [ ] Documentation
+- [ ] Client: plot widgets improvement
+  - [ ] draw multiple lines on the same plot
+  - [ ] customizable x-axis
+- [ ] Terminal buffer on server-side
+- [ ] Subprocess logging mechanism
+- [ ] DataType.Array

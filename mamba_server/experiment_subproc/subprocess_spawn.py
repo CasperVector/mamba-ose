@@ -3,7 +3,8 @@ import logging
 from importlib import import_module
 
 import Ice
-from MambaICE.Dashboard import TerminalEventHandlerPrx, DataRouterPrx
+from MambaICE.Dashboard import (TerminalEventHandlerPrx, DataRouterPrx,
+                                DeviceManagerPrx)
 
 from pyqterm import TerminalIO
 
@@ -21,7 +22,7 @@ from mamba_server.experiment_subproc import device_query
 ###################################################################
 
 
-def start_experiment_subprocess(event_hdl_endpoint, event_hdl_token):
+def start_experiment_subprocess(host_endpoint, event_hdl_token):
     # ======== THIS IS THE ENTRY POINT OF THE SUBPROCESS ========
     # NOTE: For security reason, all file handler except stdin, stdout and
     #       stderr has been closed.
@@ -58,15 +59,21 @@ def start_experiment_subprocess(event_hdl_endpoint, event_hdl_token):
 
         event_hdl = TerminalEventHandlerPrx.checkedCast(
             communicator.stringToProxy(
-                f"TerminalEventHandler:{event_hdl_endpoint}")
+                f"TerminalEventHandler:{host_endpoint}")
                 .ice_connectionId("MambaExperimentSubproc")
         )
         event_hdl.attach(event_hdl_token)
 
         data_router = DataRouterPrx.checkedCast(
-            communicator.stringToProxy(
-                f"DataRouter:{event_hdl_endpoint}"))
+            communicator.stringToProxy(f"DataRouter:{host_endpoint}")
+                .ice_connectionId("MambaExperimentSubproc")
+        )
         data_callback = DataDispatchCallback(data_router)
+
+        experiment_subproc.device_manager = DeviceManagerPrx.checkedCast(
+            communicator.stringToProxy(f"DeviceManager:{host_endpoint}")
+            .ice_connectionId("MambaExperimentSubproc")
+        )
 
         while True:
             from traitlets.config.loader import Config
@@ -105,12 +112,16 @@ def _run_ipshell(ipshell, banner, data_callback):
     if hasattr(init_module, "__registered_devices") and \
             isinstance(init_module.__registered_devices, dict):
         try:
-            mamba_server.experiment_subproc.device_query_obj.load_devices(
+            experiment_subproc.device_query_obj.load_devices(
                 init_module.__registered_devices)
+            experiment_subproc.device_query_obj.push_devices_to_host(
+                experiment_subproc.device_manager
+            )
         except KeyError:
             print("ERROR: Failed to load devices")
     else:
         print("ERROR: Failed to load devices")
+
     expose_everything_inside_module(init_module)
 
     from bluesky import RunEngine
@@ -128,15 +139,14 @@ def expose_everything_inside_module(module):
 
 
 class IPythonTerminalIO(TerminalIO):
-    def __init__(self, cols: int, rows: int, event_hdl_endpoint,
+    def __init__(self, cols: int, rows: int, host_endpoint,
                  event_hdl_token, logger):
         super().__init__(cols, rows, logger=logger)
         self.banner = ""
 
-        self.event_hdl_endpoint = event_hdl_endpoint
+        self.host_endpoint = host_endpoint
         self.event_hdl_token = event_hdl_token
 
     def run_slave(self):
-        start_experiment_subprocess(self.event_hdl_endpoint,
-                                    self.event_hdl_token)
+        start_experiment_subprocess(self.host_endpoint, self.event_hdl_token)
         self.logger = experiment_subproc.logger

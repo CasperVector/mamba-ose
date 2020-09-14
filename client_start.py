@@ -2,7 +2,7 @@ import sys
 import logging
 
 import Ice
-from MambaICE.Dashboard import SessionManagerPrx
+from MambaICE.Dashboard import SessionManagerPrx, DeviceManagerPrx
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QCoreApplication
@@ -56,6 +56,10 @@ if __name__ == "__main__":
         mamba_client.session.login(mamba_client.credentials[0], mamba_client.credentials[1])
 
         mamba_client.data_client = DataClientI(communicator, ice_endpoint, logger)
+
+        mamba_client.device_manager = DeviceManagerPrx.checkedCast(
+            communicator.stringToProxy(f"DeviceManager:{ice_endpoint}")
+                .ice_connectionId("MambaClient"))
 
         try:
             mw = MainWindow()

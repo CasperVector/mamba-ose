@@ -20,11 +20,11 @@ class DataDispatchCallback(CallbackBase):
         # TODO: process header, scan metadata, etc
         self.data_keys = keys = doc['data_keys']
 
-        data_descriptors = {
-            key: DataDescriptor(key,
-                                self._to_type(des['dtype']),
-                                des['shape']) for key, des in keys.items()
-        }
+        data_descriptors = [
+            DataDescriptor(key,
+                           self._to_type(des['dtype']),
+                           des['shape']) for key, des in keys.items()
+        ]
         self.data_host.scanStart(self.scan_id, data_descriptors)
 
     def event(self, doc):
@@ -46,14 +46,19 @@ class DataDispatchCallback(CallbackBase):
 
     @staticmethod
     def _to_type(string):
+        # TODO: move to elsewhere
         if string == 'number':
             return DataType.Float
         elif string == 'string':
             return DataType.String
+        elif string == 'integer':
+            return DataType.Integer
 
     @staticmethod
     def _pack(_type, value):
         if _type == 'number':
             return struct.pack("d", float(value))
+        elif _type == 'integer':
+            return struct.pack("i", int(value))
         elif _type == 'string':
             return value.encode('utf-8')

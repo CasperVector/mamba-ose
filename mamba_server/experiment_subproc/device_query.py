@@ -41,7 +41,7 @@ else:
 
 
 class DeviceQueryI(dict, DeviceQuery):
-    def __init__(self, typed_device_dict = None):
+    def __init__(self, typed_device_dict=None):
         super().__init__(self)
         self.device_type_lookup = {}
         if typed_device_dict:
@@ -52,6 +52,9 @@ class DeviceQueryI(dict, DeviceQuery):
             for name, dev in dev_dict.items():
                 self[name] = dev
                 self.device_type_lookup[name] = _type
+
+    def push_devices_to_host(self, host):
+        host.addDevices(self.listDevices())
 
     def getDevicesByType(self, _type, current) -> List[DeviceEntry]:
         """ICE function"""
@@ -85,7 +88,8 @@ class DeviceQueryI(dict, DeviceQuery):
         dev = self[dev_name]
         return self.get_device_fields(dev, Kind.hinted)
 
-    def listDevices(self, current):
+    def listDevices(self, current=None):
+        """ICE function"""
         dev_list = []
         for name, dev in self.items():
             dev_list.append(
@@ -145,11 +149,15 @@ class DeviceQueryI(dict, DeviceQuery):
             return DataType.Float
         elif string == 'string':
             return DataType.String
+        elif string == 'integer':
+            return DataType.Integer
 
     @staticmethod
     def _pack(_type, value):
         if _type == 'number':
             return struct.pack("d", float(value))
+        elif _type == 'integer':
+            return struct.pack("i", int(value))
         elif _type == 'string':
             return value.encode('utf-8')
 

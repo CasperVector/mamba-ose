@@ -27,7 +27,7 @@ class DataRouterI(DataRouter):
         self.clients = []
         self.conn_to_client = {}
         self.subscription = {}
-        self.keys = []
+        self.keys = {}
         self.scan_id = 0
 
     @client_verify
@@ -55,17 +55,17 @@ class DataRouterI(DataRouter):
     def scanStart(self, id, keys, current):
         self.logger.info(f"Scan start received, scan id {id}")
         self.scan_id = id
-        self.keys = keys
 
         # forward data
         for client in self.clients:
             to_send = {}
-            for key, des in keys.items():
+            for key in keys:
+                self.keys[key.name] = key
                 if client not in self.subscription:
                     continue
-                if key in self.subscription[client] or \
+                if key.name in self.subscription[client] or \
                         "*" in self.subscription[client]:
-                    to_send[key] = des
+                    to_send[key.name] = key
             try:
                 self.logger.info(f"Forward data descriptors to {client}")
                 client.scanStart(self.scan_id, to_send)
