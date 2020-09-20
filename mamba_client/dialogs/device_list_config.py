@@ -1,27 +1,35 @@
-from PyQt5.QtCore import Qt
+import struct
+import time
+
+from PyQt5.QtWidgets import (QAction, QDialog, QGridLayout, QHBoxLayout,
+                             QLabel, QPushButton, QListWidget, QListWidgetItem,
+                             QTableWidget, QTableWidgetItem, QSizePolicy,
+                             QSpacerItem)
+from PyQt5.QtCore import QSize, QEventLoop, Qt
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
-                             QSizePolicy, QSpacerItem)
 
 import mamba_client
-from mamba_client import DeviceManagerPrx
+from mamba_client import DeviceManagerPrx, DeviceEntry, DeviceType, DataType
+from mamba_client.widgets.device_select import DeviceSelectWidget
 from mamba_client.widgets.device_config import DeviceConfigWidget
 
 
-class DeviceConfigDialog(QDialog):
-    def __init__(self, device_id, device_manager: DeviceManagerPrx, parent=None):
+class DeviceListConfigDialog(QDialog):
+    def __init__(self, device_manager: DeviceManagerPrx, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"Configure Device: {device_id}")
-        self.device_id = device_id
+        self.setWindowTitle("Configure Device")
         self.logger = mamba_client.logger
         self.device_manager = device_manager
 
-        self.layout = QVBoxLayout()
+        self.layout = QGridLayout()
 
-        self.old_config_list = []
-        self.changed_config_rows = []
-        self.config_widget = DeviceConfigWidget(device_manager, device_id)
-        self.layout.addWidget(self.config_widget)
+        self.selected_device = None
+        self.device_select_widget = DeviceSelectWidget(device_manager)
+        self.layout.addWidget(self.device_select_widget, 0, 0)
+
+        self.config_widget = DeviceConfigWidget(device_manager)
+        self.config_widget.config_changed.connect(self.config_changed)
+        self.layout.addWidget(self.config_widget, 0, 1)
 
         self.button_layout = QHBoxLayout()
         button_spacer = QSpacerItem(1, 1, QSizePolicy.Expanding,
@@ -44,13 +52,18 @@ class DeviceConfigDialog(QDialog):
         self.submit_button.clicked.connect(self.submit)
         self.button_layout.addWidget(self.submit_button, Qt.AlignRight)
 
-        self.layout.addLayout(self.button_layout)
+        self.layout.addLayout(self.button_layout, 1, 1)
         self.submit_button.setEnabled(False)
 
         self.setLayout(self.layout)
 
-        self.config_widget.prepare_config_list(self.device_id)
+        self.device_select_widget.device_selected.connect(self.device_selected)
         self.config_widget.config_changed.connect(self.config_changed)
+
+    def device_selected(self, device: DeviceEntry):
+        self.submit_button.setEnabled(False)
+        self.selected_device = device
+        self.config_widget.prepare_config_list(device.name)
 
     def config_changed(self):
         self.submit_button.setEnabled(True)
@@ -60,3 +73,15 @@ class DeviceConfigDialog(QDialog):
     def submit(self):
         self.config_widget.submit()
         self.close()
+
+    @classmethod
+    def get_action(cls, device_manager, parent=None):
+        device_config_action = QAction("Device Config", parent)
+
+        def show_dialog():
+            dialog = cls(device_manager, parent)
+            dialog.show()
+
+        device_config_action.triggered.connect(show_dialog)
+
+        return device_config_action

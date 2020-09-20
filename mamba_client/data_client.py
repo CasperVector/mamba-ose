@@ -1,8 +1,8 @@
 import struct
 from datetime import datetime
 
-from MambaICE import DataDescriptor, DataFrame, DataType
-from MambaICE.Dashboard import DataClient, DataRouterPrx, DataClientPrx
+from mamba_client import (DataDescriptor, DataFrame, DataType,
+                          DataClient, DataRouterPrx, DataClientPrx)
 
 import mamba_client
 

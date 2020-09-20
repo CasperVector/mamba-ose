@@ -9,6 +9,7 @@ from matplotlib.backends.backend_qt5agg import (
     NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
 
+import mamba_client
 from mamba_client.data_client import DataClientI
 
 
@@ -16,10 +17,10 @@ DEFAULT_COLOR = QColor("blue")
 
 
 class PlotWidget(QWidget):
-    def __init__(self, data_client: DataClientI, logger):
+    def __init__(self, data_client: DataClientI):
         super().__init__()
         self.data_client = data_client
-        self.logger = logger
+        self.logger = mamba_client.logger
         self.layout = QVBoxLayout(self)
         self.figure = Figure(figsize=(4, 2))
         self.canvas = FigureCanvas(self.figure)
@@ -48,8 +49,8 @@ class PlotWidget(QWidget):
         return QIcon(pm)
 
     @classmethod
-    def get_init_func(cls, data_client, logger):
-        return lambda: cls(data_client, logger)
+    def get_init_func(cls, data_client):
+        return lambda: cls(data_client)
 
     def show_data_source_dialog(self):
         data_source_select_dialog = PlotDataSubscribeDialog(self)
@@ -136,7 +137,7 @@ class PlotDataSubscribeDialog(QDialog):
         self.line_color_select.setIcon(QIcon(self.line_color_pixmap))
 
     def ok_clicked(self):
-        self.done(0)
+        self.done(QDialog.Accepted)
 
     def display(self):
         loop = QEventLoop()
