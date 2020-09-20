@@ -58,14 +58,14 @@ class DataRouterI(DataRouter):
 
         # forward data
         for client in self.clients:
-            to_send = {}
+            to_send = []
             for key in keys:
                 self.keys[key.name] = key
                 if client not in self.subscription:
                     continue
                 if key.name in self.subscription[client] or \
                         "*" in self.subscription[client]:
-                    to_send[key.name] = key
+                    to_send.append(key)
             try:
                 self.logger.info(f"Forward data descriptors to {client}")
                 client.scanStart(self.scan_id, to_send)

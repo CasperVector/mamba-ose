@@ -78,7 +78,7 @@ class PlotWidget(QWidget):
             self.lines[name] = []
         else:
             self.data_sets[name]['x'].append(timestamp)
-            self.data_sets[name]['y'].append(value[0])
+            self.data_sets[name]['y'].append(value)
         self.plot()
 
     def plot(self):

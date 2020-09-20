@@ -51,7 +51,7 @@ class DataClientI(DataClient):
     def scanStart(self, id, descriptors, current):
         self.scan_id = id
         if len(descriptors) > 0:
-            for key, des in descriptors.items():
+            for des in descriptors:
                 assert isinstance(des, DataDescriptor)
                 self.data_descriptors[des.name] = des
                 self.data_callback_invoke(des.name, None, None)
