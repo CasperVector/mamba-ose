@@ -6,14 +6,11 @@ import mamba_client
 
 
 class TerminalWidget(Terminal, Dashboard.TerminalClient):
-    def __init__(self, communicator, ice_endpoint, logger):
+    def __init__(self, communicator, terminal_host, logger):
         super().__init__(400, 250, logger=logger)
 
         self.communicator = communicator
-        self.host = Dashboard.TerminalHostPrx.checkedCast(
-            communicator.stringToProxy(f"TerminalHost:{ice_endpoint}")
-                        .ice_connectionId("MambaClient")
-        )
+        self.host = terminal_host
         self.register_client_instance()
 
         self.stdin_callback = self.host.stdin
@@ -36,5 +33,5 @@ class TerminalWidget(Terminal, Dashboard.TerminalClient):
         super().stdout(s)
 
     @classmethod
-    def get_init_func(cls, communciator, ice_endpoint, logger):
-        return lambda: cls(communciator, ice_endpoint, logger)
+    def get_init_func(cls, communciator, terminal_host, logger):
+        return lambda: cls(communciator, terminal_host, logger)

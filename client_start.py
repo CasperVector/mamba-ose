@@ -2,7 +2,7 @@ import sys
 import logging
 
 import Ice
-from MambaICE.Dashboard import SessionManagerPrx, DeviceManagerPrx
+from mamba_client import SessionManagerPrx, DeviceManagerPrx, TerminalHostPrx
 
 from PyQt5.QtWidgets import QApplication, QAction
 from PyQt5.QtCore import Qt, QCoreApplication
@@ -13,7 +13,8 @@ from mamba_client.main_window import MainWindow
 from mamba_client.widgets.terminal import TerminalWidget
 from mamba_client.widgets.plot import PlotWidget
 from mamba_client.data_client import DataClientI
-from mamba_client.dialogs.device_config import DeviceConfigDialog
+from mamba_client.dialogs.device_list_config import DeviceListConfigDialog
+from mamba_client.widgets.scan_mechanism import ScanMechanismWidget
 
 # --- Ice properties setup ---
 
@@ -60,29 +61,38 @@ if __name__ == "__main__":
         mamba_client.device_manager = DeviceManagerPrx.checkedCast(
             communicator.stringToProxy(f"DeviceManager:{ice_endpoint}")
                 .ice_connectionId("MambaClient"))
+        mamba_client.terminal_host = TerminalHostPrx.checkedCast(
+            communicator.stringToProxy(f"TerminalHost:{ice_endpoint}")
+                        .ice_connectionId("MambaClient")
+        )
 
         try:
             mw = MainWindow()
 
             mw.add_menu_item("Device",
-                             DeviceConfigDialog.get_action(
+                             DeviceListConfigDialog.get_action(
                                  mamba_client.device_manager,
                                  mw)
                              )
             mw.add_widget("Terminal",
-                          TerminalWidget.get_init_func(communicator,
-                                                       ice_endpoint,
-                                                       mamba_client.logger)
+                          TerminalWidget.get_init_func(
+                              communicator,
+                              mamba_client.terminal_host,
+                              mamba_client.logger)
                           )
             mw.add_widget("Plot1",
-                          PlotWidget.get_init_func(mamba_client.data_client,
-                                                   mamba_client.logger)
+                          PlotWidget.get_init_func(mamba_client.data_client)
                           )
             mw.add_widget("Plot2",
-                          PlotWidget.get_init_func(mamba_client.data_client,
-                                                   mamba_client.logger)
+                          PlotWidget.get_init_func(mamba_client.data_client)
+                          )
+            mw.add_widget("Scan Mechanism",
+                          ScanMechanismWidget.get_init_func(
+                              mamba_client.device_manager,
+                              mamba_client.terminal_host)
                           )
             mw.set_layout({
+                ("left", "Scan Mechanism"),
                 ("left", "Terminal"),
                 ("right", "Plot1"),
                 ("right", "Plot2")
