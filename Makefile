@@ -1,8 +1,8 @@
 PYTHON = venv/bin/python
 SLICE2PY = venv/bin/slice2py
 
-.PHONY: clean all ice
-all: ice logs
+.PHONY: clean all ice client
+all: ice logs client
 
 $(PYTHON):
 	python -m venv venv
@@ -16,6 +16,10 @@ ice: $(SLICE2PY)
 logs:
 	mkdir logs/
 
+client:
+	(cd mamba_client && make)
+
 clean:
 	rm -rf MambaICE/
 	rm -rf logs/
+	(cd mamba_client && make clean)
