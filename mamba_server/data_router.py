@@ -1,4 +1,7 @@
 from functools import wraps
+from collections import namedtuple
+from enum import Enum
+from abc import ABC
 
 import Ice
 from MambaICE.Dashboard import DataRouter, DataClient, UnauthorizedError
@@ -21,38 +24,73 @@ def terminal_verify(f):
     return wrapper
 
 
+Client = namedtuple("Client", ["is_remote", "prx", "callback"])
+# is_remote: bool, specify the client is Remote or Local.
+# prx: DataClientPrx, for remote client.
+# callback: DataClientCallback, if the client is local, this is the callback
+#  interface to invoke.
+
+
+class DataClientCallback(ABC):
+    def scan_start(self, _id, data_descriptors):
+        raise NotImplementedError
+
+    def data_update(self, frames):
+        raise NotImplementedError
+
+    def scan_end(self, status):
+        raise NotImplementedError
+
+
 class DataRouterI(DataRouter):
     def __init__(self):
         self.logger = mamba_server.logger
         self.clients = []
+        self.local_clients = {}
         self.conn_to_client = {}
         self.subscription = {}
         self.keys = {}
         self.scan_id = 0
 
     @client_verify
-    def registerClient(self, client: DataClient, current):
-        self.logger.info("Data mamba_client connected: "
+    def registerClient(self, client: DataClient, current=None):
+        self.logger.info("Remote data client connected: "
                          + Ice.identityToString(client.ice_getIdentity()))
-        client = client.ice_fixed(current.con)
+        client_prx = client.ice_fixed(current.con)
+        client = Client(True, client_prx, None)
         self.clients.append(client)
         self.conn_to_client[current.con] = client
         self.subscription[client] = []
         current.con.setCloseCallback(
-            lambda conn: self._connection_closed_callback(client))
+            lambda conn: self._connection_closed_callback(client))  # TODO
+
+    def local_register_client(self, name, callback: DataClientCallback):
+        self.logger.info(f"Local data client registered: {name}")
+        client = Client(False, None, callback)
+        self.append(client)
+        self.local_clients[name] = client
+        self.subscription[client] = []
 
     @client_verify
-    def subscribe(self, items, current):
+    def subscribe(self, items, current=None):
         client = self.conn_to_client[current.con]
         self.subscription[client] = items
 
     @client_verify
-    def subscribeAll(self, current):
+    def subscribeAll(self, current=None):
         client = self.conn_to_client[current.con]
         self.subscription[client] = ["*"]
 
+    def local_subscribe(self, name, items):
+        client = self.local_clients[name]
+        self.subscription[client] = items
+
+    def local_subscribe_all(self, name, items):
+        client = self.local_clients[name]
+        self.subscription[client] = ["*"]
+
     @terminal_verify
-    def scanStart(self, id, keys, current):
+    def scanStart(self, id, keys, current=None):
         self.logger.info(f"Scan start received, scan id {id}")
         self.scan_id = id
 
@@ -68,13 +106,16 @@ class DataRouterI(DataRouter):
                     to_send.append(key)
             try:
                 self.logger.info(f"Forward data descriptors to {client}")
-                client.scanStart(self.scan_id, to_send)
+                if client.is_remote:
+                    client.prx.scanStart(self.scan_id, to_send)
+                else:
+                    client.callback.scan_start(self.scan_id, to_send)
             except Ice.CloseConnectionException:
                 self._connection_closed_callback(client)
                 pass
 
     @terminal_verify
-    def pushData(self, frames, current):
+    def pushData(self, frames, current=None):
         self.logger.info(f"Data frames received from bluesky callback")
         for client in self.clients:
             to_send = []
@@ -86,7 +127,10 @@ class DataRouterI(DataRouter):
             if to_send:
                 try:
                     self.logger.info(f"Forward data frames to {client}")
-                    client.dataUpdate(to_send)
+                    if client.is_remote:
+                        client.prx.dataUpdate(to_send)
+                    else:
+                        client.callback.data_update(to_send)
                 except Ice.CloseConnectionException:
                     self._connection_closed_callback(client)
 
@@ -95,7 +139,10 @@ class DataRouterI(DataRouter):
         self.logger.info(f"Scan end received")
         for client in self.clients:
             try:
-                client.scanEnd(status)
+                if client.is_remote:
+                    client.prx.scanEnd(status)
+                else:
+                    client.callback.scan_end(status)
             except Ice.CloseConnectionException:
                 self._connection_closed_callback(client)
 
