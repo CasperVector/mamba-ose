@@ -1,4 +1,3 @@
-import os
 import logging
 from importlib import import_module
 
@@ -21,7 +20,7 @@ else:
 
 from pyqterm import TerminalIO
 
-import utils
+from utils import general_utils
 import mamba_server.experiment_subproc as experiment_subproc
 import mamba_server
 from .data_dispatch_callback import DataDispatchCallback
@@ -65,7 +64,7 @@ def start_experiment_subprocess(host_endpoint, event_hdl_token):
     with Ice.initialize(ice_init_data) as communicator:
         adapter = communicator.createObjectAdapterWithEndpoints(
             "ExperimentSubprocess",
-            utils.get_experiment_subproc_endpoint()
+            general_utils.get_experiment_subproc_endpoint()
         )
         device_query.initialize(communicator, adapter)
         adapter.activate()
@@ -130,9 +129,9 @@ def _run_ipshell(ipshell, banner, data_callback):
             experiment_subproc.device_query_obj.push_devices_to_host(
                 experiment_subproc.device_manager
             )
-            motors = utils.AttrDict(
+            motors = general_utils.AttrDict(
                 init_module.__registered_devices[DeviceType.Motor])
-            dets = utils.AttrDict(
+            dets = general_utils.AttrDict(
                 init_module.__registered_devices[DeviceType.Detector])
         except KeyError:
             print("ERROR: Failed to load devices")

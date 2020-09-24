@@ -2,6 +2,7 @@
 
 module MambaICE {
     sequence<byte> bytes;
+    sequence<double> doubles;
     sequence<string> strings;
 
     enum DataType { Float, String, Integer, Array };
@@ -15,21 +16,30 @@ module MambaICE {
     };
     sequence<DataDescriptor> DataDescriptors;
 
-    struct DataFrame {
-        string name;
-        bytes value;
-        double timestamp;
-    };
-    sequence<DataFrame> DataFrames;
-
-    struct TypedDataFrame {
+    class TypedDataFrame {
         string name;
         DataType type;
-        Shape shape;
-        bytes value;
         double timestamp;
-    }
+    };
+
     sequence<TypedDataFrame> TypedDataFrames;
+
+    class StringDataFrame extends TypedDataFrame {
+        string value;
+    };
+
+    class FloatDataFrame extends TypedDataFrame {
+        double value;
+    };
+
+    class IntegerDataFrame extends TypedDataFrame {
+        int value;
+    };
+
+    class ArrayDataFrame extends TypedDataFrame {
+        Shape shape;
+        doubles data;
+    };
 
     struct DeviceEntry {
         string name;

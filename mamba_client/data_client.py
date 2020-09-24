@@ -1,10 +1,11 @@
 import struct
 from datetime import datetime
 
-from mamba_client import (DataDescriptor, DataFrame, DataType,
+from mamba_client import (DataDescriptor, DataType,
                           DataClient, DataRouterPrx, DataClientPrx)
 
 import mamba_client
+from utils.data_utils import data_frame_to_value
 
 
 class DataClientI(DataClient):
@@ -58,23 +59,9 @@ class DataClientI(DataClient):
 
     def dataUpdate(self, frames, current):
         for frame in frames:
-            assert isinstance(frame, DataFrame)
-            value = self._to_value(frame.value,
-                                   self.data_descriptors[frame.name].type)
+            value = data_frame_to_value(frame)
             timestamp = datetime.fromtimestamp(frame.timestamp)
             self.data_callback_invoke(frame.name, value, timestamp)
 
     def scanEnd(self, status, current):
         pass
-
-    @staticmethod
-    def _to_value(value, _type):
-        assert isinstance(_type, DataType)
-        if _type == DataType.Float:
-            return struct.unpack("d", value)[0]
-        elif _type == DataType.Integer:
-            return struct.unpack("i", value)[0]
-        elif _type == DataType.String:
-            return value.decode("utf-8")
-
-        return None

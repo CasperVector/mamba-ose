@@ -2,7 +2,6 @@ import struct
 from functools import wraps
 from typing import List
 
-import Ice
 import MambaICE
 
 if hasattr(MambaICE.Dashboard, 'DeviceManager') and \
@@ -13,14 +12,13 @@ else:
 
 if hasattr(MambaICE, 'DeviceType') and hasattr(MambaICE, 'DataType') and \
         hasattr(MambaICE, 'TypedDataFrame') and \
-        hasattr(MambaICE, 'DataFrame') and \
         hasattr(MambaICE, 'DataDescriptor') and \
         hasattr(MambaICE, 'DeviceEntry'):
-    from MambaICE import (DeviceType, DataType, TypedDataFrame, DataFrame,
-                          DataDescriptor, DeviceEntry)
+    from MambaICE import (DeviceType, DataType, TypedDataFrame,
+                          DeviceEntry)
 else:
     from MambaICE.types_ice import (DeviceType, DataType, TypedDataFrame,
-                                    DataFrame, DataDescriptor, DeviceEntry)
+                                    DeviceEntry)
 
 if hasattr(MambaICE.Experiment, 'DeviceQueryPrx'):
     from MambaICE.Experiment import DeviceQueryPrx
@@ -28,7 +26,8 @@ else:
     from MambaICE.experiment_ice import DeviceQueryPrx
 
 import mamba_server
-import utils
+from utils import general_utils
+from utils.data_utils import data_frame_to_value
 
 client_verify = mamba_server.verify
 
@@ -103,12 +102,13 @@ class DeviceManagerI(dict, DeviceManager):
             return self.host.getDeviceReadings(name)
 
     @client_verify
-    def setDeviceConfiguration(self, name, frame: DataFrame, current=None):
+    def setDeviceConfiguration(self, name, frame: TypedDataFrame, current=None):
         """ICE function"""
         device: DeviceEntry = self[name]
+        type_str = None
         if device.type == DeviceType.Motor:
             type_str = 'motors'
-        elif device.type == DeviceType.Motor:
+        elif device.type == DeviceType.Detector:
             type_str = 'dets'
         config_name = frame.name
 
@@ -117,28 +117,16 @@ class DeviceManagerI(dict, DeviceManager):
             if config_item.name == frame.name:
                 value_type = config_item.type
 
-        config_val = self._to_value(frame.value, value_type).__repr__()
+        config_val = data_frame_to_value(frame).__repr__()
 
-        command = f"{type_str}.{name}.{config_name}.set({config_val})"
-
-        self.terminal.emitCommand(command)
-
-    @staticmethod
-    def _to_value(value, _type):
-        assert isinstance(_type, DataType)
-        if _type == DataType.Float:
-            return struct.unpack("d", value)[0]
-        elif _type == DataType.Integer:
-            return struct.unpack("i", value)[0]
-        elif _type == DataType.String:
-            return value.decode("utf-8")
-
-        return None
+        if type_str:
+            command = f"{type_str}.{name}.{config_name}.set({config_val})"
+            self.terminal.emitCommand(command)
 
 
 def initialize(communicator, adapter, terminal):
     mamba_server.device_manager = \
-        DeviceManagerI(communicator, utils.get_experiment_subproc_endpoint(),
+        DeviceManagerI(communicator, general_utils.get_experiment_subproc_endpoint(),
                        terminal)
 
     adapter.add(mamba_server.device_manager,

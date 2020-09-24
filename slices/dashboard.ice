@@ -17,7 +17,7 @@ module MambaICE {
 
         interface DataClient {
             void scanStart(int id, DataDescriptors keys);
-            void dataUpdate(DataFrames data);
+            void dataUpdate(TypedDataFrames data);
             void scanEnd(ScanExitStatus status);
         };
 
@@ -50,7 +50,7 @@ module MambaICE {
 
             // --- method for the data producer ---
             void scanStart(int id, DataDescriptors keys) throws UnauthorizedError;
-            void pushData(DataFrames frames) throws UnauthorizedError;
+            void pushData(TypedDataFrames frames) throws UnauthorizedError;
             void scanEnd(ScanExitStatus status) throws UnauthorizedError;
         };
 
@@ -59,10 +59,34 @@ module MambaICE {
             strings getDevicesByType(string type);
             TypedDataFrames getDeviceConfigurations(string name);
             TypedDataFrames getDeviceReadings(string name);
-            void setDeviceConfiguration(string name, DataFrame frame);
+            void setDeviceConfiguration(string name, TypedDataFrame frame);
 
             // --- method for experiment subprocess ---
             void addDevices(DeviceEntries entries);
+        };
+
+        // --- Scan ---
+
+        struct MotorScanInstruction {
+            string name;
+            double start;
+            double stop;
+            int point_num;
+        }
+
+        sequence<MotorScanInstruction> ScanMotorInstructionSet;
+
+        struct ScanInstruction {
+            ScanMotorInstructionSet motors;
+            strings detectors;
+        }
+
+        interface ScanDispatcher {
+            ScanInstruction getScanPlan(string name);
+            void setScanPlan(string name, ScanInstruction instruction);
+            void runScan(string plan_name);
+            void terminateScan();
+            void pauseScan();
         };
     };
 };

@@ -1,6 +1,7 @@
-import struct
+from utils.data_utils import string_to_type, to_data_frame
 
-from MambaICE import DataFrame, DataType, DataDescriptor
+from MambaICE import (DataType, DataDescriptor, TypedDataFrame, StringDataFrame,
+                      FloatDataFrame, IntegerDataFrame, ArrayDataFrame)
 from MambaICE.Dashboard import DataRouterPrx, ScanExitStatus
 
 from bluesky.callbacks.core import CallbackBase, make_class_safe
@@ -22,16 +23,18 @@ class DataDispatchCallback(CallbackBase):
 
         data_descriptors = [
             DataDescriptor(key,
-                           self._to_type(des['dtype']),
+                           string_to_type(des['dtype']),
                            des['shape']) for key, des in keys.items()
         ]
         self.data_host.scanStart(self.scan_id, data_descriptors)
 
     def event(self, doc):
         data_frames = [
-            DataFrame(key,
-                      self._pack(self.data_keys[key]['dtype'], num),
-                      doc['timestamps'][key]) for key, num in doc['data'].items()
+            to_data_frame(
+                key,
+                self.data_keys[key]['dtype'],
+                value,
+                doc['timestamps'][key]) for key, value in doc['data'].items()
         ]
 
         self.data_host.pushData(data_frames)
@@ -43,22 +46,3 @@ class DataDispatchCallback(CallbackBase):
             self.data_host.scanEnd(ScanExitStatus.Abort)
         elif doc['exit_status'] == 'fail':
             self.data_host.scanEnd(ScanExitStatus.Fail)
-
-    @staticmethod
-    def _to_type(string):
-        # TODO: move to elsewhere
-        if string == 'number':
-            return DataType.Float
-        elif string == 'string':
-            return DataType.String
-        elif string == 'integer':
-            return DataType.Integer
-
-    @staticmethod
-    def _pack(_type, value):
-        if _type == 'number':
-            return struct.pack("d", float(value))
-        elif _type == 'integer':
-            return struct.pack("i", int(value))
-        elif _type == 'string':
-            return value.encode('utf-8')

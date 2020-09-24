@@ -5,6 +5,7 @@ import ophyd.ophydobj
 
 import MambaICE
 import MambaICE.Experiment
+from utils.data_utils import string_to_type, to_data_frame
 
 # Fool the linter. The else branch will never be executed, but leave it here
 # to make linter and auto-completion work.
@@ -110,16 +111,15 @@ class DeviceQueryI(dict, DeviceQuery):
             cpt = getattr(dev, cpt_name)
             if cpt.kind & kind:
                 field = list(cpt.describe().values())[0]
-                _type = self._to_type(field['dtype'])
+                _type = field['dtype']
                 if 'enum_strs' in field:
-                    _type = DataType.String
+                    _type = 'string'
                 field_val = list(cpt.read().values())[0]
                 fields.append(
-                    TypedDataFrame(
-                        name=cpt_name,
-                        type=_type,
-                        shape=field['shape'],
-                        value=self._pack(_type, field_val['value']),
+                    to_data_frame(
+                        cpt_name,
+                        _type,
+                        field_val['value'],
                         timestamp=field_val['timestamp']
                     )
                 )
@@ -133,7 +133,9 @@ class DeviceQueryI(dict, DeviceQuery):
             cpt = getattr(dev, cpt_name)
             if cpt.kind & kind:
                 field = list(cpt.describe().values())[0]
-                _type = self._to_type(field['dtype'])
+                _type = string_to_type(field['dtype'])
+                if 'enum_strs' in field:
+                    _type = DataType.String
                 fields.append(
                     DataDescriptor(
                         name=cpt_name,
@@ -143,26 +145,6 @@ class DeviceQueryI(dict, DeviceQuery):
                 )
 
         return fields
-
-    @staticmethod
-    def _to_type(string):
-        # TODO: move to elsewhere
-        if string == 'number':
-            return DataType.Float
-        elif string == 'string':
-            return DataType.String
-        elif string == 'integer':
-            return DataType.Integer
-
-    @staticmethod
-    def _pack(_type, value):
-        assert isinstance(_type, DataType)
-        if _type == DataType.Float:
-            return struct.pack("d", float(value))
-        elif _type == DataType.Integer:
-            return struct.pack("i", int(value))
-        elif _type == DataType.String:
-            return value.encode('utf-8')
 
 
 def initialize(communicator, adapter):

@@ -1,13 +1,12 @@
-import sys
 import logging
 
 import Ice
 from mamba_client import SessionManagerPrx, DeviceManagerPrx, TerminalHostPrx
 
-from PyQt5.QtWidgets import QApplication, QAction
+from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QCoreApplication
 
-import utils
+from utils import general_utils
 import mamba_client
 from mamba_client.main_window import MainWindow
 from mamba_client.widgets.terminal import TerminalWidget
@@ -34,9 +33,9 @@ ice_init_data.properties = ice_props
 if __name__ == "__main__":
     mamba_client.logger = logger = logging.getLogger()
 
-    mamba_client.config = utils.load_config("client_config.yaml")
-    utils.setup_logger(logger)
-    ice_endpoint = utils.get_host_endpoint()
+    mamba_client.config = general_utils.load_config("client_config.yaml")
+    general_utils.setup_logger(logger)
+    ice_endpoint = general_utils.get_host_endpoint()
 
     with Ice.initialize(ice_init_data) as communicator:
         QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)

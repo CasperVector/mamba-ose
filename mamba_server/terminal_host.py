@@ -5,7 +5,7 @@ import Ice
 import MambaICE.Dashboard as Dashboard
 
 import mamba_server
-import utils
+from utils import general_utils
 
 from mamba_server.experiment_subproc.subprocess_spawn import IPythonTerminalIO
 
@@ -50,7 +50,7 @@ class TerminalHostI(Dashboard.TerminalHost):
         if not self.terminal:
             from secrets import token_hex
             event_token = token_hex(8)
-            access_endpoint = utils.get_access_endpoint()
+            access_endpoint = general_utils.get_access_endpoint()
 
             self.terminal = IPythonTerminalIO(80, 24,
                                               access_endpoint,

@@ -20,7 +20,8 @@ def solve_filepath(path):
     if path[0] == '/':
         return path
     else:
-        mydir = os.path.dirname(os.path.realpath(__file__))
+        # mydir = os.path.dirname(os.path.realpath(__file__))
+        mydir = os.getcwd()
         return mydir + '/' + path
 
 

@@ -31,12 +31,11 @@ else:
 
 if hasattr(MambaICE, 'DeviceType') and hasattr(MambaICE, 'DataType') and \
         hasattr(MambaICE, 'TypedDataFrame') and \
-        hasattr(MambaICE, 'DataFrame') and \
         hasattr(MambaICE, 'DataDescriptor') and \
         hasattr(MambaICE, 'DeviceEntry')\
         :
     from MambaICE import (DeviceType, DataType, TypedDataFrame, DataDescriptor,
-                          DeviceEntry, DataFrame)
+                          DeviceEntry)
 else:
     from MambaICE.types_ice import (DeviceType, DataType, TypedDataFrame,
-                                    DataDescriptor, DeviceEntry, DataFrame)
+                                    DataDescriptor, DeviceEntry)

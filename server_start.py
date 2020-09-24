@@ -1,4 +1,3 @@
-import sys
 import logging
 import Ice
 
@@ -7,7 +6,7 @@ import mamba_server.session_manager as session_manager
 import mamba_server.terminal_host as terminal
 import mamba_server.data_router as data_router
 import mamba_server.device_manager as device_manager
-import utils
+from utils import general_utils
 
 # --- Ice properties setup ---
 
@@ -37,13 +36,13 @@ with Ice.initialize(ice_init_data) as ic:
     mamba_server.communicator = ic
     mamba_server.logger = logger = logging.getLogger()
 
-    mamba_server.config_filename = utils.solve_filepath("server_config.yaml")
-    mamba_server.config = utils.load_config(mamba_server.config_filename)
-    utils.setup_logger(logger)
+    mamba_server.config_filename = general_utils.solve_filepath("server_config.yaml")
+    mamba_server.config = general_utils.load_config(mamba_server.config_filename)
+    general_utils.setup_logger(logger)
 
-    mamba_server.logger.info(f"Server started. Bind at {utils.get_bind_endpoint()}.")
+    mamba_server.logger.info(f"Server started. Bind at {general_utils.get_bind_endpoint()}.")
     adapter = ic.createObjectAdapterWithEndpoints("HerosServer",
-                                                  utils.get_bind_endpoint())
+                                                  general_utils.get_bind_endpoint())
 
     session_manager.initialize(ic, adapter)
     terminal.initialize(ic, adapter)

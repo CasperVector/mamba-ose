@@ -9,8 +9,8 @@ from PyQt5.QtCore import QSize, QEventLoop, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
 
 import mamba_client
-from mamba_client import (DeviceManagerPrx, DeviceEntry, DeviceType, DataType,
-                          DataFrame)
+from mamba_client import (DeviceManagerPrx, DeviceEntry, DeviceType, DataType)
+from utils.data_utils import to_data_frame, data_frame_to_value
 
 
 class DeviceConfigWidget(QWidget):
@@ -52,8 +52,7 @@ class DeviceConfigWidget(QWidget):
         for i, config in enumerate(config_list):
             name_item = QTableWidgetItem(config.name)
             name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-            value_item = QTableWidgetItem(
-                str(self._to_value(config.value, config.type)))
+            value_item = QTableWidgetItem(str(data_frame_to_value(config)))
             self.config_widget.setItem(i, 0, name_item)
             self.config_widget.setItem(i, 1, value_item)
             self.device_config_items.append(value_item)
@@ -68,34 +67,13 @@ class DeviceConfigWidget(QWidget):
             value_str = value_item.text()
 
             old = self.old_config_list[row]
-            if value_str != str(self._to_value(old.value, old.type)):
+            if value_str != str(data_frame_to_value(old)):
                 self.device_manager.setDeviceConfiguration(
                     self.device_id,
-                    DataFrame(
-                        name=old.name,
-                        value=self._pack(old.type, value_str),
-                        timestamp=time.time()
+                    to_data_frame(
+                        old.name,
+                        old.type,
+                        value_str,
+                        time.time()
                     )
                 )
-
-    @staticmethod
-    def _to_value(value, _type):
-        assert isinstance(_type, DataType)
-        if _type == DataType.Float:
-            return struct.unpack("d", value)[0]
-        elif _type == DataType.Integer:
-            return struct.unpack("i", value)[0]
-        elif _type == DataType.String:
-            return value.decode("utf-8")
-
-        return None
-
-    @staticmethod
-    def _pack(_type, value):
-        assert isinstance(_type, DataType)
-        if _type == DataType.Float:
-            return struct.pack("d", float(value))
-        elif _type == DataType.Integer:
-            return struct.pack("i", int(value))
-        elif _type == DataType.String:
-            return value.encode('utf-8')

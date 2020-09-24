@@ -11,8 +11,7 @@ from PyQt5.QtGui import QIcon
 import MambaICE
 
 import mamba_client
-from mamba_client import (DeviceManagerPrx, DeviceEntry, DeviceType, DataType,
-                          DataFrame)
+from mamba_client import (DeviceManagerPrx, DeviceEntry, DeviceType)
 
 
 class DeviceSelectWidget(QWidget):
