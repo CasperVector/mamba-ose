@@ -27,7 +27,8 @@ else:
 
 import mamba_server
 from utils import general_utils
-from utils.data_utils import data_frame_to_value
+from utils.data_utils import data_frame_to_value, data_frame_to_descriptor
+from .virtual_device import VirtualDevice
 
 client_verify = mamba_server.verify
 
@@ -50,6 +51,7 @@ class DeviceManagerI(dict, DeviceManager):
         super().__init__(self)
         self.logger = mamba_server.logger
         self.device_type_lookup = {}
+        self.virtual_device = {}
         self._host = None
         self.communicator = communicator
         self.host_ice_endpoint = host_ice_endpoint
@@ -71,8 +73,28 @@ class DeviceManagerI(dict, DeviceManager):
         self.logger.info("Received device list from experiment subproc:")
         self.logger.info(entries)
         for entry in entries:
+            if entry.name in self:
+                self.logger.error(f"Duplicated device name: {entry.name}")
+                continue
             self[entry.name] = entry
             self.device_type_lookup[entry.name] = entry.type
+
+    @client_verify
+    def addVirtualDevice(self, name, data_frames, current=None):
+        if name in self:
+            self.logger.error(f"Duplicated device name: {name}")
+            return
+
+        self[name] = DeviceEntry(
+            name=name,
+            type=DeviceType.Virtual,
+            configs=[],
+            readings=[data_frame_to_descriptor(data_frame) for data_frame
+                      in data_frames]
+            )
+        self.device_type_lookup[name] = DeviceType.Virtual
+
+        self.virtual_device[name] = VirtualDevice(data_frames)
 
     @client_verify
     def listDevices(self, current=None):
@@ -93,35 +115,40 @@ class DeviceManagerI(dict, DeviceManager):
     def getDeviceConfigurations(self, name, current=None) -> List[TypedDataFrame]:
         """ICE function"""
         if name in self:
-            return self.host.getDeviceConfigurations(name)
+            if self[name].type == DeviceType.Virtual:
+                return self.virtual_device[name].values()
+            else:
+                return self.host.getDeviceConfigurations(name)
 
     @client_verify
     def getDeviceReadings(self, name, current=None) -> List[TypedDataFrame]:
         """ICE function"""
         if name in self:
-            return self.host.getDeviceReadings(name)
+            if self[name].type == DeviceType.Virtual:
+                return self.virtual_device[name].values()
+            else:
+                return self.host.getDeviceReadings(name)
 
     @client_verify
     def setDeviceConfiguration(self, name, frame: TypedDataFrame, current=None):
         """ICE function"""
         device: DeviceEntry = self[name]
         type_str = None
-        if device.type == DeviceType.Motor:
-            type_str = 'motors'
-        elif device.type == DeviceType.Detector:
-            type_str = 'dets'
-        config_name = frame.name
+        if device.type != DeviceType.Virtual:
+            if device.type == DeviceType.Motor:
+                type_str = 'motors'
+            elif device.type == DeviceType.Detector:
+                type_str = 'dets'
+            config_name = frame.name
 
-        value_type = None
-        for config_item in device.configs:
-            if config_item.name == frame.name:
-                value_type = config_item.type
+            config_val = data_frame_to_value(frame).__repr__()
 
-        config_val = data_frame_to_value(frame).__repr__()
-
-        if type_str:
-            command = f"{type_str}.{name}.{config_name}.set({config_val})"
-            self.terminal.emitCommand(command)
+            if type_str:
+                command = f"{type_str}.{name}.{config_name}.set({config_val})"
+                self.terminal.emitCommand(command)
+        else:
+            v_dev = self.virtual_device[name]
+            v_dev[name] = frame
 
 
 def initialize(communicator, adapter, terminal):

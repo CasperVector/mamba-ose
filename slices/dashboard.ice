@@ -61,9 +61,27 @@ module MambaICE {
             TypedDataFrames getDeviceReadings(string name);
             void setDeviceConfiguration(string name, TypedDataFrame frame);
 
+            void addVirtualDevice(string name, TypedDataFrames frames);
+
             // --- method for experiment subprocess ---
             void addDevices(DeviceEntries entries);
         };
+
+        struct FileWriterDataItem {
+            string device_name;
+            string data_name;
+        }
+
+        sequence<FileWriterDataItem> FileWriterDataItems;
+
+        interface FileWriterHost {
+            void setDirectory(string dir);
+            // void setFileNamePattern
+            void addEnvironmentSection(string section_name);
+            void addDataSection(string section_name);
+            void addDataItems(string section_name, FileWriterDataItems items);
+            void removeDataItems(string section_name, FileWriterDataItems items);
+        }
 
         // --- Scan ---
 

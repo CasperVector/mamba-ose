@@ -3,26 +3,32 @@ digraph G {
     rankdir=LR;
     rank=same;
     node [style="rounded,filled",color=black,shape=box,fillcolor=white];
+    splines=true;
+    sep="+25,25";
 
-    subgraph cluster00 {
+    subgraph cluster_client_pc {
 		label = "Client PC";
 
-        subgraph cluster11 {
+        subgraph cluster_client {
             style=filled;
             color=lightgrey;
             label="Client"
 
-            subgraph cluster22 {
+            subgraph cluster_widgets {
                 style=filled;
                 color=grey;
                 label = "Widgets";
 
                 TerminalWidget;
                 PlotWidget;
+                ScanMechanismWidget;
                 DeviceConfigDialog;
+                FileWriterConfigDialog;
+
+                ScanMechanismWidget -> DeviceConfigDialog [constraint=False];
             }
 
-            subgraph cluster23 {
+            subgraph cluster_main {
                 color=grey;
                 label="";
 
@@ -32,10 +38,10 @@ digraph G {
         }
     }
 
-    subgraph cluster01 {
+    subgraph cluster_IPC {
         label = "IPC";
 
-        subgraph cluster20 {
+        subgraph cluster_server {
             style=filled;
             color=lightgrey;
             label = "Server";
@@ -43,15 +49,20 @@ digraph G {
             SessionManager;
             TerminalHost;
             DataRouter;
-            DeviceHost;
+            DeviceManager;
+            ScanDispatcher;
+            FileWriter;
+
+            ScanDispatcher -> FileWriter [constraint=false];
+            DataRouter -> FileWriter [constraint=false];
         }
 
-        subgraph cluster21{
+        subgraph cluster_subproc {
             style=filled;
             color=lightgrey;
             label = "Experiment Subprocess";
 
-            subgraph cluster31{
+            subgraph cluster_ipython {
                 style=filled;
                 color=grey;
                 label = "";
@@ -61,33 +72,37 @@ digraph G {
                 DataDispatchCallback;
                 DeviceQuery;
 
-                IPython -> DeviceQuery [dir=both, constraint=false];
-                bluesky -> IPython [dir=both, constraint=false];
+                IPython -> DeviceQuery [dir=both, constraint=false, minlen=2];
+                bluesky -> IPython [dir=both, constraint=false, minlen=3];
                 bluesky -> DataDispatchCallback [constraint=false];
             }
 
-            subgraph cluster32{
+            subgraph cluster_devices{
                 style=filled;
                 color=grey;
                 label = "Devices";
 
                 ophyd;
-            }
+           }
 
             bluesky -> ophyd [dir=both];
             DeviceQuery -> ophyd [dir=both];
         }
     }
 
-	Main -> SessionManager;
+	Main -> SessionManager [minlen=4];
 	PlotWidget -> DataClient [dir=both];
 	TerminalWidget -> TerminalHost [dir=both];
 	TerminalHost -> IPython [dir=both];
-	DeviceConfigDialog -> DeviceHost [dir=both];
+	ScanDispatcher -> IPython;
+	DeviceManager -> DeviceQuery [dir=both];
 
-	DataClient -> DataRouter [dir=both];
 	DataDispatchCallback -> DataRouter;
-	DeviceHost -> DeviceQuery [dir=both];
+	DeviceConfigDialog -> DeviceManager [dir=both];
+	ScanMechanismWidget -> ScanDispatcher;
+	FileWriterConfigDialog -> FileWriter;
+	DeviceManager -> FileWriterConfigDialog;
+	DataClient -> DataRouter [dir=both, minlen=4];
 }
 
 

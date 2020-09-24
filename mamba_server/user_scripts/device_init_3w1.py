@@ -26,7 +26,7 @@ __registered_devices: Dict[DeviceType, Dict[str, Any]]
 #     }
 # )
 
-from ophyd.sim import motor1, motor2, det
+from ophyd.sim import motor1, motor2, det, direct_img
 
 motors = {
     'mSampleX': motor1,
@@ -35,6 +35,7 @@ motors = {
 
 dets = {
     'det': det,
+    'direct_img': direct_img
 }
 
 __registered_devices = {

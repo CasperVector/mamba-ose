@@ -6,13 +6,15 @@ if hasattr(MambaICE, 'TypedDataFrame') and hasattr(MambaICE, 'DataType') and \
         hasattr(MambaICE, 'StringDataFrame') and \
         hasattr(MambaICE, 'IntegerDataFrame') and \
         hasattr(MambaICE, 'FloatDataFrame') and \
-        hasattr(MambaICE, 'ArrayDataFrame'):
+        hasattr(MambaICE, 'ArrayDataFrame') and \
+        hasattr(MambaICE, 'DataDescriptor'):
     from MambaICE import (DataType, TypedDataFrame, FloatDataFrame,
-                          IntegerDataFrame, StringDataFrame, ArrayDataFrame)
+                          IntegerDataFrame, StringDataFrame, ArrayDataFrame,
+                          DataDescriptor)
 else:
     from MambaICE.types_ice import (DataType, TypedDataFrame, FloatDataFrame,
                                     IntegerDataFrame, StringDataFrame,
-                                    ArrayDataFrame)
+                                    ArrayDataFrame, DataDescriptor)
 
 
 def string_to_type(string):
@@ -79,3 +81,15 @@ def data_frame_to_value(data_frame):
         return float(data_frame.value)
     elif data_frame.type == DataType.Array:
         return np.array(data_frame.data).reshape(data_frame.shape)
+
+
+def data_frame_to_descriptor(data_frame):
+    shape = []
+    if data_frame.type == DataType.Array:
+        shape = data_frame.shape
+
+    return DataDescriptor(
+        name=data_frame.name,
+        type=data_frame.type,
+        shape=shape
+    )

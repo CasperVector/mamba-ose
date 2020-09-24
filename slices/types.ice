@@ -6,7 +6,7 @@ module MambaICE {
     sequence<string> strings;
 
     enum DataType { Float, String, Integer, Array };
-    enum DeviceType { Motor, Detector };
+    enum DeviceType { Virtual, Motor, Detector };
     sequence<int> Shape;
 
     struct DataDescriptor {

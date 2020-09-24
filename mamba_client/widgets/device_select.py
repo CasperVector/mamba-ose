@@ -55,6 +55,8 @@ class DeviceSelectWidget(QWidget):
     def _apply_filter(self, device_list):
         new_list = []
         for device in device_list:
+            if device.type == DeviceType.Virtual:
+                pass
             add = True
             if 'type' in self.filter:
                 add = add and (device.type in self.filter['type'])
