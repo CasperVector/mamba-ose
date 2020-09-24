@@ -33,7 +33,7 @@ class DeviceListConfigDialog(QDialog):
 
         self.button_layout = QHBoxLayout()
         button_spacer = QSpacerItem(1, 1, QSizePolicy.Expanding,
-                                    QSizePolicy.Expanding)
+                                    QSizePolicy.Fixed)
         self.button_layout.addItem(button_spacer)
 
         self.cancel_button = QPushButton("Cancel")
