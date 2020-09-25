@@ -68,7 +68,7 @@ def to_array_data_frame(name, array, timestamp):
         name=name,
         shape=shape,
         timestamp=timestamp,
-        data=packed_array
+        value=packed_array
     )
 
 
@@ -80,7 +80,7 @@ def data_frame_to_value(data_frame):
     elif data_frame.type == DataType.Float:
         return float(data_frame.value)
     elif data_frame.type == DataType.Array:
-        return np.array(data_frame.data).reshape(data_frame.shape)
+        return np.array(data_frame.value).reshape(data_frame.shape)
 
 
 def data_frame_to_descriptor(data_frame):

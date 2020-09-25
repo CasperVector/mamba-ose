@@ -57,7 +57,7 @@ class DeviceQueryI(dict, DeviceQuery):
     def push_devices_to_host(self, host):
         host.addDevices(self.listDevices())
 
-    def getDevicesByType(self, _type, current) -> List[DeviceEntry]:
+    def getDevicesByType(self, _type, current=None) -> List[DeviceEntry]:
         """ICE function"""
         dev_list = []
         for name, dev in self.items():
@@ -73,7 +73,7 @@ class DeviceQueryI(dict, DeviceQuery):
 
         return dev_list
 
-    def getDeviceConfigurations(self, dev_name, current) -> List[TypedDataFrame]:
+    def getDeviceConfigurations(self, dev_name, current=None) -> List[TypedDataFrame]:
         """ICE function"""
         if dev_name not in self:
             raise UnknownDeviceException
@@ -81,13 +81,16 @@ class DeviceQueryI(dict, DeviceQuery):
         dev = self[dev_name]
         return self.get_device_fields(dev, Kind.config)
 
-    def getDeviceReadings(self, dev_name, current):
+    def getDeviceReadings(self, dev_name, current=None):
         """ICE function"""
         if dev_name not in self:
             raise UnknownDeviceException
 
         dev = self[dev_name]
         return self.get_device_fields(dev, Kind.hinted)
+
+    def getDeviceFieldValue(self, dev_name, field_name, current=None):
+        return self.get_device_field_value(self[dev_name], field_name)
 
     def listDevices(self, current=None):
         """ICE function"""
@@ -145,6 +148,21 @@ class DeviceQueryI(dict, DeviceQuery):
                 )
 
         return fields
+
+    def get_device_field_value(self, dev, field_name) -> TypedDataFrame:
+        cpt = getattr(dev, field_name)
+
+        field = list(cpt.describe().values())[0]
+        _type = field['dtype']
+        if 'enum_strs' in field:
+            _type = 'string'
+        field_val = list(cpt.read().values())[0]
+        return to_data_frame(
+            field_name,
+            _type,
+            field_val['value'],
+            timestamp=field_val['timestamp']
+        )
 
 
 def initialize(communicator, adapter):

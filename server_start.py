@@ -6,6 +6,7 @@ import mamba_server.session_manager as session_manager
 import mamba_server.terminal_host as terminal
 import mamba_server.data_router as data_router
 import mamba_server.device_manager as device_manager
+import mamba_server.file_writer as file_writer
 from utils import general_utils
 
 # --- Ice properties setup ---
@@ -48,6 +49,7 @@ with Ice.initialize(ice_init_data) as ic:
     terminal.initialize(ic, adapter)
     data_router.initialize(ic, adapter)
     device_manager.initialize(ic, adapter, mamba_server.terminal)
+    file_writer.initialize(ic, adapter, mamba_server.device_manager)
 
     adapter.activate()
 

@@ -38,7 +38,7 @@ module MambaICE {
 
     class ArrayDataFrame extends TypedDataFrame {
         Shape shape;
-        doubles data;
+        doubles value;
     };
 
     struct DeviceEntry {

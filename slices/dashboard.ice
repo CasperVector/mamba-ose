@@ -59,6 +59,7 @@ module MambaICE {
             strings getDevicesByType(string type);
             TypedDataFrames getDeviceConfigurations(string name);
             TypedDataFrames getDeviceReadings(string name);
+            TypedDataFrame getDeviceField(steing dev_name, string_field_name);
             void setDeviceConfiguration(string name, TypedDataFrame frame);
 
             void addVirtualDevice(string name, TypedDataFrames frames);
@@ -78,9 +79,9 @@ module MambaICE {
             void setDirectory(string dir);
             // void setFileNamePattern
             void addEnvironmentSection(string section_name);
-            void addDataSection(string section_name);
-            void addDataItems(string section_name, FileWriterDataItems items);
-            void removeDataItems(string section_name, FileWriterDataItems items);
+            void addEnvironmentItems(string section_name, FileWriterDataItems items);
+            void removeEnvironmentItem(string section_name, FileWriterDataItem item);
+            void removeAllEnvironmentItems(string section_name);
         }
 
         // --- Scan ---

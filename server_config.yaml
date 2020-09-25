@@ -11,3 +11,8 @@ logging:
 
 device:
   init_module: device_init_3w1
+
+files:
+  dir: "data/"
+  prefix: 3w1_data
+  name_pattern: "{prefix}_{scan_id}.nxs"

@@ -90,9 +90,9 @@ class DataRouterI(DataRouter):
         self.subscription[client] = ["*"]
 
     @terminal_verify
-    def scanStart(self, id, keys, current=None):
-        self.logger.info(f"Scan start received, scan id {id}")
-        self.scan_id = id
+    def scanStart(self, _id, keys, current=None):
+        self.logger.info(f"Scan start received, scan id {_id}")
+        self.scan_id = _id
 
         # forward data
         for client in self.clients:

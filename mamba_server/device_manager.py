@@ -119,6 +119,8 @@ class DeviceManagerI(dict, DeviceManager):
                 return self.virtual_device[name].values()
             else:
                 return self.host.getDeviceConfigurations(name)
+        else:
+            raise NameError(f"Unknown device {name}")
 
     @client_verify
     def getDeviceReadings(self, name, current=None) -> List[TypedDataFrame]:
@@ -128,6 +130,15 @@ class DeviceManagerI(dict, DeviceManager):
                 return self.virtual_device[name].values()
             else:
                 return self.host.getDeviceReadings(name)
+        else:
+            raise NameError(f"Unknown device {name}")
+
+    @client_verify
+    def getDeviceField(self, dev_name, field_name, current=None) -> TypedDataFrame:
+        if dev_name in self:
+            return self.host.getDeviceFieldValue(dev_name, field_name)
+        else:
+            raise NameError(f"Unknown device {dev_name}")
 
     @client_verify
     def setDeviceConfiguration(self, name, frame: TypedDataFrame, current=None):
