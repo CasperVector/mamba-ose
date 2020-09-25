@@ -8,6 +8,7 @@ import MambaICE
 import mamba_server
 from .data_router import DataClientCallback
 from .device_manager import DeviceManagerI
+from .data_router import DataRouterI
 from utils.data_utils import data_frame_to_value, DataType, DataDescriptor
 
 if hasattr(MambaICE.Dashboard, 'FileWriterHost') and \
@@ -187,11 +188,13 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
 
     def scan_end(self, status):
         self.writer.close_file()
+        self.ongoing_scan_id = -1
 
     def data_update(self, frames):
-        for frame in frames:
-            self.writer.append_data("data", frame.name,
-                                    data_frame_to_value(frame))
+        if self.ongoing_scan_id > 0:
+            for frame in frames:
+                self.writer.append_data("data", frame.name,
+                                        data_frame_to_value(frame))
 
     def populate_env_items(self):
         for env_section in self.env_sections:
@@ -208,7 +211,10 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
                                           data_frame_to_value(frame))
 
 
-def initialize(communicator, adapter, device_mgr):
+def initialize(communicator,
+               adapter,
+               device_mgr: DeviceManagerI,
+               data_router: DataRouterI):
     mamba_server.file_writer_host = FileWriterHostI(
         H5FileWriter,
         device_mgr,
@@ -216,6 +222,10 @@ def initialize(communicator, adapter, device_mgr):
         mamba_server.config['files']['prefix'],
         mamba_server.config['files']['name_pattern']
     )
+
+    data_router.local_register_client("FileWriter",
+                                      mamba_server.file_writer_host)
+    data_router.local_subscribe_all("FileWriter")
 
     adapter.add(mamba_server.file_writer_host,
                 communicator.stringToIdentity("FileWriterHost"))

@@ -67,7 +67,7 @@ class DataRouterI(DataRouter):
     def local_register_client(self, name, callback: DataClientCallback):
         self.logger.info(f"Local data client registered: {name}")
         client = Client(False, None, callback)
-        self.append(client)
+        self.clients.append(client)
         self.local_clients[name] = client
         self.subscription[client] = []
 
@@ -85,7 +85,7 @@ class DataRouterI(DataRouter):
         client = self.local_clients[name]
         self.subscription[client] = items
 
-    def local_subscribe_all(self, name, items):
+    def local_subscribe_all(self, name):
         client = self.local_clients[name]
         self.subscription[client] = ["*"]
 

@@ -50,10 +50,10 @@ digraph G {
             TerminalHost;
             DataRouter;
             DeviceManager;
-            ScanDispatcher;
+            ScanManager;
             FileWriter;
 
-            ScanDispatcher -> FileWriter [constraint=false];
+            ScanManager -> FileWriter [constraint=false];
             DataRouter -> FileWriter [constraint=false];
         }
 
@@ -94,12 +94,12 @@ digraph G {
 	PlotWidget -> DataClient [dir=both];
 	TerminalWidget -> TerminalHost [dir=both];
 	TerminalHost -> IPython [dir=both];
-	ScanDispatcher -> IPython;
+	ScanManager -> IPython;
 	DeviceManager -> DeviceQuery [dir=both];
 
 	DataDispatchCallback -> DataRouter;
 	DeviceConfigDialog -> DeviceManager [dir=both];
-	ScanMechanismWidget -> ScanDispatcher;
+	ScanMechanismWidget -> ScanManager;
 	FileWriterConfigDialog -> FileWriter;
 	DeviceManager -> FileWriterConfigDialog;
 	DataClient -> DataRouter [dir=both, minlen=4];

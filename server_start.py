@@ -49,7 +49,8 @@ with Ice.initialize(ice_init_data) as ic:
     terminal.initialize(ic, adapter)
     data_router.initialize(ic, adapter)
     device_manager.initialize(ic, adapter, mamba_server.terminal)
-    file_writer.initialize(ic, adapter, mamba_server.device_manager)
+    file_writer.initialize(ic, adapter,
+                           mamba_server.device_manager, mamba_server.data_router)
 
     adapter.activate()
 

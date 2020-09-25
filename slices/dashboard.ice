@@ -59,7 +59,7 @@ module MambaICE {
             strings getDevicesByType(string type);
             TypedDataFrames getDeviceConfigurations(string name);
             TypedDataFrames getDeviceReadings(string name);
-            TypedDataFrame getDeviceField(steing dev_name, string_field_name);
+            TypedDataFrame getDeviceField(string dev_name, string field_name);
             void setDeviceConfiguration(string name, TypedDataFrame frame);
 
             void addVirtualDevice(string name, TypedDataFrames frames);
@@ -100,7 +100,7 @@ module MambaICE {
             strings detectors;
         }
 
-        interface ScanDispatcher {
+        interface ScanManager {
             ScanInstruction getScanPlan(string name);
             void setScanPlan(string name, ScanInstruction instruction);
             void runScan(string plan_name);
