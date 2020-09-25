@@ -6,11 +6,22 @@ from PyQt5.QtGui import QIcon, QColor, QPixmap, QBrush
 
 from PyQt5.QtCore import Qt, QSize
 
+import MambaICE
 import mamba_client
-from mamba_client import DeviceManagerPrx, DeviceType, TerminalHostPrx
+from mamba_client import (DeviceManagerPrx, DeviceType, TerminalHostPrx)
 from mamba_client.dialogs.device_setect import DeviceSelectDialog
 from mamba_client.dialogs.device_config import DeviceConfigDialog
 from .ui.ui_scanmechanismwidget import Ui_ScanMechanicsWidget
+
+if hasattr(MambaICE.Dashboard, 'ScanManager') and \
+        hasattr(MambaICE.Dashboard, 'MotorScanInstruction') and \
+        hasattr(MambaICE.Dashboard, 'ScanInstruction') and \
+        hasattr(MambaICE.Dashboard, 'UnauthorizedError'):
+    from MambaICE.Dashboard import (ScanManager, MotorScanInstruction,
+                                    ScanInstruction, UnauthorizedError)
+else:
+    from MambaICE.dashboard_ice import (ScanManager, MotorScanInstruction,
+                                        ScanInstruction, UnauthorizedError)
 
 MOTOR_ADD_COL = 0
 MOTOR_NAME_COL = 1
@@ -22,10 +33,6 @@ MOTOR_NUM_COL = 5
 DETECTOR_ADD_COL = 0
 DETECTOR_NAME_COL = 1
 DETECTOR_SETUP_COL = 2
-
-MotorScanInstruction = namedtuple('MotorScanInstruction', [
-    'name', 'start', 'end', 'point_num'
-])
 
 
 class ScanInstructionSet:
@@ -47,7 +54,7 @@ class ScanInstructionSet:
 
         for motor in self.motors:
             command += f"motors.{motor.name}, {float(motor.start)}, " \
-                       f"{float(motor.end)}, {int(motor.point_num)},\n"
+                       f"{float(motor.stop)}, {int(motor.point_num)},\n"
 
         command = command[:-2]
         command += "))"
@@ -112,7 +119,7 @@ class ScanMechanismWidget(QWidget):
                     self.scanned_motors[device.name] = MotorScanInstruction(
                         name=device.name,
                         start=None,
-                        end=None,
+                        stop=None,
                         point_num=None
                     )
                     self.add_motor(device.name)
@@ -173,21 +180,21 @@ class ScanMechanismWidget(QWidget):
                     self.scanned_motors[name] = MotorScanInstruction(
                         name=name,
                         start=num,
-                        end=inst.end,
+                        stop=inst.stop,
                         point_num=inst.point_num
                     )
                 elif col == MOTOR_END_COL:
                     self.scanned_motors[name] = MotorScanInstruction(
                         name=name,
                         start=inst.start,
-                        end=num,
+                        stop=num,
                         point_num=inst.point_num
                     )
                 elif col == MOTOR_NUM_COL:
                     self.scanned_motors[name] = MotorScanInstruction(
                         name=name,
                         start=inst.start,
-                        end=inst.end,
+                        stop=inst.stop,
                         point_num=num
                     )
             except ValueError:

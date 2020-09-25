@@ -24,7 +24,7 @@ from utils import general_utils
 import mamba_server.experiment_subproc as experiment_subproc
 import mamba_server
 from .data_dispatch_callback import DataDispatchCallback
-from mamba_server.experiment_subproc import device_query
+from mamba_server.experiment_subproc import device_query, scan_controller
 
 
 ###################################################################
@@ -67,6 +67,7 @@ def start_experiment_subprocess(host_endpoint, event_hdl_token):
             general_utils.get_experiment_subproc_endpoint()
         )
         device_query.initialize(communicator, adapter)
+        scan_controller.initialize(communicator, adapter)
         adapter.activate()
 
         event_hdl = TerminalEventHandlerPrx.checkedCast(
@@ -143,6 +144,7 @@ def _run_ipshell(ipshell, banner, data_callback):
     from bluesky import RunEngine
     RE = RunEngine({})
     RE.subscribe(data_callback)
+    experiment_subproc.scan_controller_obj.RE = RE
     ipshell(banner)
 
 

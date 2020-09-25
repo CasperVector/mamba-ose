@@ -14,4 +14,10 @@ module MambaICE {
             TypedDataFrame getDeviceFieldValue(string dev_name, string field_name);
         };
     };
+
+    interface ScanController {
+        void pause();
+        void resume();
+        void halt();
+    }
 };
