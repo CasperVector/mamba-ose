@@ -6,6 +6,7 @@ from abc import ABC
 import Ice
 from MambaICE.Dashboard import DataRouter, DataClient, UnauthorizedError
 from utils.data_utils import DataDescriptor, TypedDataFrame
+from mamba_server.session_manager import set_connection_closed_callback
 
 import mamba_server
 
@@ -73,8 +74,10 @@ class DataRouterI(DataRouter):
         self.clients.append(client)
         self.conn_to_client[current.con] = client
         self.subscription[client] = []
-        current.con.setCloseCallback(
-            lambda conn: self._connection_closed_callback(client))  # TODO
+        set_connection_closed_callback(
+            current.con,
+            self._connection_closed_callback
+        )
 
     def local_register_client(self, name, callback: DataClientCallback):
         self.logger.info(f"Local data client registered: {name}")
@@ -146,7 +149,7 @@ class DataRouterI(DataRouter):
                 else:
                     client.callback.scan_start(self.scan_id, to_send)
             except Ice.CloseConnectionException:
-                self._connection_closed_callback(client)
+                self._connection_closed_callback(current.con)
                 pass
 
     @terminal_verify
@@ -173,7 +176,7 @@ class DataRouterI(DataRouter):
                     else:
                         client.callback.data_update(to_send)
                 except Ice.CloseConnectionException:
-                    self._connection_closed_callback(client)
+                    self._connection_closed_callback(current.con)
 
     @terminal_verify
     def scanEnd(self, status, current):
@@ -185,12 +188,10 @@ class DataRouterI(DataRouter):
                 else:
                     client.callback.scan_end(status)
             except Ice.CloseConnectionException:
-                self._connection_closed_callback(client)
+                self._connection_closed_callback(current.con)
 
-    def _connection_closed_callback(self, client):
-        self.logger.info("Lost connection with mamba_client: " +
-                         Ice.identityToString(client.ice_getIdentity())
-                         )
+    def _connection_closed_callback(self, conn):
+        client = self.conn_to_client[conn]
         self.clients.remove(client)
         del self.subscription[client]
         conn_to_delete = None

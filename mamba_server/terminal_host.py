@@ -2,12 +2,12 @@ from functools import wraps
 import threading
 
 import Ice
-import MambaICE.Dashboard as Dashboard
-
+from MambaICE.Dashboard import (TerminalHost, TerminalClientPrx, UnauthorizedError,
+                                TerminalEventHandler)
 import mamba_server
 from utils import general_utils
-
 from mamba_server.experiment_subproc.subprocess_spawn import IPythonTerminalIO
+from mamba_server.session_manager import set_connection_closed_callback
 
 client_verify = mamba_server.verify
 
@@ -20,15 +20,16 @@ def event_verify(f):
         if self.event_emitter_con == current.con:
             f(self, *args)
         else:
-            raise Dashboard.UnauthorizedError()
+            raise UnauthorizedError()
 
     return wrapper
 
 
-class TerminalHostI(Dashboard.TerminalHost):
+class TerminalHostI(TerminalHost):
     def __init__(self, event_hdl: 'TerminalEventHandlerI'):
         self.terminal = None
         self.clients = []
+        self.conn_to_client = {}
         self.logger = mamba_server.logger
         self.event_hdl = event_hdl
 
@@ -36,13 +37,14 @@ class TerminalHostI(Dashboard.TerminalHost):
         self.event_emitter_con = None
 
     @client_verify
-    def registerClient(self, client: Dashboard.TerminalClient, current):
+    def registerClient(self, client: TerminalClientPrx, current):
         self.logger.info("Terminal mamba_client connected: "
                          + Ice.identityToString(client.ice_getIdentity()))
         client = client.ice_fixed(current.con)
         self.clients.append(client)
-        current.con.setCloseCallback(
-            lambda conn: self._connection_closed_callback(client))
+        self.conn_to_client[current.con] = client
+        set_connection_closed_callback(current.con,
+                                       self._connection_closed_callback)
 
         self.spawn()
 
@@ -83,13 +85,10 @@ class TerminalHostI(Dashboard.TerminalHost):
             try:
                 client.stdout(s)
             except Ice.CloseConnectionException:
-                self._connection_closed_callback(client)
+                pass
 
-    def _connection_closed_callback(self, client):
-        self.logger.info("Lost connection with client: " +
-                         Ice.identityToString(client.ice_getIdentity())
-                         )
-        self.clients.remove(client)
+    def _connection_closed_callback(self, conn):
+        self.clients.remove(self.conn_to_client[conn])
 
     def _terminated_callback(self):
         self.event_hdl.event_emitter_con = None
@@ -98,7 +97,7 @@ class TerminalHostI(Dashboard.TerminalHost):
         # self.terminal.spawn()
 
 
-class TerminalEventHandlerI(Dashboard.TerminalEventHandler):
+class TerminalEventHandlerI(TerminalEventHandler):
     def __init__(self):
         self.event_token = None
         self.event_emitter_con = None
