@@ -17,3 +17,4 @@ terminal_con = None
 data_router = None
 device_manager = None
 file_writer_host = None
+scan_manager = None

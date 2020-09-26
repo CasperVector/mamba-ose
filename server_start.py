@@ -7,6 +7,7 @@ import mamba_server.terminal_host as terminal
 import mamba_server.data_router as data_router
 import mamba_server.device_manager as device_manager
 import mamba_server.file_writer as file_writer
+import mamba_server.scan_mamager as scan_manager
 from utils import general_utils
 
 # --- Ice properties setup ---
@@ -42,7 +43,7 @@ with Ice.initialize(ice_init_data) as ic:
     general_utils.setup_logger(logger)
 
     mamba_server.logger.info(f"Server started. Bind at {general_utils.get_bind_endpoint()}.")
-    adapter = ic.createObjectAdapterWithEndpoints("HerosServer",
+    adapter = ic.createObjectAdapterWithEndpoints("MambaServer",
                                                   general_utils.get_bind_endpoint())
 
     session_manager.initialize(ic, adapter)
@@ -50,7 +51,10 @@ with Ice.initialize(ice_init_data) as ic:
     data_router.initialize(ic, adapter)
     device_manager.initialize(ic, adapter, mamba_server.terminal)
     file_writer.initialize(ic, adapter,
-                           mamba_server.device_manager, mamba_server.data_router)
+                           mamba_server.device_manager,
+                           mamba_server.data_router)
+    scan_manager.initialize(ic, adapter, mamba_server.terminal,
+                            mamba_server.data_router)
 
     adapter.activate()
 

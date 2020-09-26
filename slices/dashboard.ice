@@ -47,6 +47,7 @@ module MambaICE {
             void registerClient(DataClient* client) throws UnauthorizedError;
             void subscribe(strings items) throws UnauthorizedError;
             void subscribeAll() throws UnauthorizedError;
+            void unsubscribe(strings items) throws UnauthorizedError;
 
             // --- method for the data producer ---
             void scanStart(int id, DataDescriptors keys) throws UnauthorizedError;

@@ -1,7 +1,8 @@
 import logging
 
 import Ice
-from mamba_client import SessionManagerPrx, DeviceManagerPrx, TerminalHostPrx
+from mamba_client import (SessionManagerPrx, DeviceManagerPrx, TerminalHostPrx,
+                          ScanManagerPrx)
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QCoreApplication
@@ -64,6 +65,10 @@ if __name__ == "__main__":
             communicator.stringToProxy(f"TerminalHost:{ice_endpoint}")
                         .ice_connectionId("MambaClient")
         )
+        mamba_client.scan_manager = ScanManagerPrx.checkedCast(
+            communicator.stringToProxy(f"ScanManager:{ice_endpoint}")
+                .ice_connectionId("MambaClient")
+        )
 
         try:
             mw = MainWindow()
@@ -88,7 +93,8 @@ if __name__ == "__main__":
             mw.add_widget("Scan Mechanism",
                           ScanMechanismWidget.get_init_func(
                               mamba_client.device_manager,
-                              mamba_client.terminal_host)
+                              mamba_client.terminal_host,
+                              mamba_client.scan_manager)
                           )
             mw.set_layout({
                 ("left", "Scan Mechanism"),

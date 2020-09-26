@@ -1,6 +1,7 @@
 # igonre compiled slice
 *_ice.py
 MambaICE/
+plans/
 
 logs/
 

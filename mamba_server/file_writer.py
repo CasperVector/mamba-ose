@@ -3,6 +3,7 @@ from abc import ABC
 import h5py
 import numpy as np
 import os
+from pathlib import Path
 
 import MambaICE
 import mamba_server
@@ -49,6 +50,7 @@ class H5FileWriter(FileWriter):
     def __init__(self, filepath):
         super().__init__(filepath)
 
+        Path(os.path.dirname(filepath)).mkdir(parents=True, exist_ok=True)
         self.file = h5py.File(filepath, 'w-')
         self.root = self.file.create_group('scan')
 
@@ -165,7 +167,7 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
 
     def scan_start(self, _id, data_descriptors: List[DataDescriptor]):
         self.ongoing_scan_id = _id
-        name = self.pattern.format(prefix=self.prefix, scan_id=self._id)
+        name = self.pattern.format(prefix=self.prefix, scan_id=_id)
         path = os.path.join(self.dir, name)
         self.writer = self.writer_type(path)
         assert isinstance(self.writer, FileWriter)
@@ -182,8 +184,8 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
             self.writer.add_dataset("data",
                                     des.name,
                                     des.type,
-                                    (1,) + des.shape,
-                                    (None,) + des.shape)
+                                    [1] + des.shape,
+                                    [None] + des.shape)
             # TODO: How can I get the length of this scan?
 
     def scan_end(self, status):

@@ -36,12 +36,24 @@ class DataClientI(DataClient):
 
         self.host.registerClient(proxy)
 
-    def request_data(self, name, callback):
-        if name not in self.data_callbacks:
-            self.data_callbacks[name] = [callback]
+    def request_data(self, data_name, callback):
+        if data_name not in self.data_callbacks:
+            self.data_callbacks[data_name] = [callback]
             self.host.subscribe(list(self.data_callbacks.keys()))
         else:
-            self.data_callback[name].append(callback)
+            self.data_callback[data_name].append(callback)
+
+    def stop_requesting_data(self, _callback):
+        data_to_unregister = []
+        for name, callbacks in self.data_callbacks.items():
+            if _callback in callbacks:
+                self.data_callbacks[name].remove(_callback)
+                if not self.data_callbacks[name]:
+                    data_to_unregister.append(name)
+
+        for data in data_to_unregister:
+            del self.data_callbacks[data]
+        self.host.unsubscribe(data_to_unregister)
 
     def data_callback_invoke(self, name, *args):
         if name in self.data_callbacks:

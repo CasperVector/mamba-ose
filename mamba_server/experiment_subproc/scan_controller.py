@@ -24,4 +24,4 @@ def initialize(communicator, adapter):
     scan_controller_obj = ScanControllerI()
     adapter.add(scan_controller_obj,
                 communicator.stringToIdentity("ScanController"))
-    mamba_server.experiment_subproc.scan_controller = scan_controller_obj
+    mamba_server.experiment_subproc.scan_controller_obj = scan_controller_obj

@@ -13,11 +13,11 @@ module MambaICE {
             TypedDataFrames getDeviceReadings(string name);
             TypedDataFrame getDeviceFieldValue(string dev_name, string field_name);
         };
-    };
 
-    interface ScanController {
-        void pause();
-        void resume();
-        void halt();
-    }
+        interface ScanController {
+            void pause();
+            void resume();
+            void halt();
+        };
+    };
 };

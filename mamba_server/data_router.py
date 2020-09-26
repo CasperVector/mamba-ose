@@ -1,10 +1,11 @@
+from typing import List
 from functools import wraps
 from collections import namedtuple
-from enum import Enum
 from abc import ABC
 
 import Ice
 from MambaICE.Dashboard import DataRouter, DataClient, UnauthorizedError
+from utils.data_utils import DataDescriptor, TypedDataFrame
 
 import mamba_server
 
@@ -42,6 +43,16 @@ class DataClientCallback(ABC):
         raise NotImplementedError
 
 
+class DataProcessor(ABC):
+    def process_data_descriptors(self, _id, keys: List[DataDescriptor])\
+            -> List[DataDescriptor]:
+        raise NotImplementedError
+
+    def process_data(self, frames: List[TypedDataFrame])\
+            -> List[TypedDataFrame]:
+        raise NotImplementedError
+
+
 class DataRouterI(DataRouter):
     def __init__(self):
         self.logger = mamba_server.logger
@@ -49,6 +60,7 @@ class DataRouterI(DataRouter):
         self.local_clients = {}
         self.conn_to_client = {}
         self.subscription = {}
+        self.data_process_chain = []
         self.keys = {}
         self.scan_id = 0
 
@@ -71,6 +83,15 @@ class DataRouterI(DataRouter):
         self.local_clients[name] = client
         self.subscription[client] = []
 
+    def append_data_processor(self, data_processor: DataProcessor):
+        self.data_process_chain.append(data_processor)
+
+    def clear_data_processors(self):
+        self.data_process_chain = []
+
+    def remove_data_processor(self, data_processor: DataProcessor):
+        self.data_process_chain.remove(data_processor)
+
     @client_verify
     def subscribe(self, items, current=None):
         client = self.conn_to_client[current.con]
@@ -80,6 +101,15 @@ class DataRouterI(DataRouter):
     def subscribeAll(self, current=None):
         client = self.conn_to_client[current.con]
         self.subscription[client] = ["*"]
+
+    @client_verify
+    def unsubscribe(self, items, current=None):
+        client = self.conn_to_client[current.con]
+        for item in items:
+            try:
+                self.subscription[client].remove(item)
+            except ValueError:
+                pass
 
     def local_subscribe(self, name, items):
         client = self.local_clients[name]
@@ -94,6 +124,10 @@ class DataRouterI(DataRouter):
         self.logger.info(f"Scan start received, scan id {_id}")
         self.scan_id = _id
 
+        for dp in self.data_process_chain:
+            assert isinstance(dp, DataProcessor)
+            keys = dp.process_data_descriptors(_id, keys)
+
         # forward data
         for client in self.clients:
             to_send = []
@@ -102,7 +136,8 @@ class DataRouterI(DataRouter):
                 if client not in self.subscription:
                     continue
                 if key.name in self.subscription[client] or \
-                        "*" in self.subscription[client]:
+                        ("*" in self.subscription[client] and
+                         not key.name.startswith("__")):
                     to_send.append(key)
             try:
                 self.logger.info(f"Forward data descriptors to {client}")
@@ -117,12 +152,18 @@ class DataRouterI(DataRouter):
     @terminal_verify
     def pushData(self, frames, current=None):
         self.logger.info(f"Data frames received from bluesky callback")
+
+        for dp in self.data_process_chain:
+            assert isinstance(dp, DataProcessor)
+            frames = dp.process_data(frames)
+
         for client in self.clients:
             to_send = []
             for frame in frames:
                 key = frame.name
                 if key in self.subscription[client] or \
-                        "*" in self.subscription[client]:
+                        ("*" in self.subscription[client] and
+                         not key.startswith("__")):
                     to_send.append(frame)
             if to_send:
                 try:

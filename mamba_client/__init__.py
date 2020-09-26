@@ -12,6 +12,7 @@ device_manager = None
 
 client_adapter = None
 data_client = None
+scan_manager = None
 
 
 if hasattr(MambaICE.Dashboard, 'DeviceManagerPrx') and \
