@@ -93,7 +93,8 @@ if __name__ == "__main__":
             mw.add_widget("Scan Mechanism",
                           ScanMechanismWidget.get_init_func(
                               mamba_client.device_manager,
-                              mamba_client.scan_manager)
+                              mamba_client.scan_manager,
+                              mamba_client.data_client)
                           )
             mw.set_layout({
                 ("left", "Scan Mechanism"),

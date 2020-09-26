@@ -1,14 +1,17 @@
+from datetime import datetime
+from functools import partial
 from typing import List
 from collections import namedtuple
 
 from PyQt5.QtWidgets import QWidget, QTableWidgetItem, QMessageBox, QInputDialog
 from PyQt5.QtGui import QIcon, QColor, QPixmap, QBrush
 
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtCore import Qt, QSize, QTimer, QMutex, pyqtSignal
 
 import MambaICE
 import mamba_client
 from mamba_client import (DeviceManagerPrx, DeviceType, TerminalHostPrx)
+from mamba_client.data_client import DataClientI
 from mamba_client.dialogs.device_setect import DeviceSelectDialog
 from mamba_client.dialogs.device_config import DeviceConfigDialog
 from .ui.ui_scanmechanismwidget import Ui_ScanMechanicsWidget
@@ -65,12 +68,16 @@ class ScanInstructionSet:
 
 
 class ScanMechanismWidget(QWidget):
+    update_status_sig = pyqtSignal(str, int, bool)
+
     def __init__(self, device_manager: DeviceManagerPrx,
-                 scan_manager: ScanManagerPrx):
+                 scan_manager: ScanManagerPrx,
+                 data_client: DataClientI):
         super().__init__()
         self.logger = mamba_client.logger
         self.device_manager = device_manager
         self.scan_manager = scan_manager
+        self.data_client = data_client
 
         self.scanned_motors = {}
         self.scanned_detectors = []
@@ -106,7 +113,30 @@ class ScanMechanismWidget(QWidget):
         self.editing_plan = False
         self.current_plan_index = 0
 
+        self.scan_length = 0
+        self.scan_start_at = datetime.now()
+        self.scan_step = 0
+        self.scanning = False
+
+        self.ui.progressBar.setMinimum(0)
+        self.ui.progressBar.setMaximum(1)
+        self.ui.progressBar.setValue(0)
+
+        self.scan_status_timer = QTimer()
+        self.scan_status_timer.timeout.connect(self.update_elapse)
+        self.scan_status_timer.start(500)
+
+        self.status_update_lock = QMutex()
+        self.update_status_sig.connect(self._scan_status_update)
+
         self.populate_plan_combo()
+
+        self.registered_data_callbacks = []
+
+        for data in ["__scan_length", "__scan_step"]:
+            cbk = partial(self.scan_status_update, data)
+            self.registered_data_callbacks.append(cbk)
+            self.data_client.request_data(data, cbk)
 
     def create_new_plan_clicked(self):
         name, ok = QInputDialog.getText(self, "Create new plan", "Plan name:")
@@ -387,6 +417,7 @@ class ScanMechanismWidget(QWidget):
     def run(self):
         if self.save_scan_plan():
             name = self.ui.planComboBox.currentText()
+            self.ui.statusLabel.setText("PENDING")
             self.scan_manager.runScan(name)
 
     def save_scan_plan(self):
@@ -408,6 +439,51 @@ class ScanMechanismWidget(QWidget):
         self.editing_plan = False
         self.editing_new_plan = False
         return True
+
+    def scan_status_update(self, name, value, timestamp):
+        self.update_status_sig.emit(name, value if value is not None else 0,
+                                    (value is None))
+
+    def _scan_status_update(self, name, value, stop_flag):
+        self.status_update_lock.lock()
+        if name == "__scan_length":
+            if not self.scanning:
+                self.scanning = True
+                self.ui.statusLabel.setText("RUNNING")
+                self.scan_length = 0
+                self.scan_step = 0
+                self.scan_start_at = 0
+                self.scan_start_at = datetime.now()
+                self.ui.frameLabel.setText(f"-/-")
+                self.status_update_lock.unlock()
+                return
+
+            if stop_flag:
+                self.ui.statusLabel.setText("IDLE")
+                self.scanning = False
+                self.status_update_lock.unlock()
+                return
+
+            self.scan_length = int(value)
+            self.ui.progressBar.setMaximum(self.scan_length)
+        elif name == "__scan_step":
+            if value is None:
+                return
+            self.scan_step = int(value)
+            self.ui.progressBar.setValue(self.scan_step)
+            self.ui.frameLabel.setText(f"{self.scan_step}/{self.scan_length}")
+
+        self.status_update_lock.unlock()
+
+    def update_elapse(self):
+        self.status_update_lock.lock()
+        if self.scanning:
+            self.ui.elapsedLabel.setText(
+                str(datetime.now() - self.scan_start_at))
+        else:
+            self.ui.elapsedLabel.setText("0:00:00")
+
+        self.status_update_lock.unlock()
 
     @staticmethod
     def _get_table_icon_item(icon):
@@ -433,7 +509,12 @@ class ScanMechanismWidget(QWidget):
 
     @classmethod
     def get_init_func(cls, device_manager: DeviceManagerPrx,
-                      scan_manager: ScanManagerPrx):
-        return lambda: cls(device_manager, scan_manager)
+                      scan_manager: ScanManagerPrx,
+                      data_client: DataClientI):
+        return lambda: cls(device_manager, scan_manager, data_client)
+
+    def __del__(self):
+        for cbk in self.registered_data_callbacks:
+            self.data_client.stop_requesting_data(cbk)
 
 

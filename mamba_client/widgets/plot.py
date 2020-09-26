@@ -43,6 +43,10 @@ class PlotWidget(QWidget):
         self.data_sets = {}
         self.lines = {}
 
+        self.scanning = False
+
+        self.registered_data_callbacks = []
+
     @staticmethod
     def _icon(path):
         pm = QPixmap(path)
@@ -57,8 +61,9 @@ class PlotWidget(QWidget):
         name, color = data_source_select_dialog.display()
         if name:
             if name not in self.data_sets:
-                self.data_client.request_data(name, partial(self.update_data,
-                                                            name))
+                cbk = partial(self.update_data, name)
+                self.registered_data_callbacks.append(cbk)
+                self.data_client.request_data(name, cbk)
                 self.data_sets[name] = {
                     'x': [],
                     'y': [],
@@ -70,12 +75,16 @@ class PlotWidget(QWidget):
     def update_data(self, name, value, timestamp):
         assert name in self.data_sets
         if value is None:
-            self.data_sets[name]['x'] = []
-            self.data_sets[name]['y'] = []
-            if name in self.lines:
-                for line in self.lines[name]:
-                    line.remove()
-            self.lines[name] = []
+            if not self.scanning:
+                self.scanning = True
+                self.data_sets[name]['x'] = []
+                self.data_sets[name]['y'] = []
+                if name in self.lines:
+                    for line in self.lines[name]:
+                        line.remove()
+                self.lines[name] = []
+            else:
+                self.scanning = False
         else:
             self.data_sets[name]['x'].append(timestamp)
             self.data_sets[name]['y'].append(value)
@@ -94,6 +103,10 @@ class PlotWidget(QWidget):
             )
         self.legend = self.figure.legend()
         self.canvas.draw()
+
+    def __del__(self):
+        for cbk in self.registered_data_callbacks:
+            self.data_client.stop_requesting_data(cbk)
 
 
 class PlotDataSubscribeDialog(QDialog):

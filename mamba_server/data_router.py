@@ -148,7 +148,7 @@ class DataRouterI(DataRouter):
                     client.prx.scanStart(self.scan_id, to_send)
                 else:
                     client.callback.scan_start(self.scan_id, to_send)
-            except Ice.CloseConnectionException:
+            except Ice.ConnectionLostException:
                 self._connection_closed_callback(current.con)
                 pass
 
@@ -175,7 +175,7 @@ class DataRouterI(DataRouter):
                         client.prx.dataUpdate(to_send)
                     else:
                         client.callback.data_update(to_send)
-                except Ice.CloseConnectionException:
+                except (Ice.ConnectionLostException):
                     self._connection_closed_callback(current.con)
 
     @terminal_verify

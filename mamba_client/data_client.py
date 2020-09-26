@@ -60,6 +60,11 @@ class DataClientI(DataClient):
             for cb in self.data_callbacks[name]:
                 self.logger.info(f"Invoking callback {cb}")
                 cb(*args)
+        elif name == "*":
+            for name, cbks in self.data_callbacks.items():
+                for cb in cbks:
+                    self.logger.info(f"Invoking callback {cb}")
+                    cb(*args)
 
     def scanStart(self, id, descriptors, current):
         self.scan_id = id
@@ -68,6 +73,7 @@ class DataClientI(DataClient):
                 assert isinstance(des, DataDescriptor)
                 self.data_descriptors[des.name] = des
                 self.data_callback_invoke(des.name, None, None)
+                print(des.name)
 
     def dataUpdate(self, frames, current):
         for frame in frames:
@@ -76,4 +82,4 @@ class DataClientI(DataClient):
             self.data_callback_invoke(frame.name, value, timestamp)
 
     def scanEnd(self, status, current):
-        pass
+        self.data_callback_invoke("*", None, None)
