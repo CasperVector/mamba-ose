@@ -108,6 +108,11 @@ class ScanMechanismWidget(QWidget):
         self.ui.savePlanButton.clicked.connect(self.save_scan_plan)
         self.ui.planComboBox.currentIndexChanged.connect(self.plan_combo_index_changed)
         self.ui.addPlanButton.clicked.connect(self.create_new_plan_clicked)
+        self.ui.pauseButton.clicked.connect(self.pause_scan)
+        self.ui.stopButton.clicked.connect(self.abort_scan)
+
+        self.ui.pauseButton.setEnabled(False)
+        self.ui.stopButton.setEnabled(False)
 
         self.editing_new_plan = False
         self.editing_plan = False
@@ -116,6 +121,7 @@ class ScanMechanismWidget(QWidget):
         self.scan_length = 0
         self.scan_start_at = datetime.now()
         self.scan_step = 0
+        self.scan_paused = False
         self.scanning = False
 
         self.ui.progressBar.setMinimum(0)
@@ -133,7 +139,7 @@ class ScanMechanismWidget(QWidget):
 
         self.registered_data_callbacks = []
 
-        for data in ["__scan_length", "__scan_step"]:
+        for data in ["__scan_length", "__scan_step", "__scan_paused"]:
             cbk = partial(self.scan_status_update, data)
             self.registered_data_callbacks.append(cbk)
             self.data_client.request_data(data, cbk)
@@ -415,7 +421,9 @@ class ScanMechanismWidget(QWidget):
         return False
 
     def run(self):
-        if self.save_scan_plan():
+        if self.scan_paused:
+            self.scan_manager.resumeScan()
+        elif self.save_scan_plan():
             name = self.ui.planComboBox.currentText()
             self.ui.statusLabel.setText("PENDING")
             self.scan_manager.runScan(name)
@@ -452,20 +460,37 @@ class ScanMechanismWidget(QWidget):
                 self.ui.statusLabel.setText("RUNNING")
                 self.scan_length = 0
                 self.scan_step = 0
-                self.scan_start_at = 0
                 self.scan_start_at = datetime.now()
                 self.ui.frameLabel.setText(f"-/-")
+                self.ui.runButton.setEnabled(False)
+                self.ui.stopButton.setEnabled(True)
+                self.ui.pauseButton.setEnabled(True)
                 self.status_update_lock.unlock()
                 return
 
             if stop_flag:
                 self.ui.statusLabel.setText("IDLE")
                 self.scanning = False
+                self.ui.runButton.setEnabled(True)
+                self.ui.stopButton.setEnabled(False)
+                self.ui.pauseButton.setEnabled(False)
                 self.status_update_lock.unlock()
                 return
 
             self.scan_length = int(value)
             self.ui.progressBar.setMaximum(self.scan_length)
+        elif name == "__scan_paused":
+            if value:
+                if value == 1:
+                    self.scan_paused = True
+                    self.ui.runButton.setEnabled(True)
+                    self.ui.pauseButton.setEnabled(False)
+                    self.ui.statusLabel.setText("PAUSED")
+                elif value == 2:
+                    self.scan_start_at = datetime.now()
+                    self.scan_paused = False
+                    self.ui.statusLabel.setText("RUNNING")
+
         elif name == "__scan_step":
             if value is None:
                 return
@@ -477,13 +502,19 @@ class ScanMechanismWidget(QWidget):
 
     def update_elapse(self):
         self.status_update_lock.lock()
-        if self.scanning:
+        if self.scanning and not self.scan_paused:
             self.ui.elapsedLabel.setText(
                 str(datetime.now() - self.scan_start_at))
         else:
             self.ui.elapsedLabel.setText("0:00:00")
 
         self.status_update_lock.unlock()
+
+    def pause_scan(self):
+        self.scan_manager.pauseScan()
+
+    def abort_scan(self):
+        self.scan_manager.terminateScan()
 
     @staticmethod
     def _get_table_icon_item(icon):

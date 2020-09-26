@@ -84,7 +84,7 @@ class TerminalHostI(TerminalHost):
         for client in self.clients:
             try:
                 client.stdout(s)
-            except Ice.CloseConnectionException:
+            except Ice.ConnectionLostException:
                 pass
 
     def _connection_closed_callback(self, conn):

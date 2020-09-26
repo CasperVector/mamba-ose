@@ -107,6 +107,7 @@ module MambaICE {
             void setScanPlan(string name, ScanInstruction instruction);
             void runScan(string plan_name);
             void terminateScan();
+            void resumeScan();
             void pauseScan();
         };
     };

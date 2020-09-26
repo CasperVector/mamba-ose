@@ -16,17 +16,21 @@ from utils import general_utils
 if hasattr(MambaICE.Dashboard, 'ScanManager') and \
         hasattr(MambaICE.Dashboard, 'MotorScanInstruction') and \
         hasattr(MambaICE.Dashboard, 'ScanInstruction') and \
+        hasattr(MambaICE.Dashboard, 'ScanExitStatus') and \
         hasattr(MambaICE.Dashboard, 'UnauthorizedError'):
     from MambaICE.Dashboard import (ScanManager, MotorScanInstruction,
-                                    ScanInstruction, UnauthorizedError)
+                                    ScanInstruction, ScanExitStatus,
+                                    UnauthorizedError)
 else:
     from MambaICE.dashboard_ice import (ScanManager, MotorScanInstruction,
-                                        ScanInstruction, UnauthorizedError)
+                                        ScanInstruction, ScanExitStatus,
+                                        UnauthorizedError)
 
 if hasattr(MambaICE.Experiment, 'ScanControllerPrx'):
     from MambaICE.Experiment import ScanControllerPrx
 else:
     from MambaICE.experiment_ice import ScanControllerPrx
+
 
 client_verify = mamba_server.verify
 
@@ -200,9 +204,6 @@ class ScanManagerI(ScanManager):
                 self.calculate_scan_steps(plan))
             for cmd in self.generate_scan_command(plan):
                 self.terminal.emitCommand(cmd)
-        elif self.scan_paused:
-            self.terminal.emitCommand("RE.resume()")
-            self.scan_paused = False
         else:
             raise RuntimeError("There's other scan running at this moment.")
 
@@ -226,17 +227,31 @@ class ScanManagerI(ScanManager):
 
     @client_verify
     def pauseScan(self, current=None):
-        self.scan_controller.pause()
+        if self.scan_running and not self.scan_paused:
+            self.scan_paused = True
+            self.scan_controller.pause()
+            self.data_router.pushData(
+                [to_data_frame("__scan_paused", "integer", 1, time.time())])
+
+    @client_verify
+    def resumeScan(self, current=None):
+        if self.scan_paused:
+            self.data_router.pushData(
+                [to_data_frame("__scan_paused", "integer", 2, time.time())])
+            self.terminal.emitCommand("RE.resume()")
+            self.scan_paused = False
 
     @client_verify
     def terminateScan(self, current=None):
-        self.scan_controller.halt()
+        self.scan_running = False
+        self.scan_controller.abort()
+        #self.data_router.scanEnd(ScanExitStatus.Abort)
 
 
 def initialize(communicator, adapter,
                terminal: TerminalHostI,
                data_router: DataRouterI):
-    mamba_server.scan_mamager = ScanManagerI(
+    mamba_server.scan_manager = ScanManagerI(
         mamba_server.config['scan']['plan_storage'],
         communicator,
         general_utils.get_experiment_subproc_endpoint(),
@@ -244,7 +259,7 @@ def initialize(communicator, adapter,
         data_router
     )
 
-    adapter.add(mamba_server.scan_mamager,
+    adapter.add(mamba_server.scan_manager,
                 communicator.stringToIdentity("ScanManager"))
 
     mamba_server.logger.info("ScanManager initialized.")

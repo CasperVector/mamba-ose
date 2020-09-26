@@ -16,7 +16,7 @@ module MambaICE {
 
         interface ScanController {
             void pause();
-            void resume();
+            void abort();
             void halt();
         };
     };

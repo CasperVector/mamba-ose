@@ -7,7 +7,7 @@ import mamba_server.terminal_host as terminal
 import mamba_server.data_router as data_router
 import mamba_server.device_manager as device_manager
 import mamba_server.file_writer as file_writer
-import mamba_server.scan_mamager as scan_manager
+import mamba_server.scan_manager as scan_manager
 from utils import general_utils
 
 # --- Ice properties setup ---

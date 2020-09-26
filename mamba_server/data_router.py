@@ -18,10 +18,11 @@ def terminal_verify(f):
     @wraps(f)
     def wrapper(self, *args):
         current = args[-1]
-        if mamba_server.terminal_con == current.con:
-            f(self, *args)
-        else:
-            raise UnauthorizedError()
+        if current and isinstance(current, Ice.Current):
+            if mamba_server.terminal_con != current.con:
+                raise UnauthorizedError()
+
+        return f(self, *args)
 
     return wrapper
 
@@ -154,8 +155,6 @@ class DataRouterI(DataRouter):
 
     @terminal_verify
     def pushData(self, frames, current=None):
-        self.logger.info(f"Data frames received from bluesky callback")
-
         for dp in self.data_process_chain:
             assert isinstance(dp, DataProcessor)
             frames = dp.process_data(frames)
@@ -170,7 +169,7 @@ class DataRouterI(DataRouter):
                     to_send.append(frame)
             if to_send:
                 try:
-                    self.logger.info(f"Forward data frames to {client}")
+                    self.logger.info(f"Forward data frames {frames} to {client}")
                     if client.is_remote:
                         client.prx.dataUpdate(to_send)
                     else:
