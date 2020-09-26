@@ -114,7 +114,7 @@ class ScanManagerI(ScanManager):
             os.mkdir(self.plan_dir)
             return
 
-        files = filter(lambda s: s.endswith(".yaml") and s.beginswith("plan_"),
+        files = filter(lambda s: s.endswith(".yaml") and s.startswith("plan_"),
                        os.listdir(self.plan_dir))
         for file in files:
             try:
@@ -138,6 +138,7 @@ class ScanManagerI(ScanManager):
         file = "plan_" + name + ".yaml"
         with open(os.path.join(self.plan_dir, file), "w") as f:
             plan_dic = {
+                'name': name,
                 'detectors': instruction.detectors,
                 'motors': [
                     {
@@ -209,6 +210,10 @@ class ScanManagerI(ScanManager):
     def getScanPlan(self, name, current=None) -> ScanInstruction:
         if name in self.plans:
             return self.plans[name]
+
+    @client_verify
+    def listScanPlans(self, current=None) -> List[str]:
+        return list(self.plans.keys())
 
     @client_verify
     def setScanPlan(self, name, instruction, current=None):

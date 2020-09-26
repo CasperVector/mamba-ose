@@ -8,5 +8,7 @@
         <file>icons/settings.png</file>
         <file>icons/checkmark.png</file>
         <file>icons/delete.png</file>
+        <file>icons/new-document.png</file>
+        <file>icons/save.png</file>
     </qresource>
 </RCC>

@@ -103,6 +103,7 @@ module MambaICE {
 
         interface ScanManager {
             ScanInstruction getScanPlan(string name);
+            strings listScanPlans();
             void setScanPlan(string name, ScanInstruction instruction);
             void runScan(string plan_name);
             void terminateScan();
