@@ -102,10 +102,11 @@ class ScanMechanismWidget(QWidget):
         self.ui.planComboBox.currentIndexChanged.connect(self.plan_combo_index_changed)
         self.ui.addPlanButton.clicked.connect(self.create_new_plan_clicked)
 
-        self.populate_plan_combo()
-
         self.editing_new_plan = False
         self.editing_plan = False
+        self.current_plan_index = 0
+
+        self.populate_plan_combo()
 
     def create_new_plan_clicked(self):
         name, ok = QInputDialog.getText(self, "Create new plan", "Plan name:")
@@ -114,25 +115,31 @@ class ScanMechanismWidget(QWidget):
             idx = self.ui.planComboBox.count()
             self.ui.planComboBox.insertItem(
                 idx,
-                name)
+                name + "*",
+                name
+            )
             self.ui.planComboBox.setCurrentIndex(idx)
+            self.current_plan_index = idx
             self.editing_new_plan = True
             self.reset_motor_detector_list()
             self.ui.planComboBox.blockSignals(False)
 
     def plan_changed(self):
-        item = self.ui.planComboBox.model().item(
-            self.ui.planComboBox.currentIndex())
-        font = item.font()
-        font.setBold(True)
-        item.setFont(font)
+        # item = self.ui.planComboBox.model().item(
+        #     self.ui.planComboBox.currentIndex())
+        # font = item.font()
+        # font.setBold(True)
+        # item.setFont(font)
+        self.ui.planComboBox.setItemText(self.ui.planComboBox.currentIndex(),
+                                         self.ui.planComboBox.currentData()
+                                         + "*")
         self.editing_plan = True
 
     def populate_plan_combo(self):
         plans = self.scan_manager.listScanPlans()
         if plans:
             for plan in plans:
-                self.ui.planComboBox.addItem(plan)
+                self.ui.planComboBox.addItem(plan, plan)
                 self.plan_combo_index_changed(
                     self.ui.planComboBox.currentIndex())
         else:
@@ -140,8 +147,26 @@ class ScanMechanismWidget(QWidget):
             self.add_detector()
 
     def plan_combo_index_changed(self, index):
+        if self.editing_new_plan or self.editing_plan:
+            msgbox = QMessageBox()
+            msgbox.setText("The plan has been modified.")
+            msgbox.setInformativeText("Do you want to save the change?")
+            msgbox.setStandardButtons(QMessageBox.Save | QMessageBox.Discard |
+                                      QMessageBox.Cancel)
+            ret = msgbox.exec()
+            if ret == QMessageBox.Save:
+                self.save_scan_plan()
+            elif ret == QMessageBox.Cancel:
+                self.ui.planComboBox.blockSignals(True)
+                self.ui.planComboBox.setCurrentIndex(self.current_plan_index)
+                self.ui.planComboBox.blockSignals(False)
+                return
+            else:  # Discard
+                pass
+
         self.ui.planComboBox.setEnabled(False)
-        self.populate_plan_inst(self.ui.planComboBox.itemText(index))
+        self.populate_plan_inst(self.ui.planComboBox.itemData(index))
+        self.current_plan_index = index
         self.ui.planComboBox.setEnabled(True)
 
     def populate_plan_inst(self, name):
@@ -172,18 +197,14 @@ class ScanMechanismWidget(QWidget):
                     self)
                 device = dialog.display()
                 if device:
-                    self.scanned_motors[device.name] = MotorScanInstruction(
-                        name=device.name,
-                        start=None,
-                        stop=None,
-                        point_num=None
-                    )
                     self.add_motor(device.name)
+                    self.plan_changed()
             else:
                 name_to_delete = self.ui.motorTableWidget.item(
                     row, MOTOR_NAME_COL).text()
                 del self.scanned_motors[name_to_delete]
                 self.ui.motorTableWidget.removeRow(row)
+                self.plan_changed()
         elif col == MOTOR_SETUP_COL:
             if row < self.ui.motorTableWidget.rowCount() - 1:
                 name = self.ui.motorTableWidget.item(row,
@@ -206,13 +227,14 @@ class ScanMechanismWidget(QWidget):
                     self)
                 device = dialog.display()
                 if device:
-                    self.scanned_detectors.append(device.name)
                     self.add_detector(device.name)
+                    self.plan_changed()
             else:
                 name_to_delete = self.ui.detectorTableWidget.item(
                     row, DETECTOR_NAME_COL).text()
                 self.scanned_detectors.remove(name_to_delete)
                 self.ui.detectorTableWidget.removeRow(row)
+                self.plan_changed()
         elif col == DETECTOR_SETUP_COL:
             if row < self.ui.detectorTableWidget.rowCount() - 1:
                 name = self.ui.detectorTableWidget.item(
@@ -230,6 +252,7 @@ class ScanMechanismWidget(QWidget):
         if col in [MOTOR_START_COL, MOTOR_END_COL, MOTOR_NUM_COL]:
             text = item.text()
             try:
+                self.plan_changed()
                 num = float(text)
                 item.setForeground(QBrush())
                 inst = self.scanned_motors[name]
@@ -274,6 +297,12 @@ class ScanMechanismWidget(QWidget):
         else:
             if not motor_id:
                 return
+            self.scanned_motors[motor_id] = MotorScanInstruction(
+                name=motor_id,
+                start=start,
+                stop=stop,
+                point_num=point_num
+            )
             motor_item = self._get_table_uneditable_item()
             motor_item.setText(motor_id)
             self.ui.motorTableWidget.setItem(row, MOTOR_NAME_COL, motor_item)
@@ -312,8 +341,9 @@ class ScanMechanismWidget(QWidget):
             self.ui.detectorTableWidget.setItem(
                 row + 1, DETECTOR_SETUP_COL, self._get_table_uneditable_item())
         else:
-            if not detector_id:
+            if not detector_id or detector_id in self.scanned_detectors:
                 return
+            self.scanned_detectors.append(detector_id)
             detector_item = self._get_table_uneditable_item()
             detector_item.setText(detector_id)
             self.ui.detectorTableWidget.setItem(row, DETECTOR_NAME_COL, detector_item)
@@ -332,13 +362,15 @@ class ScanMechanismWidget(QWidget):
 
     def reset_motor_detector_list(self):
         self.ui.motorTableWidget.blockSignals(True)
-        for row in range(self.ui.motorTableWidget.rowCount()):
+        self.scanned_motors = {}
+        for row in reversed(range(self.ui.motorTableWidget.rowCount())):
             self.ui.motorTableWidget.removeRow(row)
         self.add_motor()
         self.ui.motorTableWidget.blockSignals(False)
 
         self.ui.detectorTableWidget.blockSignals(True)
-        for row in range(self.ui.detectorTableWidget.rowCount()):
+        self.scanned_detectors = []
+        for row in reversed(range(self.ui.detectorTableWidget.rowCount())):
             self.ui.detectorTableWidget.removeRow(row)
         self.add_detector()
         self.ui.detectorTableWidget.blockSignals(False)
@@ -365,12 +397,16 @@ class ScanMechanismWidget(QWidget):
                 "Invalid values of scan parameters.\n",
                 QMessageBox.Ok)
             return False
-        name = self.ui.planComboBox.currentText()
+        name = self.ui.planComboBox.currentData()
+        self.ui.planComboBox.setItemText(self.ui.planComboBox.currentIndex(),
+                                         name)
         inst = ScanInstruction(
             motors=list(self.scanned_motors.values()),
             detectors=self.scanned_detectors
         )
         self.scan_manager.setScanPlan(name, inst)
+        self.editing_plan = False
+        self.editing_new_plan = False
         return True
 
     @staticmethod
@@ -389,7 +425,7 @@ class ScanMechanismWidget(QWidget):
 
     @staticmethod
     def _get_table_editable_item(text=None):
-        if not text:
+        if text is None:
             text = ""
         item = QTableWidgetItem()
         item.setText(str(text))
