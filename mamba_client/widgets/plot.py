@@ -27,7 +27,7 @@ class PlotWidget(QWidget):
         self.navbar = NavigationToolbar(self.canvas, self)
         self.navbar.setIconSize(QSize(15, 15))
 
-        a = self.navbar.addAction(self._icon('res/link.png'),
+        a = self.navbar.addAction(self._icon(':/icons/link.png'),
                                   "Select Data Source",
                                   self.show_data_source_dialog)
 
@@ -57,7 +57,7 @@ class PlotWidget(QWidget):
         return lambda: cls(data_client)
 
     def show_data_source_dialog(self):
-        data_source_select_dialog = PlotDataSubscribeDialog(self)
+        data_source_select_dialog = PlotDataSelectDialog(self)
         name, color = data_source_select_dialog.display()
         if name:
             if name not in self.data_sets:
@@ -109,7 +109,7 @@ class PlotWidget(QWidget):
             self.data_client.stop_requesting_data(cbk)
 
 
-class PlotDataSubscribeDialog(QDialog):
+class PlotDataSelectDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Configure Data Source")

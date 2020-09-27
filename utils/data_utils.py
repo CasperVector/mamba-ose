@@ -1,5 +1,6 @@
 import numpy as np
 import json
+from typing import Iterable
 import MambaICE
 
 if hasattr(MambaICE, 'TypedDataFrame') and hasattr(MambaICE, 'DataType') and \
@@ -31,28 +32,30 @@ def string_to_type(string):
 
 def to_data_frame(name, _type: str, value, timestamp):
     _type = _type.lower()
-    if _type == 'number':
-        return FloatDataFrame(
-            name=name,
-            type=DataType.Float,
-            timestamp=timestamp,
-            value=float(value)
-        )
-    elif _type == 'integer':
-        return IntegerDataFrame(
-            name=name,
-            type=DataType.Integer,
-            timestamp=timestamp,
-            value=int(value)
-        )
-    elif _type == 'string':
-        return StringDataFrame(
-            name=name,
-            type=DataType.String,
-            timestamp=timestamp,
-            value=str(value)
-        )
-    elif _type == 'array':
+    if not isinstance(value, Iterable):
+        if _type == 'number':
+            return FloatDataFrame(
+                name=name,
+                type=DataType.Float,
+                timestamp=timestamp,
+                value=float(value)
+            )
+        elif _type == 'integer':
+            return IntegerDataFrame(
+                name=name,
+                type=DataType.Integer,
+                timestamp=timestamp,
+                value=int(value)
+            )
+        elif _type == 'string':
+            return StringDataFrame(
+                name=name,
+                type=DataType.String,
+                timestamp=timestamp,
+                value=str(value)
+            )
+    else:
+        # _type == 'array':
         return to_array_data_frame(name, value, timestamp)
     assert False, f"Unknown data type {_type}"
 
@@ -66,6 +69,7 @@ def to_array_data_frame(name, array, timestamp):
     packed_array = np_array.flatten()
     return ArrayDataFrame(
         name=name,
+        type=DataType.Array,
         shape=shape,
         timestamp=timestamp,
         value=packed_array

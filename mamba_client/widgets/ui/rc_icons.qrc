@@ -10,5 +10,6 @@
         <file>icons/delete.png</file>
         <file>icons/new-document.png</file>
         <file>icons/save.png</file>
+        <file>icons/link.png</file>
     </qresource>
 </RCC>

@@ -194,6 +194,9 @@ class ScanMechanismWidget(QWidget):
                                       QMessageBox.Cancel)
             ret = msgbox.exec()
             if ret == QMessageBox.Save:
+                name = self.ui.planComboBox.itemData(self.current_plan_index)
+                self.ui.planComboBox.setItemText(self.current_plan_index,
+                                                 name)
                 self.save_scan_plan()
             elif ret == QMessageBox.Cancel:
                 self.ui.planComboBox.blockSignals(True)

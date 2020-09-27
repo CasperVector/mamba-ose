@@ -68,6 +68,8 @@ class DataClientI(DataClient):
 
     def scanStart(self, id, descriptors, current):
         self.scan_id = id
+        self.logger.info("Received scan started message. Data to be received: "
+                         + str([des.name for des in descriptors]))
         if len(descriptors) > 0:
             for des in descriptors:
                 assert isinstance(des, DataDescriptor)
@@ -76,6 +78,8 @@ class DataClientI(DataClient):
                 print(des.name)
 
     def dataUpdate(self, frames, current):
+        self.logger.info("Received data frames: " +
+                         str([frame.name for frame in frames]))
         for frame in frames:
             value = data_frame_to_value(frame)
             timestamp = datetime.fromtimestamp(frame.timestamp)
