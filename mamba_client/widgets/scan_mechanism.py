@@ -37,6 +37,9 @@ DETECTOR_ADD_COL = 0
 DETECTOR_NAME_COL = 1
 DETECTOR_SETUP_COL = 2
 
+PAUSED = 1
+RESUMED = 2
+
 
 class ScanInstructionSet:
     def __init__(self, motors: List[MotorScanInstruction], detectors: list):
@@ -481,12 +484,12 @@ class ScanMechanismWidget(QWidget):
             self.ui.progressBar.setMaximum(self.scan_length)
         elif name == "__scan_paused":
             if value:
-                if value == 1:
+                if value == PAUSED:
                     self.scan_paused = True
                     self.ui.runButton.setEnabled(True)
                     self.ui.pauseButton.setEnabled(False)
                     self.ui.statusLabel.setText("PAUSED")
-                elif value == 2:
+                elif value == RESUMED:
                     self.scan_start_at = datetime.now()
                     self.scan_paused = False
                     self.ui.statusLabel.setText("RUNNING")

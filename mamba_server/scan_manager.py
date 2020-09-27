@@ -34,6 +34,9 @@ else:
 
 client_verify = mamba_server.verify
 
+PAUSED = 1
+RESUMED = 2
+
 
 class ScanManagerI(ScanManager):
 
@@ -231,13 +234,13 @@ class ScanManagerI(ScanManager):
             self.scan_paused = True
             self.scan_controller.pause()
             self.data_router.pushData(
-                [to_data_frame("__scan_paused", "integer", 1, time.time())])
+                [to_data_frame("__scan_paused", "integer", PAUSED, time.time())])
 
     @client_verify
     def resumeScan(self, current=None):
         if self.scan_paused:
             self.data_router.pushData(
-                [to_data_frame("__scan_paused", "integer", 2, time.time())])
+                [to_data_frame("__scan_paused", "integer", RESUMED, time.time())])
             self.terminal.emitCommand("RE.resume()")
             self.scan_paused = False
 
