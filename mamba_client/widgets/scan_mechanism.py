@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from typing import List
 from collections import namedtuple
@@ -71,7 +71,7 @@ class ScanInstructionSet:
 
 
 class ScanMechanismWidget(QWidget):
-    update_status_sig = pyqtSignal(str, int, bool)
+    update_status_sig = pyqtSignal(str, int, int, bool)
 
     def __init__(self, device_manager: DeviceManagerPrx,
                  scan_manager: ScanManagerPrx,
@@ -125,6 +125,7 @@ class ScanMechanismWidget(QWidget):
         self.scan_start_at = datetime.now()
         self.scan_step = 0
         self.scan_paused = False
+        self.frame_count_from_paused = 0
         self.scanning = False
 
         self.ui.progressBar.setMinimum(0)
@@ -454,24 +455,25 @@ class ScanMechanismWidget(QWidget):
         self.editing_new_plan = False
         return True
 
-    def scan_status_update(self, name, value, timestamp):
-        self.update_status_sig.emit(name, value if value is not None else 0,
+    def scan_status_update(self, name, scan_id, value, timestamp):
+        self.update_status_sig.emit(name, scan_id, value if value is not None else 0,
                                     (value is None))
 
-    def _scan_status_update(self, name, value, stop_flag):
-        self.status_update_lock.lock()
+    def _scan_status_update(self, name, scan_id, value, stop_flag):
         if name == "__scan_length":
             if not self.scanning:
                 self.scanning = True
+                self.scan_paused = False
                 self.ui.statusLabel.setText("RUNNING")
+                self.ui.scanIDLabel.setText(str(scan_id))
                 self.scan_length = 0
                 self.scan_step = 0
+                self.frame_count_from_paused = 0
                 self.scan_start_at = datetime.now()
                 self.ui.frameLabel.setText(f"-/-")
                 self.ui.runButton.setEnabled(False)
                 self.ui.stopButton.setEnabled(True)
                 self.ui.pauseButton.setEnabled(True)
-                self.status_update_lock.unlock()
                 return
 
             if stop_flag:
@@ -480,7 +482,6 @@ class ScanMechanismWidget(QWidget):
                 self.ui.runButton.setEnabled(True)
                 self.ui.stopButton.setEnabled(False)
                 self.ui.pauseButton.setEnabled(False)
-                self.status_update_lock.unlock()
                 return
 
             self.scan_length = int(value)
@@ -493,6 +494,7 @@ class ScanMechanismWidget(QWidget):
                     self.ui.pauseButton.setEnabled(False)
                     self.ui.statusLabel.setText("PAUSED")
                 elif value == RESUMED:
+                    self.frame_count_from_paused = 0
                     self.scan_start_at = datetime.now()
                     self.scan_paused = False
                     self.ui.statusLabel.setText("RUNNING")
@@ -500,21 +502,20 @@ class ScanMechanismWidget(QWidget):
         elif name == "__scan_step":
             if value is None:
                 return
+            self.frame_count_from_paused += 1
             self.scan_step = int(value)
             self.ui.progressBar.setValue(self.scan_step)
             self.ui.frameLabel.setText(f"{self.scan_step}/{self.scan_length}")
 
-        self.status_update_lock.unlock()
-
     def update_elapse(self):
-        self.status_update_lock.lock()
         if self.scanning and not self.scan_paused:
-            self.ui.elapsedLabel.setText(
-                str(datetime.now() - self.scan_start_at))
+            elapsed = datetime.now() - self.scan_start_at
+            self.ui.elapsedLabel.setText(self.convert_to_time(elapsed))
+            time_per_frame = elapsed / self.frame_count_from_paused
+            eta = time_per_frame * (self.scan_length - self.scan_step)
+            self.ui.etaLabel.setText(self.convert_to_time(eta))
         else:
             self.ui.elapsedLabel.setText("0:00:00")
-
-        self.status_update_lock.unlock()
 
     def pause_scan(self):
         self.scan_manager.pauseScan()
@@ -543,6 +544,14 @@ class ScanMechanismWidget(QWidget):
         item = QTableWidgetItem()
         item.setText(str(text))
         return item
+
+    @staticmethod
+    def convert_to_time(delta: timedelta):
+        seconds = int(delta.total_seconds())
+        hours = int(seconds / 3600)
+        mins = int((seconds % 3600) / 60)
+        seconds = int((seconds % 3600) % 60)
+        return f"{hours}:{mins:02d}:{seconds:02d}"
 
     @classmethod
     def get_init_func(cls, device_manager: DeviceManagerPrx,

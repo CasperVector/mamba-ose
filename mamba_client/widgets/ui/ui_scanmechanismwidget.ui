@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>520</width>
-    <height>671</height>
+    <height>778</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -34,168 +34,6 @@
         <enum>QLayout::SetDefaultConstraint</enum>
        </property>
        <item row="0" column="4">
-        <widget class="QGroupBox" name="etaGroupBox">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>55</height>
-          </size>
-         </property>
-         <property name="title">
-          <string>ETA</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_9">
-          <property name="topMargin">
-           <number>6</number>
-          </property>
-          <property name="bottomMargin">
-           <number>6</number>
-          </property>
-          <item>
-           <widget class="QLabel" name="etaLabel">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize">
-             <size>
-              <width>0</width>
-              <height>16</height>
-             </size>
-            </property>
-            <property name="font">
-             <font>
-              <pointsize>15</pointsize>
-             </font>
-            </property>
-            <property name="text">
-             <string>00:00</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item row="0" column="0">
-        <widget class="QGroupBox" name="frameGroupBox">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>55</height>
-          </size>
-         </property>
-         <property name="title">
-          <string>Frame</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_10">
-          <property name="topMargin">
-           <number>6</number>
-          </property>
-          <property name="bottomMargin">
-           <number>6</number>
-          </property>
-          <item>
-           <widget class="QLabel" name="frameLabel">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize">
-             <size>
-              <width>0</width>
-              <height>16</height>
-             </size>
-            </property>
-            <property name="font">
-             <font>
-              <pointsize>15</pointsize>
-             </font>
-            </property>
-            <property name="text">
-             <string>0/0</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item row="0" column="1" colspan="2">
-        <widget class="QGroupBox" name="statusGroupBox">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>55</height>
-          </size>
-         </property>
-         <property name="title">
-          <string>Status</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_8">
-          <property name="topMargin">
-           <number>6</number>
-          </property>
-          <property name="bottomMargin">
-           <number>6</number>
-          </property>
-          <item>
-           <widget class="QLabel" name="statusLabel">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize">
-             <size>
-              <width>0</width>
-              <height>16</height>
-             </size>
-            </property>
-            <property name="font">
-             <font>
-              <pointsize>15</pointsize>
-             </font>
-            </property>
-            <property name="text">
-             <string>IDLE</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item row="0" column="3">
         <widget class="QGroupBox" name="elapsedGroupBox">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -249,6 +87,222 @@
          </layout>
         </widget>
        </item>
+       <item row="0" column="1">
+        <widget class="QGroupBox" name="frameGroupBox">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>55</height>
+          </size>
+         </property>
+         <property name="title">
+          <string>Frame</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_10">
+          <property name="topMargin">
+           <number>6</number>
+          </property>
+          <property name="bottomMargin">
+           <number>6</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="frameLabel">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>16</height>
+             </size>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>0/0</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item row="0" column="5">
+        <widget class="QGroupBox" name="etaGroupBox">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>55</height>
+          </size>
+         </property>
+         <property name="title">
+          <string>ETA</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_9">
+          <property name="topMargin">
+           <number>6</number>
+          </property>
+          <property name="bottomMargin">
+           <number>6</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="etaLabel">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>16</height>
+             </size>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>00:00</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item row="0" column="2" colspan="2">
+        <widget class="QGroupBox" name="statusGroupBox">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>55</height>
+          </size>
+         </property>
+         <property name="title">
+          <string>Status</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_8">
+          <property name="topMargin">
+           <number>6</number>
+          </property>
+          <property name="bottomMargin">
+           <number>6</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="statusLabel">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>16</height>
+             </size>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>IDLE</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item row="0" column="0">
+        <widget class="QGroupBox" name="scanIDGroupBox">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>55</height>
+          </size>
+         </property>
+         <property name="title">
+          <string>Scan ID</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_12">
+          <property name="topMargin">
+           <number>6</number>
+          </property>
+          <property name="bottomMargin">
+           <number>6</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="scanIDLabel">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>16</height>
+             </size>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>0</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
       </layout>
      </item>
      <item>
@@ -274,7 +328,7 @@
         </sizepolicy>
        </property>
        <property name="currentIndex">
-        <number>0</number>
+        <number>1</number>
        </property>
        <widget class="QWidget" name="scanDefinitionPage">
         <property name="geometry">
@@ -282,8 +336,14 @@
           <x>0</x>
           <y>0</y>
           <width>494</width>
-          <height>471</height>
+          <height>578</height>
          </rect>
+        </property>
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Preferred" vsizetype="MinimumExpanding">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
         </property>
         <attribute name="label">
          <string>Scan Definition</string>
@@ -464,7 +524,7 @@
              <property name="minimumSize">
               <size>
                <width>0</width>
-               <height>160</height>
+               <height>100</height>
               </size>
              </property>
              <property name="title">
@@ -478,6 +538,12 @@
                   <horstretch>0</horstretch>
                   <verstretch>0</verstretch>
                  </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>0</width>
+                  <height>100</height>
+                 </size>
                 </property>
                 <column>
                  <property name="text">
@@ -572,7 +638,7 @@
           <x>0</x>
           <y>0</y>
           <width>494</width>
-          <height>471</height>
+          <height>578</height>
          </rect>
         </property>
         <attribute name="label">

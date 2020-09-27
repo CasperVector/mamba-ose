@@ -60,7 +60,7 @@ class Plot2DWidget(QWidget):
         self.data_client.request_data(data_name, cbk)
         self.subscribed_data_name = data_name
 
-    def update_data(self, value, timestamp):
+    def update_data(self, _id, value, timestamp):
         if value is not None:
             shape = np.shape(value)
             if len(shape) != 2:

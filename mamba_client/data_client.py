@@ -74,8 +74,7 @@ class DataClientI(DataClient):
             for des in descriptors:
                 assert isinstance(des, DataDescriptor)
                 self.data_descriptors[des.name] = des
-                self.data_callback_invoke(des.name, None, None)
-                print(des.name)
+                self.data_callback_invoke(des.name, id, None, None)
 
     def dataUpdate(self, frames, current):
         self.logger.info("Received data frames: " +
@@ -83,7 +82,7 @@ class DataClientI(DataClient):
         for frame in frames:
             value = data_frame_to_value(frame)
             timestamp = datetime.fromtimestamp(frame.timestamp)
-            self.data_callback_invoke(frame.name, value, timestamp)
+            self.data_callback_invoke(frame.name, self.scan_id, value, timestamp)
 
     def scanEnd(self, status, current):
-        self.data_callback_invoke("*", None, None)
+        self.data_callback_invoke("*", self.scan_id, None, None)

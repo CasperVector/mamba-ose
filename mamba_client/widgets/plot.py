@@ -72,7 +72,7 @@ class PlotWidget(QWidget):
             color_hex = hex(color.rgba())
             self.data_sets[name]['color'] = "#" + color_hex[4:] + color_hex[2:4]
 
-    def update_data(self, name, value, timestamp):
+    def update_data(self, name, _id, value, timestamp):
         assert name in self.data_sets
         if value is None:
             if not self.scanning:
