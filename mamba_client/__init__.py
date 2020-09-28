@@ -21,17 +21,18 @@ if hasattr(MambaICE.Dashboard, 'DeviceManagerPrx') and \
         hasattr(MambaICE.Dashboard, 'DataClientPrx') and \
         hasattr(MambaICE.Dashboard, 'TerminalHostPrx') and \
         hasattr(MambaICE.Dashboard, 'ScanManagerPrx') and \
-        hasattr(MambaICE.Dashboard, 'SessionManagerPrx')\
+        hasattr(MambaICE.Dashboard, 'SessionManagerPrx') and \
+        hasattr(MambaICE.Dashboard, 'UnauthorizedError')\
     :
         from MambaICE.Dashboard import (DeviceManagerPrx, DataClient,
                                         DataRouterPrx, DataClientPrx,
                                         TerminalHostPrx, ScanManagerPrx,
-                                        SessionManagerPrx)
+                                        SessionManagerPrx, UnauthorizedError)
 else:
     from MambaICE.dashboard_ice import (DeviceManagerPrx, DataClient,
                                         DataRouterPrx, DataClientPrx,
                                         TerminalHostPrx, ScanManagerPrx,
-                                        SessionManagerPrx)
+                                        SessionManagerPrx, UnauthorizedError)
 
 if hasattr(MambaICE, 'DeviceType') and hasattr(MambaICE, 'DataType') and \
         hasattr(MambaICE, 'TypedDataFrame') and \

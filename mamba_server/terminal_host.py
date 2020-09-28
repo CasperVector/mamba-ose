@@ -27,7 +27,7 @@ def event_verify(f):
 
 class TerminalHostI(TerminalHost):
     def __init__(self, event_hdl: 'TerminalEventHandlerI'):
-        self.terminal = None
+        self._terminal = None
         self.clients = []
         self.conn_to_client = {}
         self.logger = mamba_server.logger
@@ -48,22 +48,28 @@ class TerminalHostI(TerminalHost):
 
         self.spawn()
 
+    @property
+    def terminal(self):
+        if not self._terminal:
+            self.spawn()
+        return self._terminal
+
     def spawn(self):
-        if not self.terminal:
+        if not self._terminal:
             from secrets import token_hex
             event_token = token_hex(8)
             access_endpoint = general_utils.get_access_endpoint()
 
-            self.terminal = IPythonTerminalIO(80, 24,
-                                              access_endpoint,
-                                              event_token,
-                                              self.logger)
+            self._terminal = IPythonTerminalIO(80, 24,
+                                               access_endpoint,
+                                               event_token,
+                                               self.logger)
 
             self.event_hdl.set_token(event_token)
 
-            self.terminal.stdout_callback = self._stdout_callback
-            self.terminal.terminated_callback = self._terminated_callback
-            self.terminal.spawn()
+            self._terminal.stdout_callback = self._stdout_callback
+            self._terminal.terminated_callback = self._terminated_callback
+            self._terminal.spawn()
             self.logger.info("Terminal thread spawned, waiting for event "
                              "emitters to attach.")
 

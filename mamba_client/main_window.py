@@ -1,15 +1,20 @@
 from PyQt5.QtWidgets import QMainWindow, QWidget, QDockWidget
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
+from .widgets.mask import MaskWidget
 
 
 class MainWindow(QMainWindow):
+    _show_popup_sig = pyqtSignal(str, bool)
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
         self.widget_factory = {}
         self.docks = {}
-
         self.menus = {}
+
+        self._popup = None
+        self._show_popup_sig.connect(self._create_masked_popup)
 
         self.setWindowTitle("Mamba")
         self.setDockNestingEnabled(True)
@@ -58,3 +63,25 @@ class MainWindow(QMainWindow):
             self.menus[menu] = bar.addMenu(menu)
 
         self.menus[menu].addAction(action)
+
+    def show_masked_popup(self, text, closed_btn=True):
+        if not self._popup:
+            self._show_popup_sig.emit(text, closed_btn)
+        else:
+            self._popup.setText(text)
+            self._popup.closeBtnEnable(closed_btn)
+
+    def _create_masked_popup(self, text, closed_btn):
+        self._popup = MaskWidget(self, text, closed_btn)
+        self._popup.move(0, 0)
+        self._popup.resize(self.width(), self.height())
+        self._popup.show()
+        self._popup.closed.connect(self._clear_masked_popup)
+
+    def _clear_masked_popup(self):
+        self._popup = None
+
+    def close_masked_popup(self):
+        if self._popup:
+            self._popup.safe_close()
+            self._popup = None
