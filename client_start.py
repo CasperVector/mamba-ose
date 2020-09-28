@@ -105,8 +105,6 @@ if __name__ == "__main__":
 
             mw.show()
 
-            mw.show_masked_popup("Hello!")
-
             app.exec_()
 
         finally:
