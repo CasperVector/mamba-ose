@@ -50,6 +50,7 @@ class PlotWidget(QWidget):
 
         self.registered_data_callbacks = []
 
+    def register_scan_stop_cbk(self):
         for name in ["__scan_ended"]:
             cbk = partial(self.update_data, name)
             self.registered_data_callbacks.append(cbk)
@@ -72,6 +73,11 @@ class PlotWidget(QWidget):
         )
 
         names, colors, self.xsource = data_source_select_dialog.display()
+
+        for cbk in self.registered_data_callbacks:
+            self.data_client.stop_requesting_data(cbk)
+        self.register_scan_stop_cbk()
+
         for name, color in zip(names, colors):
             if name not in self.data_sets:
                 cbk = partial(self.update_data, name)
@@ -90,18 +96,18 @@ class PlotWidget(QWidget):
         if value is None:
             if not self.scanning:
                 self.scanning = True
-                print("clear")
                 self.figure.clf()
                 self.axs = self.figure.subplots()
                 self.figure.set_tight_layout(True)
                 self.legend = self.figure.legend()
 
-                self.data_sets[name]['data'] = []
-                self.data_sets[name]['timestamp'] = []
-                if name in self.lines:
-                    for line in self.lines[name]:
-                        line.remove()
-                self.lines[name] = []
+                for name in self.data_sets:
+                    self.data_sets[name]['data'] = []
+                    self.data_sets[name]['timestamp'] = []
+                    if name in self.lines:
+                        for line in self.lines[name]:
+                            line.remove()
+                        self.lines[name] = []
 
                 if self.xsource:
                     self.axs.set_xlabel(self.xsource)
@@ -122,7 +128,6 @@ class PlotWidget(QWidget):
         self.plot()
 
     def plot(self):
-        x_len = len(self.data_sets[self.xsource]['data'])
         self.legend.remove()
         for name, data_set in self.data_sets.items():
             if name == self.xsource:
@@ -133,6 +138,7 @@ class PlotWidget(QWidget):
                     line.remove()
 
             if self.xsource:
+                x_len = len(self.data_sets[self.xsource]['data'])
                 self.lines[name] = self.axs.plot(
                     self.data_sets[self.xsource]['data'],
                     data_set['data'][:x_len],
@@ -199,6 +205,7 @@ class PlotDataSelectDialog(QDialog):
         self.add_btn = QPushButton()
         self.ok_btn.clicked.connect(self.ok_clicked)
         self.add_btn.clicked.connect(self.add_clicked)
+        self.delete_btn.clicked.connect(self.delete_clicked)
 
         sep_line = QFrame()
         sep_line.setFrameShape(QFrame.HLine)
@@ -260,6 +267,12 @@ class PlotDataSelectDialog(QDialog):
         if source:
             color = self.color
             self.add_source(source, color)
+
+    def delete_clicked(self):
+        row = self.name_table_widget.currentRow()
+        self.name_table_widget.removeRow(row)
+        del self.source_names[row]
+        del self.colors[row]
 
     def add_source(self, source, color, xaxis=False):
         new_row = self.name_table_widget.rowCount()

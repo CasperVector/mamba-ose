@@ -497,6 +497,8 @@ class ScanMechanismWidget(QWidget):
                     self.frame_count_from_paused = 0
                     self.scan_start_at = datetime.now()
                     self.scan_paused = False
+                    self.ui.runButton.setEnabled(False)
+                    self.ui.pauseButton.setEnabled(True)
                     self.ui.statusLabel.setText("RUNNING")
 
         elif name == "__scan_step":
