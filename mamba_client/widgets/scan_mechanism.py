@@ -71,7 +71,7 @@ class ScanInstructionSet:
 
 
 class ScanMechanismWidget(QWidget):
-    update_status_sig = pyqtSignal(str, int, int, bool)
+    update_status_sig = pyqtSignal(str, int, int)
 
     def __init__(self, device_manager: DeviceManagerPrx,
                  scan_manager: ScanManagerPrx,
@@ -143,7 +143,8 @@ class ScanMechanismWidget(QWidget):
 
         self.registered_data_callbacks = []
 
-        for data in ["__scan_length", "__scan_step", "__scan_paused"]:
+        for data in ["__scan_length", "__scan_step", "__scan_paused",
+                     "__scan_ended"]:
             cbk = partial(self.scan_status_update, data)
             self.registered_data_callbacks.append(cbk)
             self.data_client.request_data(data, cbk)
@@ -456,10 +457,10 @@ class ScanMechanismWidget(QWidget):
         return True
 
     def scan_status_update(self, name, scan_id, value, timestamp):
-        self.update_status_sig.emit(name, scan_id, value if value is not None else 0,
-                                    (value is None))
+        self.update_status_sig.emit(name, scan_id,
+                                    value if value is not None else 0)
 
-    def _scan_status_update(self, name, scan_id, value, stop_flag):
+    def _scan_status_update(self, name, scan_id, value):
         if name == "__scan_length":
             if not self.scanning:
                 self.scanning = True
@@ -476,16 +477,15 @@ class ScanMechanismWidget(QWidget):
                 self.ui.pauseButton.setEnabled(True)
                 return
 
-            if stop_flag:
-                self.ui.statusLabel.setText("IDLE")
-                self.scanning = False
-                self.ui.runButton.setEnabled(True)
-                self.ui.stopButton.setEnabled(False)
-                self.ui.pauseButton.setEnabled(False)
-                return
-
             self.scan_length = int(value)
             self.ui.progressBar.setMaximum(self.scan_length)
+        elif name == "__scan_ended":
+            self.ui.statusLabel.setText("IDLE")
+            self.scanning = False
+            self.ui.runButton.setEnabled(True)
+            self.ui.stopButton.setEnabled(False)
+            self.ui.pauseButton.setEnabled(False)
+            return
         elif name == "__scan_paused":
             if value:
                 if value == PAUSED:

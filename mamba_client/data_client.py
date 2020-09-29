@@ -41,7 +41,7 @@ class DataClientI(DataClient):
             self.data_callbacks[data_name] = [callback]
             self.host.subscribe(list(self.data_callbacks.keys()))
         else:
-            self.data_callback[data_name].append(callback)
+            self.data_callbacks[data_name].append(callback)
 
     def stop_requesting_data(self, _callback):
         data_to_unregister = []
@@ -85,4 +85,4 @@ class DataClientI(DataClient):
             self.data_callback_invoke(frame.name, self.scan_id, value, timestamp)
 
     def scanEnd(self, status, current):
-        self.data_callback_invoke("*", self.scan_id, None, None)
+        self.data_callback_invoke("__scan_ended", self.scan_id, None, None)
