@@ -12,26 +12,28 @@ from ophyd import EpicsMotor
 
 __registered_devices: Dict[DeviceType, Dict[str, Any]]
 
-# motors = AttrDict(
-#     {
-#         'mSlitsH': EpicsMotor('stage_slits:motorH'),
-#         'mSlitsV': EpicsMotor('stage_slits:motorV'),
-#         'mSampleX': EpicsMotor('stage_sample:motorX'),
-#         'mSampleZ': EpicsMotor('stage_sample:motorZ'),
-#         'mSampleRoll': EpicsMotor('stage_sample:motorRoll'),
-#         'mSamplePitch': EpicsMotor('stage_sample:motorPitch'),
-#         'mDetX': EpicsMotor('stage_detector:motorX'),
-#         'mDetY': EpicsMotor('stage_detector:motorY'),
-#         'mDetZ': EpicsMotor('stage_detector:motorZ')
-#     }
-# )
-
-from ophyd.sim import motor1, motor2, det, direct_img
-
 motors = {
-    'mSampleX': motor1,
-    'mSampleZ': motor2,
+    'slitsH': EpicsMotor('BL3W1:stage_slits', name='motorH'),
+    'slitsV': EpicsMotor('BL3W1:stage_slits', name='motorV'),
+    'sampleX': EpicsMotor('BL3W1:stage_sample', name='motorX'),
+    'sampleZ': EpicsMotor('BL3W1:stage_sample', name='motorZ'),
+    'sampleRoll': EpicsMotor('BL3W1:stage_sample', name='motorRoll'),
+    'samplePitch': EpicsMotor('BL3W1:stage_sample', name='motorPitch'),
+    'detX': EpicsMotor('BL3W1:stage_detector', name='motorX'),
+    'detY': EpicsMotor('BL3W1:stage_detector', name='motorY'),
+    'detZ': EpicsMotor('BL3W1:stage_detector', name='motorZ'),
+    'sampleR': EpicsMotor('BL3W1:sample', name='rotation'),
+    'sample0': EpicsMotor('BL3W1:sample', name='sample0'),
+    'sample90': EpicsMotor('BL3W1:sample', name='sample90'),
 }
+
+#
+from ophyd.sim import motor1, motor2, det, direct_img
+#
+# motors = {
+#     'mSampleX': motor1,
+#     'mSampleZ': motor2,
+# }
 
 dets = {
     'det': det,
