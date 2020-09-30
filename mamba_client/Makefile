@@ -3,10 +3,12 @@ PYRCC5 = ../venv/bin/pyrcc5
 TARGET_UI_FILES = widgets/ui/ui_scanmechanismwidget.py
 TARGET_RES_FILES = widgets/ui/rc_icons.py
 
-all: $(TARGET_UI_FILES) $(TARGET_RES_FILES)
+ifeq ($(OS), Windows_NT)
+    PYUIC5 = pyuic5
+    PYRCC5 = pyrcc5
+endif
 
-$(PYUIC5) $(PYRRC5):
-	../venv/bin/python -m pip install pyqt5
+all: $(TARGET_UI_FILES) $(TARGET_RES_FILES)
 
 $(TARGET_UI_FILES): %.py: %.ui
 	$(PYUIC5) $< -o $@

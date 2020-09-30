@@ -1,16 +1,20 @@
-PYTHON = venv/bin/python
-SLICE2PY = venv/bin/slice2py
+PYTHON = python
+SLICE2PY = slice2py
+RM = rm
+RMDIR = rm -r
 
-.PHONY: clean all ice client
+ifeq ($(OS), Windows_NT)
+    PYTHON = venv/bin/python
+    SLICE2PY = venv/bin/slice2py
+    RM = rm
+    RMDIR = rm -r
+endif
+
+.PHONY: clean all ice client server
 all: ice logs client
+server: ice
 
-$(PYTHON):
-	python -m venv venv
-
-$(SLICE2PY): $(PYTHON)
-	venv/bin/python -m pip install zero-ice
-
-ice: $(SLICE2PY)
+ice:
 	$(SLICE2PY) --underscore -Islices/ slices/types.ice slices/dashboard.ice slices/experiment.ice
 
 logs:
@@ -20,6 +24,6 @@ client:
 	(cd mamba_client && make)
 
 clean:
-	rm -rf MambaICE/
-	rm -rf logs/
+	$(RMDIR) MambaICE/
+	$(RMDIR) logs/
 	(cd mamba_client && make clean)
