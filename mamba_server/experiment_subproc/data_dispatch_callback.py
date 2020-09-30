@@ -19,11 +19,13 @@ class DataDispatchCallback(CallbackBase):
 
     def descriptor(self, doc):
         # TODO: process header, scan metadata, etc
-        self.data_keys = keys = doc['data_keys']
+        for key in doc.keys():
+            doc[key]['dtype'] = string_to_type(doc[key]['dtype'])
 
+        self.data_keys = keys = doc['data_keys']
         data_descriptors = [
             DataDescriptor(key,
-                           string_to_type(des['dtype']),
+                           des['dtype'],
                            des['shape']) for key, des in keys.items()
         ]
         self.data_host.scanStart(self.scan_id, data_descriptors)

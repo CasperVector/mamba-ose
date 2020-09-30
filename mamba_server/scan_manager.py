@@ -67,10 +67,10 @@ class ScanManagerI(ScanManager):
                 -> List[TypedDataFrame]:
             self.current_step += 1
             frames.append(
-                to_data_frame("__scan_length", "integer", self.scan_length,
+                to_data_frame("__scan_length", DataType.Integer, self.scan_length,
                               self.start_at))
             frames.append(
-                to_data_frame("__scan_step", "integer", self.current_step,
+                to_data_frame("__scan_step", DataType.Integer, self.current_step,
                               time.time()))
             return frames
 
@@ -234,13 +234,13 @@ class ScanManagerI(ScanManager):
             self.scan_paused = True
             self.scan_controller.pause()
             self.data_router.pushData(
-                [to_data_frame("__scan_paused", "integer", PAUSED, time.time())])
+                [to_data_frame("__scan_paused", DataType.Integer, PAUSED, time.time())])
 
     @client_verify
     def resumeScan(self, current=None):
         if self.scan_paused:
             self.data_router.pushData(
-                [to_data_frame("__scan_paused", "integer", RESUMED, time.time())])
+                [to_data_frame("__scan_paused", DataType.Integer, RESUMED, time.time())])
             self.terminal.emitCommand("RE.resume()")
             self.scan_paused = False
 

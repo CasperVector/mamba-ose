@@ -30,34 +30,31 @@ def string_to_type(string):
         return DataType.Array
 
 
-def to_data_frame(name, _type: str, value, timestamp):
-    _type = _type.lower()
-    if not isinstance(value, Iterable):
-        if _type == 'number':
-            return FloatDataFrame(
-                name=name,
-                type=DataType.Float,
-                timestamp=timestamp,
-                value=float(value)
-            )
-        elif _type == 'integer':
-            return IntegerDataFrame(
-                name=name,
-                type=DataType.Integer,
-                timestamp=timestamp,
-                value=int(value)
-            )
-        elif _type == 'string':
-            return StringDataFrame(
-                name=name,
-                type=DataType.String,
-                timestamp=timestamp,
-                value=str(value)
-            )
+def to_data_frame(name, _type: DataType, value, timestamp):
+    if _type == DataType.Float:
+        return FloatDataFrame(
+            name=name,
+            type=DataType.Float,
+            timestamp=timestamp,
+            value=float(value)
+        )
+    elif _type == DataType.Integer:
+        return IntegerDataFrame(
+            name=name,
+            type=DataType.Integer,
+            timestamp=timestamp,
+            value=int(value)
+        )
+    elif _type == DataType.String:
+        return StringDataFrame(
+            name=name,
+            type=DataType.String,
+            timestamp=timestamp,
+            value=str(value)
+        )
     else:
-        # _type == 'array':
+        assert _type == DataType.Array, f"Wrong Type {_type}"
         return to_array_data_frame(name, value, timestamp)
-    assert False, f"Unknown data type {_type}"
 
 
 def to_array_data_frame(name, array, timestamp):

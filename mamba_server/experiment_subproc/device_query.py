@@ -114,9 +114,9 @@ class DeviceQueryI(dict, DeviceQuery):
             cpt = getattr(dev, cpt_name)
             if cpt.kind & kind:
                 field = list(cpt.describe().values())[0]
-                _type = field['dtype']
+                _type = string_to_type(field['dtype'])
                 if 'enum_strs' in field:
-                    _type = 'string'
+                    _type = DataType.String
                 field_val = list(cpt.read().values())[0]
                 fields.append(
                     to_data_frame(
@@ -153,9 +153,9 @@ class DeviceQueryI(dict, DeviceQuery):
         cpt = getattr(dev, field_name)
 
         field = list(cpt.describe().values())[0]
-        _type = field['dtype']
+        _type = string_to_type(field['dtype'])
         if 'enum_strs' in field:
-            _type = 'string'
+            _type = DataType.String
         field_val = list(cpt.read().values())[0]
         return to_data_frame(
             field_name,
