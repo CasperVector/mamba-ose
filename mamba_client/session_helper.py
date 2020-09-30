@@ -2,9 +2,26 @@ import Ice
 import time
 import threading
 
+import MambaICE.Dashboard
 import mamba_client
-from mamba_client import SessionManagerPrx, UnauthorizedError
+from mamba_client import SessionManagerPrx
 from mamba_client.main_window import MainWindow
+
+ses_helper = None
+
+
+class UnauthorizedError(Ice.UserException):
+    def __init__(self, reason=''):
+        self.reason = reason
+        if ses_helper and isinstance(ses_helper, SessionHelper):
+            ses_helper.on_unauthorized()
+
+    def __str__(self):
+        return Ice.stringifyException(self)
+
+    __repr__ = __str__
+
+    _ice_id = '::MambaICE::Dashboard::UnauthorizedError'
 
 
 class SessionHelper:
@@ -16,6 +33,7 @@ class SessionHelper:
         self.main_window = main_window
         self.username, self.password = credentials
         self.session = None
+        self.authorized = False
         self.reconnect_lock = threading.Lock()
 
     def connect_login(self):
@@ -24,6 +42,7 @@ class SessionHelper:
         self.session = SessionManagerPrx.checkedCast(proxy)
         try:
             self.session.login(self.username, self.password)
+            self.authorized = True
         except UnauthorizedError:
             self.main_window.show_masked_popup(
                 "Unauthorized user or invalid password.", False)
@@ -38,7 +57,12 @@ class SessionHelper:
         self.logger.error("Lost connection to the server. Trying to reconnect.")
         threading.Thread(name="Reconnect", target=self.popup_try_reconnect,
                          daemon=True).start()
-        self.popup_try_reconnect()
+
+    def on_unauthorized(self):
+        if self.authorized:
+            self.logger.error("Login expired. Trying to reconnect.")
+            threading.Thread(name="Reconnect", target=self.popup_try_reconnect,
+                             daemon=True).start()
 
     def popup_try_reconnect(self):
         if self.reconnect_lock.locked():
@@ -68,3 +92,15 @@ class SessionHelper:
         except Ice.ConnectionRefusedException:
             pass
 
+
+def initialize(communicator, ice_endpoint, mw, credential):
+    global ses_helper
+    ses_helper = SessionHelper(
+        communicator, ice_endpoint, credential, mw)
+
+    ses_helper.connect_login()
+
+    UnauthorizedError._ice_type = MambaICE.Dashboard._t_UnauthorizedError
+    MambaICE.Dashboard.UnauthorizedError = UnauthorizedError
+
+    return ses_helper

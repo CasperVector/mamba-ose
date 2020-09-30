@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt, QCoreApplication
 
 from utils import general_utils
 import mamba_client
-from mamba_client.session_helper import SessionHelper
+import mamba_client.session_helper
 from mamba_client.main_window import MainWindow
 from mamba_client.widgets.terminal import TerminalWidget
 from mamba_client.widgets.plot import PlotWidget
@@ -54,9 +54,8 @@ if __name__ == "__main__":
 
         # TODO: login window
         mamba_client.credentials = ("user", "password")
-        mamba_client.session = SessionHelper(
-            communicator, ice_endpoint, mamba_client.credentials, mw)
-        mamba_client.session.connect_login()
+        mamba_client.session = mamba_client.session_helper.initialize(
+            communicator, ice_endpoint, mw, mamba_client.credentials)
 
         mamba_client.data_client = DataClientI(communicator, ice_endpoint, logger)
 
