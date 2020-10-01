@@ -1,5 +1,6 @@
 from functools import wraps
 import Ice
+import IcePy
 
 import MambaICE.Dashboard as Dashboard
 import mamba_server
@@ -13,7 +14,7 @@ def verify(f):
     def wrapper(*args):
         assert isinstance(ses_mgr, SessionManagerI)
         current = args[-1]
-        if current and isinstance(current, Ice.Current):
+        if current and isinstance(current, IcePy.Current):
             ses_mgr.verify(current)
         return f(*args)
 

@@ -1,27 +1,15 @@
+import sys
+import traceback
 import Ice
 import time
 import threading
 
 import MambaICE.Dashboard
 import mamba_client
-from mamba_client import SessionManagerPrx
+from mamba_client import SessionManagerPrx, UnauthorizedError
 from mamba_client.main_window import MainWindow
 
 ses_helper = None
-
-
-class UnauthorizedError(Ice.UserException):
-    def __init__(self, reason=''):
-        self.reason = reason
-        if ses_helper and isinstance(ses_helper, SessionHelper):
-            ses_helper.on_unauthorized()
-
-    def __str__(self):
-        return Ice.stringifyException(self)
-
-    __repr__ = __str__
-
-    _ice_id = '::MambaICE::Dashboard::UnauthorizedError'
 
 
 class SessionHelper:
@@ -100,7 +88,13 @@ def initialize(communicator, ice_endpoint, mw, credential):
 
     ses_helper.connect_login()
 
-    UnauthorizedError._ice_type = MambaICE.Dashboard._t_UnauthorizedError
-    MambaICE.Dashboard.UnauthorizedError = UnauthorizedError
+    def handle_exception(exc_type, exc_value, exc_tb):
+        tb = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        mamba_client.logger.error(tb)
+
+        if exc_type == UnauthorizedError:
+            ses_helper.on_unauthorized()
+
+    sys.excepthook = handle_exception
 
     return ses_helper

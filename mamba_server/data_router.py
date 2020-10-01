@@ -4,6 +4,7 @@ from collections import namedtuple
 from abc import ABC
 
 import Ice
+import IcePy
 from MambaICE.Dashboard import DataRouter, DataClient, UnauthorizedError
 from utils.data_utils import DataDescriptor, TypedDataFrame
 from mamba_server.session_manager import set_connection_closed_callback
@@ -18,7 +19,7 @@ def terminal_verify(f):
     @wraps(f)
     def wrapper(self, *args):
         current = args[-1]
-        if current and isinstance(current, Ice.Current):
+        if current and isinstance(current, IcePy.Current):
             if mamba_server.terminal_con != current.con:
                 raise UnauthorizedError()
 
