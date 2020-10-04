@@ -134,6 +134,17 @@ class DeviceManagerI(dict, DeviceManager):
             raise NameError(f"Unknown device {name}")
 
     @client_verify
+    def getDeviceHintedReadings(self, name, current=None) -> List[TypedDataFrame]:
+        """ICE function"""
+        if name in self:
+            if self[name].type == DeviceType.Virtual:
+                return self.virtual_device[name].values()
+            else:
+                return self.host.getDeviceHintedReadings(name)
+        else:
+            raise NameError(f"Unknown device {name}")
+
+    @client_verify
     def getDeviceField(self, dev_name, field_name, current=None) -> TypedDataFrame:
         if dev_name in self:
             return self.host.getDeviceFieldValue(dev_name, field_name)
@@ -160,6 +171,22 @@ class DeviceManagerI(dict, DeviceManager):
         else:
             v_dev = self.virtual_device[name]
             v_dev[name] = frame
+
+    @client_verify
+    def setDeviceValue(self, name, frame: TypedDataFrame, current=None):
+        """ICE function"""
+        device: DeviceEntry = self[name]
+        type_str = None
+        if device.type == DeviceType.Motor:
+            type_str = 'motors'
+        else:
+            raise TypeError(f"Device {name} is not a motor.")
+
+        val = data_frame_to_value(frame).__repr__()
+
+        if type_str:
+            command = f"{type_str}.{name}.set({val})"
+            self.terminal.emitCommand(command)
 
 
 def initialize(communicator, adapter, terminal):

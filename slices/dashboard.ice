@@ -59,9 +59,12 @@ module MambaICE {
             DeviceEntries listDevices();
             strings getDevicesByType(string type);
             TypedDataFrames getDeviceConfigurations(string name);
+            TypedDataFrames getDeviceHintedReadings(string name);
             TypedDataFrames getDeviceReadings(string name);
             TypedDataFrame getDeviceField(string dev_name, string field_name);
+
             void setDeviceConfiguration(string name, TypedDataFrame frame);
+            void setDeviceValue(string name, TypedDataFrame frame);
 
             void addVirtualDevice(string name, TypedDataFrames frames);
 

@@ -1,6 +1,6 @@
 PYUIC5 = ../venv/bin/pyuic5
 PYRCC5 = ../venv/bin/pyrcc5
-TARGET_UI_FILES = widgets/ui/ui_scanmechanismwidget.py
+TARGET_UI_FILES = widgets/ui/ui_scanmechanismwidget.py widgets/ui/ui_motorwidget.py
 TARGET_RES_FILES = widgets/ui/rc_icons.py
 
 ifeq ($(OS), Windows_NT)

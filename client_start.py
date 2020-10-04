@@ -17,6 +17,7 @@ from mamba_client.widgets.plot_2d import Plot2DWidget
 from mamba_client.data_client import DataClientI
 from mamba_client.dialogs.device_list_config import DeviceListConfigDialog
 from mamba_client.widgets.scan_mechanism import ScanMechanismWidget
+from mamba_client.widgets.motor import MotorWidget
 
 # --- Ice properties setup ---
 
@@ -95,7 +96,11 @@ if __name__ == "__main__":
                               mamba_client.scan_manager,
                               mamba_client.data_client)
                           )
+            mw.add_widget("Motor",
+                          MotorWidget.get_init_func(mamba_client.device_manager)
+                          )
             mw.set_layout({
+                ("left", "Motor"),
                 ("left", "Scan Mechanism"),
                 ("left", "Terminal"),
                 ("right", "Plot1D"),

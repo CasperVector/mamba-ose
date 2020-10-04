@@ -1,5 +1,6 @@
 import numpy as np
 import json
+import time
 from typing import Iterable
 import MambaICE
 
@@ -30,7 +31,10 @@ def string_to_type(string):
         return DataType.Array
 
 
-def to_data_frame(name, _type: DataType, value, timestamp):
+def to_data_frame(name, _type: DataType, value, timestamp=None):
+    if not timestamp:
+        timestamp = time.time()
+
     if _type == DataType.Float:
         return FloatDataFrame(
             name=name,
