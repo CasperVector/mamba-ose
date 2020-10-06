@@ -18,7 +18,7 @@ else:
     from MambaICE.dashboard_ice import (TerminalEventHandlerPrx, DataRouterPrx,
                                         DeviceManagerPrx)
 
-from pyqterm import TerminalIO
+from termqt import TerminalIO
 
 from utils import general_utils
 import mamba_server.experiment_subproc as experiment_subproc

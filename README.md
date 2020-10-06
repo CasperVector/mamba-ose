@@ -15,7 +15,7 @@ Mamba' versatile GUI gathers everything one experimentalist need to run an exper
 
 Clients and servers talk through ICE, a RPC framework. The separation of client and the server increases the robustness of the entire system, naturally offers ways for multiple clients cooperating at the same time.
 
-Mamba is powered by a series of open source projects: PyQt, scipy environment, ICE, pyqterm.
+Mamba is powered by a series of open source projects: PyQt, scipy environment, ICE, termqt.
 
 ## Get Started
 
@@ -37,11 +37,11 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
    venv/bin/python3 -m pip install zeroc-ice
    ```
 
-4. Install pyqterm
+4. Install termqt
 
    ```bash
-   git clone https://github.com/TerryGeng/pyqterm
-   (cd pyqterm && ../venv/bin/python setup.py develop)
+   git clone https://github.com/TerryGeng/termqt
+   (cd termqt && ../venv/bin/python setup.py develop)
    ```
 
 5. Make compiled ICE slices (must have gnu make installed. Windows users should consider install MinGW)
@@ -73,11 +73,11 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
    venv/bin/python3 -m pip install pyqt5 zeroc-ice
    ```
 
-3. Install pyqterm
+3. Install termqt
 
    ```bash
-   git clone https://github.com/TerryGeng/pyqterm
-   (cd pyqterm && ../venv/bin/python setup.py develop)
+   git clone https://github.com/TerryGeng/termqt
+   (cd termqt && ../venv/bin/python setup.py develop)
    ```
 
 5. Make compiled ICE slices (must have gnu make installed. Windows users should consider install MinGW)
@@ -109,7 +109,7 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
 - [x] Ice configuration file, avoid hardcoded port number in the program
 - [x] Ice interface
 - [x] IPython prompt enhancement (https://github.com/ipython/ipython/pull/10500/files, https://ipython.readthedocs.io/en/stable/config/details.html#custom-prompts)
-- [x] pyqterm: bug fixes and allow customized escape sequence
+- [x] termqt: bug fixes and allow customized escape sequence
 - [x] Bluesky data callback
 - [x] Slice interface refactored - _2020.9.13_
 - [x] DeviceQuery interface, handle device config query request - _2020.9.13_

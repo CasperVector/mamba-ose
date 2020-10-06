@@ -1,6 +1,6 @@
 import MambaICE.Dashboard as Dashboard
 
-from pyqterm import Terminal
+from termqt import Terminal
 
 import mamba_client
 
