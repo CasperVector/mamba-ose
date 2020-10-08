@@ -13,15 +13,14 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
-def solve_filepath(path):
+def solve_filepath(path, my_path):
     if not path:
         return ''
 
     if path[0] == '/':
         return path
     else:
-        # mydir = os.path.dirname(os.path.realpath(__file__))
-        mydir = os.getcwd()
+        mydir = os.path.dirname(my_path)
         return mydir + '/' + path
 
 

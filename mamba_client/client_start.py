@@ -1,4 +1,6 @@
+import os
 import logging
+import argparse
 
 import Ice
 from mamba_client import (SessionManagerPrx, DeviceManagerPrx, TerminalHostPrx,
@@ -19,26 +21,46 @@ from mamba_client.dialogs.device_list_config import DeviceListConfigDialog
 from mamba_client.widgets.scan_mechanism import ScanMechanismWidget
 from mamba_client.widgets.motor import MotorWidget
 
-# --- Ice properties setup ---
 
-ice_props = Ice.createProperties()
+def main():
+    parser = argparse.ArgumentParser(
+        description="The GUI client of Mamba application."
+    )
+    parser.add_argument("-c", "--config", dest="config", type=str,
+                        default=None, help="the path to the config file")
 
-# ACM setup for bidirectional connections.
+    args = parser.parse_args()
 
-# Don't actively close connection
-ice_props.setProperty("Ice.ACM.Close", "4")  # CloseOnIdleForceful
-# Always send heartbeat message to keep the connection alive.
-ice_props.setProperty("Ice.ACM.Heartbeat", "3")  # HeartbeatAlways
-ice_props.setProperty("Ice.ACM.Timeout", "10")
+    # --- Ice properties setup ---
+    ice_props = Ice.createProperties()
 
-ice_init_data = Ice.InitializationData()
-ice_init_data.properties = ice_props
+    # ACM setup for bidirectional connections.
 
-if __name__ == "__main__":
+    # Don't actively close connection
+    ice_props.setProperty("Ice.ACM.Close", "4")  # CloseOnIdleForceful
+    # Always send heartbeat message to keep the connection alive.
+    ice_props.setProperty("Ice.ACM.Heartbeat", "3")  # HeartbeatAlways
+    ice_props.setProperty("Ice.ACM.Timeout", "10")
+
+    ice_init_data = Ice.InitializationData()
+    ice_init_data.properties = ice_props
     mamba_client.logger = logger = logging.getLogger()
-
-    mamba_client.config = general_utils.load_config("client_config.yaml")
     general_utils.setup_logger(logger)
+
+    if args.config:
+        assert os.path.exists(args.config), "Invalid config path!"
+        logger.info(f"Loading config file {args.config}")
+        mamba_client.config = general_utils.load_config(args.config)
+    elif os.path.exists("client_config.yaml"):
+        logger.info(f"Loading config file ./client_config.yaml")
+        mamba_client.config = general_utils.load_config("client_config.yaml")
+    else:
+        logger.warning("No config file discovered. Using the default one.")
+        mamba_client.config = general_utils.load_config(
+            general_utils.solve_filepath("client_config.yaml",
+                                         os.path.realpath(__file__))
+        )
+
     ice_endpoint = general_utils.get_host_endpoint()
 
     with Ice.initialize(ice_init_data) as communicator:
@@ -54,7 +76,10 @@ if __name__ == "__main__":
         #     session.login happens (which is identified by name "MambaClient").
 
         # TODO: login window
-        mamba_client.credentials = ("user", "password")
+        mamba_client.credentials = (
+            mamba_client.config['user']['username'],
+            mamba_client.config['user']['password']
+        )
         mamba_client.session = mamba_client.session_helper.initialize(
             communicator, ice_endpoint, mw, mamba_client.credentials)
 

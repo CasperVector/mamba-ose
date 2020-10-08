@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'widgets/ui/ui_motorwidget.ui'
+# Form implementation generated from reading ui file 'mamba_client/widgets/ui/ui_motorwidget.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.0
 #

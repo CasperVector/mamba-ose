@@ -41,19 +41,19 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
 
    ```bash
    git clone https://github.com/TerryGeng/termqt
-   (cd termqt && ../venv/bin/python setup.py develop)
+   (cd termqt && ../venv/bin/python setup.py install)
    ```
 
-5. Make compiled ICE slices (must have gnu make installed. Windows users should consider install MinGW)
+5. Install mamba
 
     ```bash
-    make
+    venv/bin/python setup.py develop
     ```
 
 6. Run the server
 
    ```
-   venv/bin/python3 server_start.py
+   venv/bin/mamba_host
    ```
 
    
@@ -80,13 +80,13 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
    (cd termqt && ../venv/bin/python setup.py develop)
    ```
 
-5. Make compiled ICE slices (must have gnu make installed. Windows users should consider install MinGW)
+5. Install mamba
 
     ```bash
-    make
+    venv/bin/python setup.py develop
     ```
 
-6. Correctly set the IP address of the server inside `client_config.yaml`:
+6. Make a copy of `mamba_client/client_config.yaml`, correctly set the IP address of the server inside your copy:
 
    ```yaml
    ---
@@ -97,7 +97,7 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
 6. Run the client
 
    ```
-   venv/bin/python3 client_start.py
+   venv/bin/mamba_client -c {the path to your copy of client_config.yaml}
    ```
 
    

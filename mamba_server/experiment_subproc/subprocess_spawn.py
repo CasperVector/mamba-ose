@@ -119,27 +119,31 @@ def _run_ipshell(ipshell, banner, data_callback):
 
     import mamba_server.experiment_subproc
 
-    init_module = import_module('mamba_server.user_scripts.{:s}'.format(
-        mamba_server.config['device']['init_module']
-    ))
-    if hasattr(init_module, "__registered_devices") and \
-            isinstance(init_module.__registered_devices, dict):
-        try:
-            experiment_subproc.device_query_obj.load_devices(
-                init_module.__registered_devices)
-            experiment_subproc.device_query_obj.push_devices_to_host(
-                experiment_subproc.device_manager
-            )
-            motors = general_utils.AttrDict(
-                init_module.__registered_devices[DeviceType.Motor])
-            dets = general_utils.AttrDict(
-                init_module.__registered_devices[DeviceType.Detector])
-        except KeyError:
+    try:
+        module_name = mamba_server.config['device']['init_module']
+        init_module = import_module(module_name)
+        if hasattr(init_module, "__registered_devices") and \
+                isinstance(init_module.__registered_devices, dict):
+            try:
+                experiment_subproc.device_query_obj.load_devices(
+                    init_module.__registered_devices)
+                experiment_subproc.device_query_obj.push_devices_to_host(
+                    experiment_subproc.device_manager
+                )
+                motors = general_utils.AttrDict(
+                    init_module.__registered_devices[DeviceType.Motor])
+                dets = general_utils.AttrDict(
+                    init_module.__registered_devices[DeviceType.Detector])
+            except KeyError:
+                print("ERROR: Failed to load devices")
+        else:
             print("ERROR: Failed to load devices")
-    else:
-        print("ERROR: Failed to load devices")
 
-    expose_everything_inside_module(init_module)
+        expose_everything_inside_module(init_module)
+    except KeyError:
+        print("*** No init script specified. Startup without devices.")
+    except ModuleNotFoundError:
+        print("*** Unable to load init script. Please check its path settings.")
 
     from bluesky import RunEngine
     RE = RunEngine({})
