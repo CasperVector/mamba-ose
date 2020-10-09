@@ -29,31 +29,41 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
    python -m venv venv # Create a new virtual environment
    ```
 
-2. bluesky need to be installed first. See [bluesky's tutorial](https://blueskyproject.io/bluesky/tutorial.html) (remember to install everything with `venv/bin/python3 -m pip`).
+2. Activate the `venv` just created. On Linux:
+   ```bash
+   ./venv/bin/activate
+   ```
+   On Windows:
+   ```bash
+   .\venv\Scripts\activate
+   ```
+   
 
-3. Install ICE
+3. bluesky need to be installed first. See [bluesky's tutorial](https://blueskyproject.io/bluesky/tutorial.html) (remember to install everything with `venv/bin/python3 -m pip`).
+
+4. Install ICE
 
    ```
-   venv/bin/python3 -m pip install zeroc-ice
+   python -m pip install zeroc-ice
    ```
 
-4. Install termqt
+5. Install termqt
 
    ```bash
    git clone https://github.com/TerryGeng/termqt
-   (cd termqt && ../venv/bin/python setup.py install)
+   (cd termqt && python setup.py install)
    ```
 
-5. Install mamba
+6. Install mamba
 
     ```bash
-    venv/bin/python setup.py develop
+    python setup.py develop
     ```
 
-6. Run the server
+7. Run the server
 
    ```
-   venv/bin/mamba_host
+   mamba_host
    ```
 
    
@@ -66,24 +76,26 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
    git clone http://heps-se.ihep.ac.cn/gengyd/mamba.git
    cd mamba
    ```
+   
+2. Activate the `venv` just created. See above.
 
-2. Install pyqt5 and ICE
+3. Install pyqt5 and ICE
 
    ```bash
-   venv/bin/python3 -m pip install pyqt5 zeroc-ice
+   python -m pip install pyqt5 zeroc-ice
    ```
 
-3. Install termqt
+4. Install termqt
 
    ```bash
    git clone https://github.com/TerryGeng/termqt
-   (cd termqt && ../venv/bin/python setup.py develop)
+   (cd termqt && python setup.py develop)
    ```
 
 5. Install mamba
 
     ```bash
-    venv/bin/python setup.py develop
+    python setup.py develop
     ```
 
 6. Make a copy of `mamba_client/client_config.yaml`, correctly set the IP address of the server inside your copy:
@@ -97,7 +109,7 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
 6. Run the client
 
    ```
-   venv/bin/mamba_client -c {the path to your copy of client_config.yaml}
+   mamba_client -c {the path to your copy of client_config.yaml}
    ```
 
    
