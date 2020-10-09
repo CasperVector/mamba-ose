@@ -1,4 +1,7 @@
 from setuptools import setup, find_packages
+from setuptools.command.install import install
+from setuptools.command.develop import develop
+from setuptools.command.sdist import sdist
 
 
 def compile_slices():
@@ -63,6 +66,29 @@ def compile_qt_ui_files():
             os.system(f"{pyrcc} {qrc} -o {output}")
 
 
+class custom_install(install):
+    def run(self):
+        install.run(self)
+
+        self.execute(compile_slices, [], msg="Compile ICE slice files")
+        self.execute(compile_qt_ui_files, [], msg="Compile Qt's ui and qrc files")
+
+
+class custom_develop(develop):
+    def run(self):
+        develop.run(self)
+
+        self.execute(compile_slices, [], msg="Compile ICE slice files")
+        self.execute(compile_qt_ui_files, [], msg="Compile Qt's ui and qrc files")
+
+
+class custom_sdist(sdist):
+    def make_release_tree(self, basedir, files):
+        sdist.make_release_tree(self, basedir, files)
+        self.execute(compile_slices, [], msg="Compile ICE slice files")
+        self.execute(compile_qt_ui_files, [], msg="Compile Qt's ui and qrc files")
+
+
 with open("requirements.txt") as reqs:
     requirements = reqs.readlines()
 
@@ -70,7 +96,6 @@ setup(
     name="mamba",
     version="0.1a1",
     packages=find_packages(exclude=("user_scripts*",)),
-
     author="Yanda Geng",
     author_email="gengyanda16@smail.nju.edu.cn",
     description="Interactive experiment control toolkit for HEPS.",
@@ -91,8 +116,7 @@ setup(
         'MambaICE': ["slices/*.ice"],
         'mamba_client': ["widgets/ui/*.ui", "widgets/ui/*.qrc", "widgets/ui/icons/*.png", "*.yaml"],
         'mamba_server': ["*.yaml"]
-    }
+    },
+    cmdclass={'install': custom_install, 'develop': custom_develop, 'sdist': custom_sdist}
 )
 
-compile_slices()
-compile_qt_ui_files()
