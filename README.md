@@ -21,12 +21,15 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
 
 ### Server Side
 
-1. Clone this repo
+1. Open a new terminal window (PowerShell on Windows), clone this repo and
+`cd` to the path of device_repo you have cloned/downloaded. 
+Activate _anaconda_ if you use anaconda.
 
    ```bash
    git clone http://heps-se.ihep.ac.cn/gengyd/mamba.git
    cd mamba
-   python -m venv venv # Create a new virtual environment
+   activate  # activate conda, if you use conda
+   python -m venv venv  # Create a new virtual environment
    ```
 
 2. Activate the `venv` just created. On Linux:
@@ -41,17 +44,18 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
 
 3. bluesky need to be installed first. See [bluesky's tutorial](https://blueskyproject.io/bluesky/tutorial.html) (remember to install everything with `venv/bin/python3 -m pip`).
 
-4. Install ICE
-
-   ```
-   python -m pip install zeroc-ice
-   ```
-
-5. Install termqt
+4. Install termqt
 
    ```bash
    git clone https://github.com/TerryGeng/termqt
    (cd termqt && python setup.py install)
+   ```
+
+5. Install all other dependencies
+
+   ```
+   python -m pip install --upgrade pip
+   python -m pip install -r requirements.txt
    ```
 
 6. Install mamba
@@ -79,17 +83,19 @@ Mamba is powered by a series of open source projects: PyQt, scipy environment, I
    
 2. Activate the `venv` just created. See above.
 
-3. Install pyqt5 and ICE
+3. Install termqt
 
    ```bash
-   python -m pip install pyqt5 zeroc-ice
-   ```
-
-4. Install termqt
-
-   ```bash
+   python -m pip install --upgrade pip  # upgrade pip
+   python -m pip install pyqt5
    git clone https://github.com/TerryGeng/termqt
    (cd termqt && python setup.py develop)
+   ```
+ 
+4. Install all other dependencies
+
+   ```
+   python -m pip install -r requirements.txt
    ```
 
 5. Install mamba
