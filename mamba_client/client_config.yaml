@@ -1,0 +1,9 @@
+---
+user:
+  username: mamba_user
+  password: password
+network:
+  host_address: 127.0.0.1
+  host_port: 10076
+  protocol: tcp
+
