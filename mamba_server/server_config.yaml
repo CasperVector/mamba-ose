@@ -10,7 +10,7 @@ logging:
   experiment_subproc_logfile: logs/experiment.log
 
 device:
-  init_module: user_scripts.device_init_3w1
+  init_module: user_scripts.device_init_example
 
 scan:
   plan_storage: "plans/"

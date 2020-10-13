@@ -37,7 +37,6 @@ pyqtgraph
 pyrsistent
 python-dateutil
 PyYAML
-pyzmq
 requests
 six
 super-state-machine
