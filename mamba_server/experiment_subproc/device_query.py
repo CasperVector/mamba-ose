@@ -1,8 +1,6 @@
 from typing import List, Dict, Any
 import struct
 
-import ophyd.ophydobj
-
 import MambaICE
 import MambaICE.Experiment
 from utils.data_utils import string_to_type, to_data_frame
@@ -26,19 +24,17 @@ if hasattr(MambaICE.Experiment, 'UnknownDeviceException') and \
 else:
     from MambaICE.experiment_ice import UnknownDeviceException, DeviceQuery
 
-if hasattr(ophyd.ophydobj, 'Kind'):
-    from ophyd.ophydobj import Kind
-else:
-    from enum import IntFlag
+from enum import IntFlag
 
-    class Kind(IntFlag):
-        """Ophyd-style components type, see the documentation of ophyd for
-        more details.
-        """
-        omitted = 0b000
-        normal = 0b001
-        config = 0b010
-        hinted = 0b101  # Notice that bool(hinted & normal) is True.
+
+class Kind(IntFlag):
+    """Ophyd-style components type, see the documentation of ophyd for
+    more details.
+    """
+    omitted = 0b000
+    normal = 0b001
+    config = 0b010
+    hinted = 0b101  # Notice that bool(hinted & normal) is True.
 
 
 class DeviceQueryI(dict, DeviceQuery):
