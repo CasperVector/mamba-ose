@@ -79,6 +79,7 @@ class MotorWidget(QWidget):
 
             if data_frames:
                 self.cur_pos = data_frame_to_value(data_frames[0])
+                self.ui.motorNameLabel.setText(self.motor_id)
                 self.ui.currentPosEdit.setText("{:.2f}".format(self.cur_pos))
                 self.sync_abs_rel_edit()
 
