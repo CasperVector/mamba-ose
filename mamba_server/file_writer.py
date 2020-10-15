@@ -191,7 +191,8 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
             # TODO: How can I get the length of this scan?
 
     def scan_end(self, status):
-        self.writer.close_file()
+        if self.writer:
+            self.writer.close_file()
         self.ongoing_scan_id = -1
 
     def data_update(self, frames):
