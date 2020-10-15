@@ -1,4 +1,5 @@
 import os
+import datetime
 import argparse
 import logging
 import Ice
@@ -21,6 +22,8 @@ def main():
                         default=None, help="the path to the config file")
 
     args = parser.parse_args()
+
+    mamba_server.session_start_at = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
     # --- Ice properties setup ---
 

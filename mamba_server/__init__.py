@@ -7,6 +7,8 @@ try:
 except NameError:
     logger = logging.getLogger()
 
+session_start_at = ""
+
 logger = None
 config = None
 communicator = None

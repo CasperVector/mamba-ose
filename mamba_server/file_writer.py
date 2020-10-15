@@ -167,7 +167,9 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
 
     def scan_start(self, _id, data_descriptors: List[DataDescriptor]):
         self.ongoing_scan_id = _id
-        name = self.pattern.format(prefix=self.prefix, scan_id=_id)
+        name = self.pattern.format(prefix=self.prefix,
+                                   scan_id=_id,
+                                   session=mamba_server.session_start_at)
         path = os.path.join(self.dir, name)
         self.writer = self.writer_type(path)
         assert isinstance(self.writer, FileWriter)
