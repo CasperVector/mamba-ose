@@ -117,19 +117,21 @@ class DeviceQueryI(dict, DeviceQuery):
         for cpt_name in components:
             cpt = getattr(dev, cpt_name)
             if cpt.kind & kind:
-                field = list(cpt.describe().values())[0]
-                _type = string_to_type(field['dtype'])
-                if 'enum_strs' in field:
-                    _type = DataType.String
-                field_val = list(cpt.read().values())[0]
-                fields.append(
-                    to_data_frame(
-                        cpt_name,
-                        _type,
-                        field_val['value'],
-                        timestamp=field_val['timestamp']
+                des = list(cpt.describe().values())
+                if des:
+                    field = des[0]
+                    _type = string_to_type(field['dtype'])
+                    if 'enum_strs' in field:
+                        _type = DataType.String
+                    field_val = list(cpt.read().values())[0]
+                    fields.append(
+                        to_data_frame(
+                            cpt_name,
+                            _type,
+                            field_val['value'],
+                            timestamp=field_val['timestamp']
+                        )
                     )
-                )
 
         return fields
 
@@ -139,34 +141,40 @@ class DeviceQueryI(dict, DeviceQuery):
         for cpt_name in components:
             cpt = getattr(dev, cpt_name)
             if cpt.kind & kind:
-                field = list(cpt.describe().values())[0]
-                _type = string_to_type(field['dtype'])
-                if 'enum_strs' in field:
-                    _type = DataType.String
-                fields.append(
-                    DataDescriptor(
-                        name=cpt_name,
-                        type=_type,
-                        shape=field['shape']
+                des = list(cpt.describe().values())
+                if des:
+                    field = des[0]
+                    _type = string_to_type(field['dtype'])
+                    if 'enum_strs' in field:
+                        _type = DataType.String
+                    fields.append(
+                        DataDescriptor(
+                            name=cpt_name,
+                            type=_type,
+                            shape=field['shape']
+                        )
                     )
-                )
 
         return fields
 
     def get_device_field_value(self, dev, field_name) -> TypedDataFrame:
         cpt = getattr(dev, field_name)
 
-        field = list(cpt.describe().values())[0]
-        _type = string_to_type(field['dtype'])
-        if 'enum_strs' in field:
-            _type = DataType.String
-        field_val = list(cpt.read().values())[0]
-        return to_data_frame(
-            field_name,
-            _type,
-            field_val['value'],
-            timestamp=field_val['timestamp']
-        )
+        des = list(cpt.describe().values())
+        if des:
+            field = des[0]
+            _type = string_to_type(field['dtype'])
+            if 'enum_strs' in field:
+                _type = DataType.String
+            field_val = list(cpt.read().values())[0]
+            return to_data_frame(
+                field_name,
+                _type,
+                field_val['value'],
+                timestamp=field_val['timestamp']
+            )
+
+        raise Exception("No field description found.")
 
 
 def initialize(communicator, adapter):
