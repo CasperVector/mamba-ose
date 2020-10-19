@@ -111,12 +111,16 @@ class DeviceQueryI(dict, DeviceQuery):
 
         return dev_list
 
-    def get_device_fields(self, dev, kind) -> List[TypedDataFrame]:
+    def get_device_fields(self, dev, kind, prefix="") -> List[TypedDataFrame]:
         fields: List[TypedDataFrame] = []
         components = dev.component_names
         for cpt_name in components:
             cpt = getattr(dev, cpt_name)
-            if cpt.kind & kind:
+            if hasattr(cpt, "component_names"):
+                fields += self.get_device_fields(
+                    cpt, kind,
+                    prefix=cpt_name if not prefix else f"{prefix}.{cpt_name}")
+            elif cpt.kind & kind:
                 des = list(cpt.describe().values())
                 if des:
                     field = des[0]
@@ -126,7 +130,7 @@ class DeviceQueryI(dict, DeviceQuery):
                     field_val = list(cpt.read().values())[0]
                     fields.append(
                         to_data_frame(
-                            cpt_name,
+                            cpt_name if not prefix else f"{prefix}.{cpt_name}",
                             _type,
                             field_val['value'],
                             timestamp=field_val['timestamp']
@@ -135,12 +139,16 @@ class DeviceQueryI(dict, DeviceQuery):
 
         return fields
 
-    def get_device_field_descriptions(self, dev, kind) -> List[DataDescriptor]:
+    def get_device_field_descriptions(self, dev, kind, prefix="") -> List[DataDescriptor]:
         fields: List[DataDescriptor] = []
         components = dev.component_names
         for cpt_name in components:
             cpt = getattr(dev, cpt_name)
-            if cpt.kind & kind:
+            if hasattr(cpt, "component_names"):
+                fields += self.get_device_field_descriptions(
+                    cpt, kind,
+                    prefix=cpt_name if not prefix else f"{prefix}.{cpt_name}")
+            elif cpt.kind & kind:
                 des = list(cpt.describe().values())
                 if des:
                     field = des[0]
@@ -158,6 +166,10 @@ class DeviceQueryI(dict, DeviceQuery):
         return fields
 
     def get_device_field_value(self, dev, field_name) -> TypedDataFrame:
+        if "." in field_name:
+            cpt, attr = field_name.split(".", 1)
+            return self.get_device_field_value(getattr(dev, cpt), attr)
+
         cpt = getattr(dev, field_name)
 
         des = list(cpt.describe().values())
