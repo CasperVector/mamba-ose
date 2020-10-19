@@ -159,10 +159,10 @@ class DeviceQueryI(dict, DeviceQuery):
         while True:
             split = _name.split(".", 1)
             if len(split) == 1:
-                cpt = getattr(dev, split[0])
+                cpt = getattr(_cpt, split[0])
                 break
             else:
-                _cpt = getattr(dev, split[0])
+                _cpt = getattr(_cpt, split[0])
                 _name = split[1]
 
         return cpt
