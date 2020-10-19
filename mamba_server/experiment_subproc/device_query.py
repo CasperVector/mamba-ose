@@ -24,17 +24,12 @@ if hasattr(MambaICE.Experiment, 'UnknownDeviceException') and \
 else:
     from MambaICE.experiment_ice import UnknownDeviceException, DeviceQuery
 
-from enum import IntFlag
+from enum import Enum
 
 
-class Kind(IntFlag):
-    """Ophyd-style components type, see the documentation of ophyd for
-    more details.
-    """
-    omitted = 0b000
-    normal = 0b001
-    config = 0b010
-    hinted = 0b101  # Notice that bool(hinted & normal) is True.
+class Kind(Enum):
+    config = 0
+    read = 1
 
 
 class DeviceQueryI(dict, DeviceQuery):
@@ -105,65 +100,72 @@ class DeviceQueryI(dict, DeviceQuery):
                     name=name,
                     type=self.device_type_lookup[name],
                     configs=self.get_device_field_descriptions(dev, Kind.config),
-                    readings=self.get_device_field_descriptions(dev, Kind.hinted),
+                    readings=self.get_device_field_descriptions(dev, Kind.read),
                 )
             )
 
         return dev_list
 
-    def get_device_fields(self, dev, kind, prefix="") -> List[TypedDataFrame]:
+    def get_device_fields(self, dev, kind) -> List[TypedDataFrame]:
         fields: List[TypedDataFrame] = []
-        components = dev.component_names
-        for cpt_name in components:
-            cpt = getattr(dev, cpt_name)
-            if hasattr(cpt, "component_names"):
-                fields += self.get_device_fields(
-                    cpt, kind,
-                    prefix=cpt_name if not prefix else f"{prefix}.{cpt_name}")
-            elif cpt.kind & kind:
-                des = list(cpt.describe().values())
-                if des:
-                    field = des[0]
-                    _type = string_to_type(field['dtype'])
-                    if 'enum_strs' in field:
-                        _type = DataType.String
-                    field_val = list(cpt.read().values())[0]
-                    fields.append(
-                        to_data_frame(
-                            cpt_name if not prefix else f"{prefix}.{cpt_name}",
-                            _type,
-                            field_val['value'],
-                            timestamp=field_val['timestamp']
-                        )
+        cpt_lists = dev.read_attrs if kind == Kind.read else dev.configuration_attrs
+
+        for cpt_name in cpt_lists:
+            cpt = self.resolve_component(dev, cpt_name)
+            des = list(cpt.describe().values())
+            if des:
+                field = des[0]
+                _type = string_to_type(field['dtype'])
+                if 'enum_strs' in field:
+                    _type = DataType.String
+                field_val = list(cpt.read().values())[0]
+                fields.append(
+                    to_data_frame(
+                        cpt_name,
+                        _type,
+                        field_val['value'],
+                        timestamp=field_val['timestamp']
                     )
+                )
 
         return fields
 
     def get_device_field_descriptions(self, dev, kind, prefix="") -> List[DataDescriptor]:
         fields: List[DataDescriptor] = []
-        components = dev.component_names
-        for cpt_name in components:
-            cpt = getattr(dev, cpt_name)
-            if hasattr(cpt, "component_names"):
-                fields += self.get_device_field_descriptions(
-                    cpt, kind,
-                    prefix=cpt_name if not prefix else f"{prefix}.{cpt_name}")
-            elif cpt.kind & kind:
-                des = list(cpt.describe().values())
-                if des:
-                    field = des[0]
-                    _type = string_to_type(field['dtype'])
-                    if 'enum_strs' in field:
-                        _type = DataType.String
-                    fields.append(
-                        DataDescriptor(
-                            name=cpt_name,
-                            type=_type,
-                            shape=field['shape']
-                        )
+        cpt_lists = dev.read_attrs if kind == Kind.read else dev.configuration_attrs
+
+        for cpt_name in cpt_lists:
+            cpt = self.resolve_component(dev, cpt_name)
+            des = list(cpt.describe().values())
+            if des:
+                field = des[0]
+                _type = string_to_type(field['dtype'])
+                if 'enum_strs' in field:
+                    _type = DataType.String
+                fields.append(
+                    DataDescriptor(
+                        name=cpt_name,
+                        type=_type,
+                        shape=field['shape']
                     )
+                )
 
         return fields
+
+    def resolve_component(self, dev, cpt_name):
+        cpt = None
+        _cpt = dev
+        _name = cpt_name
+        while True:
+            split = cpt_name.split(".", 1)
+            if len(split) == 1:
+                cpt = getattr(dev, split[0])
+                break
+            else:
+                _cpt = getattr(dev, split[0])
+                _name = split[1]
+
+        return cpt
 
     def get_device_field_value(self, dev, field_name) -> TypedDataFrame:
         if "." in field_name:
