@@ -33,13 +33,17 @@ class DataDispatchCallback(CallbackBase):
         self.data_host.scanStart(self.scan_id, data_descriptors)
 
     def event(self, doc):
-        data_frames = [
-            to_data_frame(
-                key,
-                self.data_keys[key]['dtype'],
-                value,
-                doc['timestamps'][key]) for key, value in doc['data'].items()
-        ]
+        data_frames = []
+        for key, value in doc['data'].items():
+            if 'external' in self.data_keys[key]:
+                continue
+            data_frames.append(
+                to_data_frame(
+                    key,
+                    self.data_keys[key]['dtype'],
+                    value,
+                    doc['timestamps'][key])
+            )
 
         self.data_host.pushData(data_frames)
 
