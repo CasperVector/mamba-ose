@@ -67,7 +67,7 @@ def to_array_data_frame(name, array, timestamp):
 
     np_array = np.array(array)
     shape = np.shape(np_array)
-    packed_array = np_array.flatten()
+    packed_array = np_array.flatten().astype(np.double)  # TODO: Typed Array!
     return ArrayDataFrame(
         name=name,
         type=DataType.Array,
