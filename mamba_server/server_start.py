@@ -70,20 +70,26 @@ def main():
         general_utils.setup_logger(logger)
 
         mamba_server.logger.info(f"Server started. Bind at {general_utils.get_bind_endpoint()}.")
-        adapter = ic.createObjectAdapterWithEndpoints("MambaServer",
+        public_adapter = ic.createObjectAdapterWithEndpoints("MambaServer",
                                                       general_utils.get_bind_endpoint())
+        mamba_server.public_adapter = public_adapter
 
-        session_manager.initialize(ic, adapter)
-        terminal.initialize(ic, adapter)
-        data_router.initialize(ic, adapter)
-        device_manager.initialize(ic, adapter, mamba_server.terminal)
-        file_writer.initialize(ic, adapter,
+        internal_adapter = ic.createObjectAdapterWithEndpoints("MambaServerInternal",
+                                                               general_utils.get_internal_endpoint())
+        mamba_server.internal_adapter = internal_adapter
+
+        session_manager.initialize(ic, public_adapter)
+        terminal.initialize(ic, public_adapter, internal_adapter)
+        data_router.initialize(ic, public_adapter, internal_adapter)
+        device_manager.initialize(ic, public_adapter, internal_adapter, mamba_server.terminal)
+        file_writer.initialize(ic, public_adapter,
                                mamba_server.device_manager,
                                mamba_server.data_router)
-        scan_manager.initialize(ic, adapter, mamba_server.terminal,
+        scan_manager.initialize(ic, public_adapter, mamba_server.terminal,
                                 mamba_server.data_router)
 
-        adapter.activate()
+        public_adapter.activate()
+        internal_adapter.activate()
 
         try:
             ic.waitForShutdown()

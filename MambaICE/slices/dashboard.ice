@@ -38,7 +38,7 @@ module MambaICE {
 
         // Handling the event emitted by underlying IPython shell and bluesky.
         interface TerminalEventHandler {
-            void attach(string token);
+            void attach(int port);
             void enterExecution(string cmd);
             void leaveExecution(string result);
         };
@@ -48,11 +48,12 @@ module MambaICE {
             void subscribe(strings items) throws UnauthorizedError;
             void subscribeAll() throws UnauthorizedError;
             void unsubscribe(strings items) throws UnauthorizedError;
+        };
 
-            // --- method for the data producer ---
-            void scanStart(int id, DataDescriptors keys) throws UnauthorizedError;
-            void pushData(TypedDataFrames frames) throws UnauthorizedError;
-            void scanEnd(ScanExitStatus status) throws UnauthorizedError;
+        interface DataRouterRecv {
+            void scanStart(int id, DataDescriptors keys);
+            void pushData(TypedDataFrames frames);
+            void scanEnd(ScanExitStatus status);
         };
 
         interface DeviceManager {
@@ -67,8 +68,9 @@ module MambaICE {
             void setDeviceValue(string name, TypedDataFrame frame);
 
             void addVirtualDevice(string name, TypedDataFrames frames);
+        };
 
-            // --- method for experiment subprocess ---
+        interface DeviceManagerInternal {
             void addDevices(DeviceEntries entries);
         };
 

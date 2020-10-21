@@ -2,7 +2,6 @@
 network:
   server_bind_address:
   server_bind_port: 10076
-  experiment_subproc_bind_port: 10077
   protocol: tcp
 
 logging:

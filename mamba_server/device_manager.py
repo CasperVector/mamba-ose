@@ -5,10 +5,11 @@ from typing import List
 import MambaICE
 
 if hasattr(MambaICE.Dashboard, 'DeviceManager') and \
+        hasattr(MambaICE.Dashboard, 'DeviceManagerInternal') and \
         hasattr(MambaICE.Dashboard, 'UnauthorizedError'):
-    from MambaICE.Dashboard import DeviceManager, UnauthorizedError
+    from MambaICE.Dashboard import DeviceManager, DeviceManagerInternal, UnauthorizedError
 else:
-    from MambaICE.dashboard_ice import DeviceManager, UnauthorizedError
+    from MambaICE.dashboard_ice import DeviceManager, DeviceManagerInternal, UnauthorizedError
 
 if hasattr(MambaICE, 'DeviceType') and hasattr(MambaICE, 'DataType') and \
         hasattr(MambaICE, 'TypedDataFrame') and \
@@ -33,51 +34,48 @@ from .virtual_device import VirtualDevice
 client_verify = mamba_server.verify
 
 
-def terminal_verify(f):
-    """decorator"""
-    @wraps(f)
-    def wrapper(self, *args):
-        current = args[-1]
-        if mamba_server.terminal_con == current.con:
-            return f(self, *args)
-        else:
-            raise UnauthorizedError()
+class DeviceManagerInternalI(DeviceManagerInternal):
+    def __init__(self, dev_mgr):
+        self.dev_mgr = dev_mgr
 
-    return wrapper
+    def addDevices(self, entries: List[DeviceEntry], current=None):
+        """ICE function"""
+        self.dev_mgr.logger.info("Received device list from experiment subproc:")
+        self.dev_mgr.logger.info(entries)
+        for entry in entries:
+            if entry.name in self.dev_mgr:
+                self.dev_mgr.logger.error(f"Duplicated device name: {entry.name}")
+                continue
+            self.dev_mgr[entry.name] = entry
+            self.dev_mgr.device_type_lookup[entry.name] = entry.type
 
 
 class DeviceManagerI(dict, DeviceManager):
-    def __init__(self, communicator, host_ice_endpoint, terminal):
+    def __init__(self, communicator, terminal):
         super().__init__(self)
         self.logger = mamba_server.logger
         self.device_type_lookup = {}
         self.virtual_device = {}
         self._host = None
         self.communicator = communicator
-        self.host_ice_endpoint = host_ice_endpoint
         self.terminal = terminal
+        self.internal_interface = None
 
     @property
     def host(self) -> DeviceQueryPrx:
         if self._host is None:
             self._host = DeviceQueryPrx.checkedCast(
                 self.communicator.stringToProxy(
-                    f"DeviceQuery:{self.host_ice_endpoint}")
+                    f"DeviceQuery:{self.terminal.get_slave_endpoint()}")
             )
             self.logger.info("Create proxy to DeviceQuery.")
         return self._host
 
-    @terminal_verify
-    def addDevices(self, entries: List[DeviceEntry], current=None):
-        """ICE function"""
-        self.logger.info("Received device list from experiment subproc:")
-        self.logger.info(entries)
-        for entry in entries:
-            if entry.name in self:
-                self.logger.error(f"Duplicated device name: {entry.name}")
-                continue
-            self[entry.name] = entry
-            self.device_type_lookup[entry.name] = entry.type
+    def get_internal_interface(self):
+        if not self.internal_interface:
+            self.internal_interface = DeviceManagerInternalI(self)
+
+        return self.internal_interface
 
     @client_verify
     def addVirtualDevice(self, name, data_frames, current=None):
@@ -189,12 +187,12 @@ class DeviceManagerI(dict, DeviceManager):
             self.terminal.emitCommand(command)
 
 
-def initialize(communicator, adapter, terminal):
-    mamba_server.device_manager = \
-        DeviceManagerI(communicator, general_utils.get_experiment_subproc_endpoint(),
-                       terminal)
+def initialize(communicator, public_adapter, internal_adapter, terminal):
+    mamba_server.device_manager = DeviceManagerI(communicator, terminal)
 
-    adapter.add(mamba_server.device_manager,
-                communicator.stringToIdentity("DeviceManager"))
+    public_adapter.add(mamba_server.device_manager,
+                       communicator.stringToIdentity("DeviceManager"))
+    internal_adapter.add(mamba_server.device_manager.get_internal_interface(),
+                         communicator.stringToIdentity("DeviceManagerInternal"))
 
     mamba_server.logger.info("DeviceManager initialized.")

@@ -12,19 +12,6 @@ from mamba_server.session_manager import set_connection_closed_callback
 client_verify = mamba_server.verify
 
 
-def event_verify(f):
-    """decorator"""
-    @wraps(f)
-    def wrapper(self, *args):
-        current = args[-1]
-        if self.event_emitter_con == current.con:
-            f(self, *args)
-        else:
-            raise UnauthorizedError()
-
-    return wrapper
-
-
 class TerminalHostI(TerminalHost):
     def __init__(self, event_hdl: 'TerminalEventHandlerI'):
         self._terminal = None
@@ -32,9 +19,6 @@ class TerminalHostI(TerminalHost):
         self.conn_to_client = {}
         self.logger = mamba_server.logger
         self.event_hdl = event_hdl
-
-        self.event_token = None
-        self.event_emitter_con = None
 
     @client_verify
     def registerClient(self, client: TerminalClientPrx, current):
@@ -58,14 +42,12 @@ class TerminalHostI(TerminalHost):
         if not self._terminal:
             from secrets import token_hex
             event_token = token_hex(8)
-            access_endpoint = general_utils.get_access_endpoint()
+            access_endpoint = general_utils.get_internal_endpoint()
+            print(access_endpoint)
 
             self._terminal = IPythonTerminalIO(80, 24,
                                                access_endpoint,
-                                               event_token,
                                                self.logger)
-
-            self.event_hdl.set_token(event_token)
 
             self._terminal.stdout_callback = self._stdout_callback
             self._terminal.terminated_callback = self._terminated_callback
@@ -93,58 +75,52 @@ class TerminalHostI(TerminalHost):
             except Ice.ConnectionLostException:
                 pass
 
+    def get_slave_endpoint(self):
+        return general_utils.format_endpoint("127.0.0.1",
+                                             self.event_hdl.slave_port,
+                                             "tcp")
+
     def _connection_closed_callback(self, conn):
         self.clients.remove(self.conn_to_client[conn])
 
     def _terminated_callback(self):
         self.event_hdl.event_emitter_con = None
         self.event_hdl.event_token = None
-        self.terminal = None
+        self._terminal = None
         # self.terminal.spawn()
 
 
 class TerminalEventHandlerI(TerminalEventHandler):
     def __init__(self):
-        self.event_token = None
-        self.event_emitter_con = None
         self.logger = mamba_server.logger
         self.idle = threading.Event()
         self.idle.set()
-
-    def set_token(self, token):
-        self.event_token = token
+        self.slave_port = 0
 
     # ----------------------
     #   Exposed to emitter
     # ----------------------
 
-    def attach(self, token, current):
-        if not self.event_emitter_con and token == self.event_token:
-            self.event_token = None
-            mamba_server.terminal_con = self.event_emitter_con = current.con
-            self.logger.info("Terminal event emitter attached.")
-        else:
-            self.logger.info("Invalid terminal event emitter attach request.")
-            raise Dashboard.UnauthorizedError()
+    def attach(self, port, current):
+        self.slave_port = port
+        self.logger.info(f"Terminal event emitter attached, binding at {port}.")
 
-    @event_verify
     def enterExecution(self, cmd, current):
         self.logger.info(f"executed {cmd}")
         self.idle.clear()
 
-    @event_verify
     def leaveExecution(self, result, current):
         self.logger.info(f"result {result}")
         self.idle.set()
 
 
-def initialize(communicator, adapter):
+def initialize(communicator, public_adapter, internal_adapter):
     event_hdl = TerminalEventHandlerI()
     mamba_server.terminal = TerminalHostI(event_hdl)
 
-    adapter.add(mamba_server.terminal,
-                communicator.stringToIdentity("TerminalHost"))
-    adapter.add(event_hdl,
-                communicator.stringToIdentity("TerminalEventHandler"))
+    public_adapter.add(mamba_server.terminal,
+                       communicator.stringToIdentity("TerminalHost"))
+    internal_adapter.add(event_hdl,
+                         communicator.stringToIdentity("TerminalEventHandler"))
 
     mamba_server.logger.info("TerminalHost, TerminalEventHandler initialized.")

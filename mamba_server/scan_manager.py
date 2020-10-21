@@ -83,7 +83,6 @@ class ScanManagerI(ScanManager):
             self.start_at = 0
 
     def __init__(self, plan_dir, communicator: Ice.Communicator,
-                 host_ice_endpoint,
                  terminal: TerminalHostI,
                  data_router: DataRouterI):
         self.logger = mamba_server.logger
@@ -91,7 +90,6 @@ class ScanManagerI(ScanManager):
         self.data_router = data_router
         self.communicator = communicator
         self.plan_dir = plan_dir
-        self.host_ice_endpoint = host_ice_endpoint
         self._scan_controller = None
         self.plans = {}
 
@@ -112,7 +110,7 @@ class ScanManagerI(ScanManager):
         if not self._scan_controller:
             self._scan_controller = ScanControllerPrx.checkedCast(
                 self.communicator.stringToProxy(
-                    f"ScanController:{self.host_ice_endpoint}")
+                    f"ScanController:{self.terminal.get_slave_endpoint()}")
             )
         return self._scan_controller
 
@@ -233,13 +231,13 @@ class ScanManagerI(ScanManager):
         if self.scan_running and not self.scan_paused:
             self.scan_paused = True
             self.scan_controller.pause()
-            self.data_router.pushData(
+            self.data_router.get_recv_interface().pushData(
                 [to_data_frame("__scan_paused", DataType.Integer, PAUSED, time.time())])
 
     @client_verify
     def resumeScan(self, current=None):
         if self.scan_paused:
-            self.data_router.pushData(
+            self.data_router.get_recv_interface().pushData(
                 [to_data_frame("__scan_paused", DataType.Integer, RESUMED, time.time())])
             self.terminal.emitCommand("RE.resume()")
             self.scan_paused = False
@@ -257,7 +255,6 @@ def initialize(communicator, adapter,
     mamba_server.scan_manager = ScanManagerI(
         mamba_server.config['scan']['plan_storage'],
         communicator,
-        general_utils.get_experiment_subproc_endpoint(),
         terminal,
         data_router
     )

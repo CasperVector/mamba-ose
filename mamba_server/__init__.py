@@ -14,8 +14,10 @@ config = None
 communicator = None
 session = None
 
+public_adapter = None
+internal_adapter = None
+
 terminal = None
-terminal_con = None
 data_router = None
 device_manager = None
 file_writer_host = None

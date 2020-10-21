@@ -5,6 +5,7 @@ import logging
 
 import mamba_client
 import mamba_server
+import mamba_server.experiment_subproc
 
 
 class AttrDict(dict):
@@ -40,7 +41,7 @@ def setup_logger(logger, level=logging.INFO):
     logger.addHandler(handler)
 
 
-def format_endpoint(host, port, protocol='tcp'):
+def format_endpoint(host, port=0, protocol='tcp'):
     if not protocol:
         protocol = 'tcp'
 
@@ -48,7 +49,8 @@ def format_endpoint(host, port, protocol='tcp'):
     if host:
         endpoint += " -h " + host
 
-    endpoint += " -p " + str(port)
+    if port:
+        endpoint += " -p " + str(port)
 
     return endpoint
 
@@ -63,6 +65,9 @@ def get_host_endpoint():
 
 
 def get_bind_endpoint():
+    if mamba_server.public_adapter:
+        return mamba_server.public_adapter.getEndpoints()[0].toString()
+
     return format_endpoint(
         mamba_server.config['network']['server_bind_address'],
         mamba_server.config['network']['server_bind_port'],
@@ -70,17 +75,12 @@ def get_bind_endpoint():
     )
 
 
-def get_access_endpoint():
+def get_internal_endpoint():
+    if mamba_server.internal_adapter:
+        return mamba_server.internal_adapter.getEndpoints()[0].toString()
+
     return format_endpoint(
         '127.0.0.1',
-        mamba_server.config['network']['server_bind_port'],
-        mamba_server.config['network']['protocol']
-    )
-
-
-def get_experiment_subproc_endpoint():
-    return format_endpoint(
-        '127.0.0.1',
-        mamba_server.config['network']['experiment_subproc_bind_port'],
-        mamba_server.config['network']['protocol']
+        0,
+        'tcp'
     )

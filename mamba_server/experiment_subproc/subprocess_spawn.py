@@ -10,13 +10,13 @@ else:
     from MambaICE.types_ice import DeviceType
 
 if hasattr(MambaICE.Dashboard, 'TerminalEventHandlerPrx') and \
-        hasattr(MambaICE.Dashboard, 'DataRouterPrx') and \
-        hasattr(MambaICE.Dashboard, 'DeviceManagerPrx'):
-    from MambaICE.Dashboard import (TerminalEventHandlerPrx, DataRouterPrx,
-                                    DeviceManagerPrx)
+        hasattr(MambaICE.Dashboard, 'DataRouterRecvPrx') and \
+        hasattr(MambaICE.Dashboard, 'DeviceManagerInternalPrx'):
+    from MambaICE.Dashboard import (TerminalEventHandlerPrx, DataRouterRecvPrx,
+                                    DeviceManagerInternalPrx)
 else:
-    from MambaICE.dashboard_ice import (TerminalEventHandlerPrx, DataRouterPrx,
-                                        DeviceManagerPrx)
+    from MambaICE.dashboard_ice import (TerminalEventHandlerPrx, DataRouterRecvPrx,
+                                        DeviceManagerInternalPrx)
 
 from termqt import TerminalIO
 
@@ -34,7 +34,7 @@ from mamba_server.experiment_subproc import device_query, scan_controller
 ###################################################################
 
 
-def start_experiment_subprocess(host_endpoint, event_hdl_token):
+def start_experiment_subprocess(host_endpoint):
     # ======== THIS IS THE ENTRY POINT OF THE SUBPROCESS ========
     # NOTE: For security reason, all file handler except stdin, stdout and
     #       stderr has been closed.
@@ -64,27 +64,28 @@ def start_experiment_subprocess(host_endpoint, event_hdl_token):
     with Ice.initialize(ice_init_data) as communicator:
         adapter = communicator.createObjectAdapterWithEndpoints(
             "ExperimentSubprocess",
-            general_utils.get_experiment_subproc_endpoint()
+            general_utils.format_endpoint("127.0.0.1", 0, "tcp")
         )
+        experiment_subproc.slave_adapter = adapter
+
         device_query.initialize(communicator, adapter)
         scan_controller.initialize(communicator, adapter)
         adapter.activate()
 
         event_hdl = TerminalEventHandlerPrx.checkedCast(
             communicator.stringToProxy(
-                f"TerminalEventHandler:{host_endpoint}")
-                .ice_connectionId("MambaExperimentSubproc")
+                f"TerminalEventHandler:{host_endpoint}").ice_connectionId("MambaExperimentSubproc")
         )
-        event_hdl.attach(event_hdl_token)
 
-        data_router = DataRouterPrx.checkedCast(
-            communicator.stringToProxy(f"DataRouter:{host_endpoint}")
-                .ice_connectionId("MambaExperimentSubproc")
+        event_hdl.attach(adapter.getEndpoints()[0].getInfo().port)
+
+        data_router = DataRouterRecvPrx.checkedCast(
+            communicator.stringToProxy(f"DataRouterRecv:{host_endpoint}").ice_connectionId("MambaExperimentSubproc")
         )
         data_callback = DataDispatchCallback(data_router)
 
-        experiment_subproc.device_manager = DeviceManagerPrx.checkedCast(
-            communicator.stringToProxy(f"DeviceManager:{host_endpoint}")
+        experiment_subproc.device_manager = DeviceManagerInternalPrx.checkedCast(
+            communicator.stringToProxy(f"DeviceManagerInternal:{host_endpoint}")
                 .ice_connectionId("MambaExperimentSubproc")
         )
 
@@ -161,15 +162,13 @@ def expose_everything_inside_module(module):
 
 
 class IPythonTerminalIO(TerminalIO):
-    def __init__(self, cols: int, rows: int, host_endpoint,
-                 event_hdl_token, logger):
+    def __init__(self, cols: int, rows: int, host_endpoint, logger):
         super().__init__(cols, rows, logger=logger)
         self.banner = ""
         self.logger = logger
 
         self.host_endpoint = host_endpoint
-        self.event_hdl_token = event_hdl_token
 
     def run_slave(self):
-        start_experiment_subprocess(self.host_endpoint, self.event_hdl_token)
+        start_experiment_subprocess(self.host_endpoint)
         self.logger = experiment_subproc.logger
