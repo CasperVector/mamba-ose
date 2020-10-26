@@ -60,8 +60,8 @@ module MambaICE {
             DeviceEntries listDevices();
             strings getDevicesByType(string type);
             TypedDataFrames getDeviceConfigurations(string name);
-            TypedDataFrames getDeviceHintedReadings(string name);
             TypedDataFrames getDeviceReadings(string name);
+            DataDescriptors describeDeviceReadings(string name);
             TypedDataFrame getDeviceField(string dev_name, string field_name);
 
             void setDeviceConfiguration(string name, TypedDataFrame frame);
@@ -77,9 +77,18 @@ module MambaICE {
         struct FileWriterDataItem {
             string device_name;
             string data_name;
-        }
+        };
 
         sequence<FileWriterDataItem> FileWriterDataItems;
+
+        struct ScanDataOption {
+            string dev;
+            string name;
+            bool save;
+            bool single_file;
+        };
+
+        sequence<ScanDataOption> ScanDataOptions;
 
         interface FileWriterHost {
             void setDirectory(string dir);
@@ -88,6 +97,7 @@ module MambaICE {
             void addEnvironmentItems(string section_name, FileWriterDataItems items);
             void removeEnvironmentItem(string section_name, FileWriterDataItem item);
             void removeAllEnvironmentItems(string section_name);
+            void updateScanDataOptions(ScanDataOptions sdos);
         }
 
         // --- Scan ---

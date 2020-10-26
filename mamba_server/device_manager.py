@@ -2,6 +2,7 @@ import struct
 from functools import wraps
 from typing import List
 
+import Ice
 import MambaICE
 
 if hasattr(MambaICE.Dashboard, 'DeviceManager') and \
@@ -11,15 +12,11 @@ if hasattr(MambaICE.Dashboard, 'DeviceManager') and \
 else:
     from MambaICE.dashboard_ice import DeviceManager, DeviceManagerInternal, UnauthorizedError
 
-if hasattr(MambaICE, 'DeviceType') and hasattr(MambaICE, 'DataType') and \
-        hasattr(MambaICE, 'TypedDataFrame') and \
-        hasattr(MambaICE, 'DataDescriptor') and \
+if hasattr(MambaICE, 'DeviceType') and \
         hasattr(MambaICE, 'DeviceEntry'):
-    from MambaICE import (DeviceType, DataType, TypedDataFrame,
-                          DeviceEntry)
+    from MambaICE import (DeviceType, DeviceEntry)
 else:
-    from MambaICE.types_ice import (DeviceType, DataType, TypedDataFrame,
-                                    DeviceEntry)
+    from MambaICE.types_ice import (DeviceType, DeviceEntry)
 
 if hasattr(MambaICE.Experiment, 'DeviceQueryPrx'):
     from MambaICE.Experiment import DeviceQueryPrx
@@ -27,8 +24,8 @@ else:
     from MambaICE.experiment_ice import DeviceQueryPrx
 
 import mamba_server
-from utils import general_utils
-from utils.data_utils import data_frame_to_value, data_frame_to_descriptor
+from utils.data_utils import (TypedDataFrame, DataDescriptor, DataType,
+                              data_frame_to_value, data_frame_to_descriptor)
 from .virtual_device import VirtualDevice
 
 client_verify = mamba_server.verify
@@ -132,15 +129,11 @@ class DeviceManagerI(dict, DeviceManager):
             raise NameError(f"Unknown device {name}")
 
     @client_verify
-    def getDeviceHintedReadings(self, name, current=None) -> List[TypedDataFrame]:
-        """ICE function"""
-        if name in self:
-            if self[name].type == DeviceType.Virtual:
-                return self.virtual_device[name].values()
-            else:
-                return self.host.getDeviceHintedReadings(name)
+    def describeDeviceReadings(self, dev_name, current=None) -> List[DataDescriptor]:
+        if dev_name in self:
+            return self.host.describeDeviceReadings(dev_name)
         else:
-            raise NameError(f"Unknown device {name}")
+            raise NameError(f"Unknown device {dev_name}")
 
     @client_verify
     def getDeviceField(self, dev_name, field_name, current=None) -> TypedDataFrame:
@@ -187,12 +180,12 @@ class DeviceManagerI(dict, DeviceManager):
             self.terminal.emitCommand(command)
 
 
-def initialize(communicator, public_adapter, internal_adapter, terminal):
-    mamba_server.device_manager = DeviceManagerI(communicator, terminal)
+def initialize(internal_ic, public_adapter, internal_adapter, terminal):
+    mamba_server.device_manager = DeviceManagerI(internal_ic, terminal)
 
     public_adapter.add(mamba_server.device_manager,
-                       communicator.stringToIdentity("DeviceManager"))
+                       Ice.stringToIdentity("DeviceManager"))
     internal_adapter.add(mamba_server.device_manager.get_internal_interface(),
-                         communicator.stringToIdentity("DeviceManagerInternal"))
+                         Ice.stringToIdentity("DeviceManagerInternal"))
 
     mamba_server.logger.info("DeviceManager initialized.")

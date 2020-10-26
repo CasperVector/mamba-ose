@@ -11,12 +11,14 @@ session_start_at = ""
 
 logger = None
 config = None
-communicator = None
-session = None
+
+public_communicator = None
+internal_communicator = None
 
 public_adapter = None
 internal_adapter = None
 
+session = None
 terminal = None
 data_router = None
 device_manager = None

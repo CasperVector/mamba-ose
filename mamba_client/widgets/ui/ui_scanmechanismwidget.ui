@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>520</width>
+    <width>543</width>
     <height>778</height>
    </rect>
   </property>
@@ -33,60 +33,6 @@
        <property name="sizeConstraint">
         <enum>QLayout::SetDefaultConstraint</enum>
        </property>
-       <item row="0" column="4">
-        <widget class="QGroupBox" name="elapsedGroupBox">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>55</height>
-          </size>
-         </property>
-         <property name="title">
-          <string>Elapsed Time</string>
-         </property>
-         <layout class="QVBoxLayout" name="verticalLayout_11">
-          <property name="topMargin">
-           <number>6</number>
-          </property>
-          <property name="bottomMargin">
-           <number>6</number>
-          </property>
-          <item>
-           <widget class="QLabel" name="elapsedLabel">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="minimumSize">
-             <size>
-              <width>0</width>
-              <height>16</height>
-             </size>
-            </property>
-            <property name="font">
-             <font>
-              <pointsize>15</pointsize>
-             </font>
-            </property>
-            <property name="text">
-             <string>00:00</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignCenter</set>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
        <item row="0" column="1">
         <widget class="QGroupBox" name="frameGroupBox">
          <property name="sizePolicy">
@@ -141,8 +87,8 @@
          </layout>
         </widget>
        </item>
-       <item row="0" column="5">
-        <widget class="QGroupBox" name="etaGroupBox">
+       <item row="0" column="0">
+        <widget class="QGroupBox" name="scanIDGroupBox">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
            <horstretch>0</horstretch>
@@ -156,9 +102,9 @@
           </size>
          </property>
          <property name="title">
-          <string>ETA</string>
+          <string>Scan ID</string>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout_9">
+         <layout class="QVBoxLayout" name="verticalLayout_12">
           <property name="topMargin">
            <number>6</number>
           </property>
@@ -166,9 +112,63 @@
            <number>6</number>
           </property>
           <item>
-           <widget class="QLabel" name="etaLabel">
+           <widget class="QLabel" name="scanIDLabel">
             <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="minimumSize">
+             <size>
+              <width>0</width>
+              <height>16</height>
+             </size>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>15</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>0</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item row="0" column="4">
+        <widget class="QGroupBox" name="elapsedGroupBox">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>55</height>
+          </size>
+         </property>
+         <property name="title">
+          <string>Elapsed Time</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_11">
+          <property name="topMargin">
+           <number>6</number>
+          </property>
+          <property name="bottomMargin">
+           <number>6</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="elapsedLabel">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
@@ -249,8 +249,8 @@
          </layout>
         </widget>
        </item>
-       <item row="0" column="0">
-        <widget class="QGroupBox" name="scanIDGroupBox">
+       <item row="0" column="5">
+        <widget class="QGroupBox" name="etaGroupBox">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
            <horstretch>0</horstretch>
@@ -264,9 +264,9 @@
           </size>
          </property>
          <property name="title">
-          <string>Scan ID</string>
+          <string>ETA</string>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout_12">
+         <layout class="QVBoxLayout" name="verticalLayout_9">
           <property name="topMargin">
            <number>6</number>
           </property>
@@ -274,9 +274,9 @@
            <number>6</number>
           </property>
           <item>
-           <widget class="QLabel" name="scanIDLabel">
+           <widget class="QLabel" name="etaLabel">
             <property name="sizePolicy">
-             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+             <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
               <horstretch>0</horstretch>
               <verstretch>0</verstretch>
              </sizepolicy>
@@ -293,7 +293,7 @@
              </font>
             </property>
             <property name="text">
-             <string>0</string>
+             <string>00:00</string>
             </property>
             <property name="alignment">
              <set>Qt::AlignCenter</set>
@@ -335,7 +335,7 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>494</width>
+          <width>517</width>
           <height>578</height>
          </rect>
         </property>
@@ -350,7 +350,7 @@
         </attribute>
         <layout class="QVBoxLayout" name="verticalLayout_7">
          <item>
-          <layout class="QVBoxLayout" name="verticalLayout_2">
+          <layout class="QVBoxLayout" name="verticalLayout_2" stretch="5,45,45,5">
            <property name="topMargin">
             <number>0</number>
            </property>
@@ -434,6 +434,13 @@
                 </size>
                </property>
               </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="fileOptionButton">
+               <property name="text">
+                <string>File option</string>
+               </property>
+              </widget>
              </item>
             </layout>
            </item>
@@ -637,7 +644,7 @@
          <rect>
           <x>0</x>
           <y>0</y>
-          <width>494</width>
+          <width>517</width>
           <height>578</height>
          </rect>
         </property>

@@ -78,15 +78,15 @@ class DeviceQueryI(dict, DeviceQuery):
             raise UnknownDeviceException
 
         dev = self[dev_name]
-        return self.get_device_fields(dev, Kind.normal)
+        return self.get_device_fields(dev, Kind.read)
 
-    def getDeviceHintedReadings(self, dev_name, current=None):
+    def describeDeviceReadings(self, dev_name, current=None):
         """ICE function"""
         if dev_name not in self:
             raise UnknownDeviceException
 
         dev = self[dev_name]
-        return self.get_device_fields(dev, Kind.hinted)
+        return self.get_device_field_descriptions(dev, Kind.read)
 
     def getDeviceFieldValue(self, dev_name, field_name, current=None):
         return self.get_device_field_value(self[dev_name], field_name)

@@ -4,7 +4,7 @@ import argparse
 
 import Ice
 from mamba_client import (SessionManagerPrx, DeviceManagerPrx, TerminalHostPrx,
-                          ScanManagerPrx)
+                          ScanManagerPrx, FileWriterHostPrx)
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QCoreApplication
@@ -41,6 +41,8 @@ def main():
     # Always send heartbeat message to keep the connection alive.
     ice_props.setProperty("Ice.ACM.Heartbeat", "3")  # HeartbeatAlways
     ice_props.setProperty("Ice.ACM.Timeout", "10")
+
+    ice_props.setProperty("Ice.MessageSizeMax", "4000")  # 4000KB ~ 4MB
 
     ice_init_data = Ice.InitializationData()
     ice_init_data.properties = ice_props
@@ -96,6 +98,10 @@ def main():
             communicator.stringToProxy(f"ScanManager:{ice_endpoint}")
                 .ice_connectionId("MambaClient")
         )
+        mamba_client.file_writer = FileWriterHostPrx.checkedCast(
+            communicator.stringToProxy(f"FileWriterHost:{ice_endpoint}")
+                .ice_connectionId("MambaClient")
+        )
 
         try:
             mw.add_menu_item("Device",
@@ -119,7 +125,8 @@ def main():
                           ScanMechanismWidget.get_init_func(
                               mamba_client.device_manager,
                               mamba_client.scan_manager,
-                              mamba_client.data_client)
+                              mamba_client.data_client,
+                              mamba_client.file_writer)
                           )
             mw.add_widget("Motor",
                           MotorWidget.get_init_func(mamba_client.device_manager)

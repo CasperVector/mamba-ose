@@ -11,7 +11,7 @@ module MambaICE {
             DeviceEntries getDevicesByType(string type);
             TypedDataFrames getDeviceConfigurations(string name);
             TypedDataFrames getDeviceReadings(string name);
-            TypedDataFrames getDeviceHintedReadings(string name);
+            DataDescriptors describeDeviceReadings(string name);
             TypedDataFrame getDeviceFieldValue(string dev_name, string field_name);
         };
 

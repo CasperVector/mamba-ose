@@ -27,30 +27,44 @@ def main():
 
     # --- Ice properties setup ---
 
-    ice_props = Ice.createProperties()
+    public_ice_props = Ice.createProperties()
+    internal_ice_props = Ice.createProperties()
 
     # ACM setup for bidirectional connections.
-    ice_props.setProperty("Ice.ACM.Close", "4")  # CloseOnIdleForceful
-    ice_props.setProperty("Ice.ACM.Heartbeat", "0")  # HeartbeatOff
-    ice_props.setProperty("Ice.ACM.Timeout", "30")
+    public_ice_props.setProperty("Ice.ACM.Close", "4")  # CloseOnIdleForceful
+    internal_ice_props.setProperty("Ice.ACM.Close", "4")
+    public_ice_props.setProperty("Ice.ACM.Heartbeat", "0")  # HeartbeatOff
+    internal_ice_props.setProperty("Ice.ACM.Heartbeat", "0")
+    public_ice_props.setProperty("Ice.ACM.Timeout", "30")
+    internal_ice_props.setProperty("Ice.ACM.Timeout", "10")
+
+    public_ice_props.setProperty("Ice.MessageSizeMax", "10000")  # 10000KB ~ 10MB
+    internal_ice_props.setProperty("Ice.MessageSizeMax", "100000")  # 100000KB ~ 100MB
 
     # Increase the thread pool, to handle nested RPC calls
     # If the thread pool is exhausted, new RPC call will block the mamba_server.
     # When a deadlock happens, one can use
-    #    ice_props.setProperty("Ice.Trace.ThreadPool", "1")
+    #    public_ice_props.setProperty("Ice.Trace.ThreadPool", "1")
     # to see the what's going on in the thread pool.
     # See https://doc.zeroc.com/ice/3.6/client-server-features/the-ice-threading-model/nested-invocations
     # for more information.
-    ice_props.setProperty("Ice.ThreadPool.Client.Size", "1")
-    ice_props.setProperty("Ice.ThreadPool.Client.SizeMax", "10")
-    ice_props.setProperty("Ice.ThreadPool.Server.Size", "1")
-    ice_props.setProperty("Ice.ThreadPool.Server.SizeMax", "10")
+    public_ice_props.setProperty("Ice.ThreadPool.Client.Size", "1")
+    public_ice_props.setProperty("Ice.ThreadPool.Client.SizeMax", "10")
+    public_ice_props.setProperty("Ice.ThreadPool.Server.Size", "1")
+    public_ice_props.setProperty("Ice.ThreadPool.Server.SizeMax", "10")
+    internal_ice_props.setProperty("Ice.ThreadPool.Client.Size", "1")
+    internal_ice_props.setProperty("Ice.ThreadPool.Client.SizeMax", "10")
+    internal_ice_props.setProperty("Ice.ThreadPool.Server.Size", "1")
+    internal_ice_props.setProperty("Ice.ThreadPool.Server.SizeMax", "10")
 
-    ice_init_data = Ice.InitializationData()
-    ice_init_data.properties = ice_props
+    pub_ice_init_data = Ice.InitializationData()
+    pub_ice_init_data.properties = public_ice_props
+    int_ice_init_data = Ice.InitializationData()
+    int_ice_init_data.properties = internal_ice_props
 
-    with Ice.initialize(ice_init_data) as ic:
-        mamba_server.communicator = ic
+    with Ice.initialize(pub_ice_init_data) as ic, Ice.initialize(int_ice_init_data) as iic:
+        mamba_server.public_communicator = ic
+        mamba_server.internal_communicator = iic
         mamba_server.logger = logger = logging.getLogger()
 
         if args.config:
@@ -79,10 +93,10 @@ def main():
         mamba_server.internal_adapter = internal_adapter
 
         session_manager.initialize(ic, public_adapter)
-        terminal.initialize(ic, public_adapter, internal_adapter)
-        data_router.initialize(ic, public_adapter, internal_adapter)
-        device_manager.initialize(ic, public_adapter, internal_adapter, mamba_server.terminal)
-        file_writer.initialize(ic, public_adapter,
+        terminal.initialize(public_adapter, internal_adapter)
+        data_router.initialize(public_adapter, internal_adapter)
+        device_manager.initialize(iic, public_adapter, internal_adapter, mamba_server.terminal)
+        file_writer.initialize(public_adapter,
                                mamba_server.device_manager,
                                mamba_server.data_router)
         scan_manager.initialize(ic, public_adapter, mamba_server.terminal,

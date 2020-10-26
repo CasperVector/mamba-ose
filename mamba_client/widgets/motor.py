@@ -74,14 +74,32 @@ class MotorWidget(QWidget):
 
     def _update(self):
         if self.motor_id:
-            data_frames = self.device_manager.getDeviceHintedReadings(
+            data_frames = self.device_manager.getDeviceReadings(
                 self.motor_id)
 
-            if data_frames:
-                self.cur_pos = data_frame_to_value(data_frames[0])
-                self.ui.motorNameLabel.setText(self.motor_id)
-                self.ui.currentPosEdit.setText("{:.2f}".format(self.cur_pos))
-                self.sync_abs_rel_edit()
+            print(data_frames)
+
+            df = None
+            if len(data_frames) == 0:
+                return
+            elif len(data_frames) == 1:
+                df = data_frames[0]
+            else:
+                for data_frame in data_frames:
+                    if "setpoint" in data_frame.name:
+                        continue
+                    if data_frame.type != DataType.Float and data_frame.type != DataType.Integer:
+                        continue
+                    df = data_frame
+                    break
+
+            if not df:
+                return
+
+            self.cur_pos = data_frame_to_value(df)
+            self.ui.motorNameLabel.setText(self.motor_id)
+            self.ui.curPosLabel.setText("{:.2f}".format(self.cur_pos))
+            self.sync_abs_rel_edit()
 
     def sync_abs_rel_edit(self):
         if not self.ui.targetAbsEdit.text() and \

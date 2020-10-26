@@ -10,21 +10,27 @@ from PyQt5.QtCore import Qt, QSize, QTimer, QMutex, pyqtSignal
 
 import MambaICE
 import mamba_client
-from mamba_client import (DeviceManagerPrx, DeviceType, TerminalHostPrx)
+from mamba_client import (DeviceManagerPrx, DeviceType, FileWriterHostPrx)
 from mamba_client.data_client import DataClientI
 from mamba_client.dialogs.device_setect import DeviceSelectDialog
 from mamba_client.dialogs.device_config import DeviceConfigDialog
+from mamba_client.dialogs.scan_file_option import ScanFileOptionDialog
 from .ui.ui_scanmechanismwidget import Ui_ScanMechanicsWidget
 
 if hasattr(MambaICE.Dashboard, 'ScanManagerPrx') and \
         hasattr(MambaICE.Dashboard, 'MotorScanInstruction') and \
+        hasattr(MambaICE.Dashboard, 'ScanDataOption') and \
         hasattr(MambaICE.Dashboard, 'ScanInstruction') and \
         hasattr(MambaICE.Dashboard, 'UnauthorizedError'):
     from MambaICE.Dashboard import (ScanManagerPrx, MotorScanInstruction,
-                                    ScanInstruction, UnauthorizedError)
+                                    ScanInstruction, ScanDataOption,
+                                    UnauthorizedError)
 else:
     from MambaICE.dashboard_ice import (ScanManagerPrx, MotorScanInstruction,
-                                        ScanInstruction, UnauthorizedError)
+                                        ScanInstruction, ScanDataOption,
+                                        UnauthorizedError)
+
+from utils.data_utils import DataDescriptor
 
 MOTOR_ADD_COL = 0
 MOTOR_NAME_COL = 1
@@ -75,15 +81,18 @@ class ScanMechanismWidget(QWidget):
 
     def __init__(self, device_manager: DeviceManagerPrx,
                  scan_manager: ScanManagerPrx,
-                 data_client: DataClientI):
+                 data_client: DataClientI,
+                 file_writer: FileWriterHostPrx):
         super().__init__()
         self.logger = mamba_client.logger
         self.device_manager = device_manager
         self.scan_manager = scan_manager
         self.data_client = data_client
+        self.file_writer = file_writer
 
         self.scanned_motors = {}
         self.scanned_detectors = []
+        self.scan_data_options = {}
 
         self.ui = Ui_ScanMechanicsWidget()
         self.ui.setupUi(self)
@@ -277,6 +286,7 @@ class ScanMechanismWidget(QWidget):
                 name_to_delete = self.ui.detectorTableWidget.item(
                     row, DETECTOR_NAME_COL).text()
                 self.scanned_detectors.remove(name_to_delete)
+                self.scan_data_options.remove(name_to_delete)
                 self.ui.detectorTableWidget.removeRow(row)
                 self.plan_changed()
         elif col == DETECTOR_SETUP_COL:
@@ -388,6 +398,7 @@ class ScanMechanismWidget(QWidget):
             if not detector_id or detector_id in self.scanned_detectors:
                 return
             self.scanned_detectors.append(detector_id)
+            self.scan_data_options[detector_id] = self.prepare_scan_data_option(detector_id)
             detector_item = self._get_table_uneditable_item()
             detector_item.setText(detector_id)
             self.ui.detectorTableWidget.setItem(row, DETECTOR_NAME_COL, detector_item)
@@ -414,6 +425,7 @@ class ScanMechanismWidget(QWidget):
 
         self.ui.detectorTableWidget.blockSignals(True)
         self.scanned_detectors = []
+        self.scan_data_options = []
         for row in reversed(range(self.ui.detectorTableWidget.rowCount())):
             self.ui.detectorTableWidget.removeRow(row)
         self.add_detector()
@@ -434,7 +446,24 @@ class ScanMechanismWidget(QWidget):
         elif self.save_scan_plan():
             name = self.ui.planComboBox.currentText()
             self.ui.statusLabel.setText("PENDING")
+            self.update_remote_scan_data_options()
             self.scan_manager.runScan(name)
+
+    def update_remote_scan_data_options(self):
+        result_sdos = []
+
+        for dev, sdos in self.scan_data_options.items():
+            for sdo in sdos:
+                result_sdos.append(
+                    ScanDataOption(
+                        dev=dev,
+                        name=sdo['name'],
+                        save=sdo['save'],
+                        single_file=sdo['single']
+                    )
+                )
+
+        self.file_writer.updateScanDataOptions(result_sdos)
 
     def save_scan_plan(self):
         if not self.validate_plan_input():
@@ -455,6 +484,32 @@ class ScanMechanismWidget(QWidget):
         self.editing_plan = False
         self.editing_new_plan = False
         return True
+
+    def prepare_scan_data_option(self, detector_id):
+        data_descriptors: List[DataDescriptor] = \
+            self.device_manager.describeDeviceReadings(detector_id)
+
+        data_options = []
+        for data_descriptor in data_descriptors:
+            data_option = {
+                'dev': detector_id,
+                'name': data_descriptor.name,
+                'type': data_descriptor.type,
+                'save': True,
+                'single': False
+            }
+            data_options.append(data_option)
+
+        return data_options
+
+    def display_scan_data_options_dialog(self):
+        dialog = ScanFileOptionDialog()
+        scan_data_options = dialog.display(self.scan_data_options)
+
+        for sdo in scan_data_options:
+            for dev_sdo in self.scan_data_options[sdo['dev']]:
+                if dev_sdo['name'] == sdo['name']:
+                    dev_sdo.update(sdo)
 
     def scan_status_update(self, name, scan_id, value, timestamp):
         self.update_status_sig.emit(name, scan_id,
@@ -558,8 +613,9 @@ class ScanMechanismWidget(QWidget):
     @classmethod
     def get_init_func(cls, device_manager: DeviceManagerPrx,
                       scan_manager: ScanManagerPrx,
-                      data_client: DataClientI):
-        return lambda: cls(device_manager, scan_manager, data_client)
+                      data_client: DataClientI,
+                      file_writer: FileWriterHostPrx):
+        return lambda: cls(device_manager, scan_manager, data_client, file_writer)
 
     def __del__(self):
         for cbk in self.registered_data_callbacks:

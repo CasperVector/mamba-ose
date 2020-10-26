@@ -249,17 +249,17 @@ class ScanManagerI(ScanManager):
         #self.data_router.scanEnd(ScanExitStatus.Abort)
 
 
-def initialize(communicator, adapter,
+def initialize(internal_communicator, adapter,
                terminal: TerminalHostI,
                data_router: DataRouterI):
     mamba_server.scan_manager = ScanManagerI(
         mamba_server.config['scan']['plan_storage'],
-        communicator,
+        internal_communicator,  # TODO: too ugly. refactor the exp process spawn mechanism
         terminal,
         data_router
     )
 
     adapter.add(mamba_server.scan_manager,
-                communicator.stringToIdentity("ScanManager"))
+                Ice.stringToIdentity("ScanManager"))
 
     mamba_server.logger.info("ScanManager initialized.")

@@ -114,13 +114,13 @@ class TerminalEventHandlerI(TerminalEventHandler):
         self.idle.set()
 
 
-def initialize(communicator, public_adapter, internal_adapter):
+def initialize(public_adapter, internal_adapter):
     event_hdl = TerminalEventHandlerI()
     mamba_server.terminal = TerminalHostI(event_hdl)
 
     public_adapter.add(mamba_server.terminal,
-                       communicator.stringToIdentity("TerminalHost"))
+                       Ice.stringToIdentity("TerminalHost"))
     internal_adapter.add(event_hdl,
-                         communicator.stringToIdentity("TerminalEventHandler"))
+                         Ice.stringToIdentity("TerminalEventHandler"))
 
     mamba_server.logger.info("TerminalHost, TerminalEventHandler initialized.")

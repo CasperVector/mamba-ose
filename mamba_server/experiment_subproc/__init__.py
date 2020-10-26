@@ -8,3 +8,4 @@ device_manager = None
 
 device_query_obj = None
 scan_controller_obj = None
+raw_data_writer_obj = None

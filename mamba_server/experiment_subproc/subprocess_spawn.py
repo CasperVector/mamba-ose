@@ -58,6 +58,8 @@ def start_experiment_subprocess(host_endpoint):
     ice_props.setProperty("Ice.ACM.Heartbeat", "3")  # HeartbeatAlways
     ice_props.setProperty("Ice.ACM.Timeout", "30")
 
+    ice_props.setProperty("Ice.MessageSizeMax", "100000")  # 100000KB ~ 100MB
+
     ice_init_data = Ice.InitializationData()
     ice_init_data.properties = ice_props
 

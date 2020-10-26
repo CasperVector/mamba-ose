@@ -5,6 +5,7 @@ import numpy as np
 import os
 from pathlib import Path
 
+import Ice
 import MambaICE
 import mamba_server
 from .data_router import DataClientCallback
@@ -14,12 +15,13 @@ from utils.data_utils import data_frame_to_value, DataType, DataDescriptor
 
 if hasattr(MambaICE.Dashboard, 'FileWriterHost') and \
         hasattr(MambaICE.Dashboard, 'FileWriterDataItem') and \
+        hasattr(MambaICE.Dashboard, 'ScanDataOption') and \
         hasattr(MambaICE.Dashboard, 'UnauthorizedError'):
     from MambaICE.Dashboard import (FileWriterHost, UnauthorizedError,
-                                    FileWriterDataItem)
+                                    ScanDataOption, FileWriterDataItem)
 else:
     from MambaICE.dashboard_ice import (FileWriterHost, UnauthorizedError,
-                                        FileWriterDataItem)
+                                        ScanDataOption, FileWriterDataItem)
 
 client_verify = mamba_server.verify
 
@@ -129,10 +131,16 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
         self.dev_mgr = device_mgr
 
         self.ongoing_scan_id = -1
-        self.writer = None
+        self.main_writer = None
+        self.aux_writers = []
 
         self.env_sections = {}
         self.data_items = {}
+
+        self.scan_data_options = {}
+
+    def set_scan_data_options(self):
+        pass
 
     @client_verify
     def setDirectory(self, _dir, current=None):
@@ -165,41 +173,66 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
     def removeAllEnvironmentItems(self, section_name, current=None):
         self.env_sections[section_name].data_items = []
 
+    @client_verify
+    def updateScanDataOptions(self, sdos: List[ScanDataOption], current=None):
+        self.scan_data_options = {sdo.name: sdo for sdo in sdos}
+
     def scan_start(self, _id, data_descriptors: List[DataDescriptor]):
         self.ongoing_scan_id = _id
         name = self.pattern.format(prefix=self.prefix,
                                    scan_id=_id,
                                    session=mamba_server.session_start_at)
         path = os.path.join(self.dir, name)
-        self.writer = self.writer_type(path)
-        assert isinstance(self.writer, FileWriter)
+        self.main_writer = self.writer_type(path)
+        assert isinstance(self.main_writer, FileWriter)
 
-        self.writer.add_section("data")
+        self.main_writer.add_section("data")
 
         for key, sec in self.env_sections:
-            self.writer.add_section(key)
+            self.main_writer.add_section(key)
         self.populate_env_items()
 
         self.data_items = {des.name: des for des in data_descriptors}
         for des in data_descriptors:
-            assert isinstance(self.writer, FileWriter)
-            self.writer.add_dataset("data",
-                                    des.name,
-                                    des.type,
-                                    [1] + des.shape,
-                                    [None] + des.shape)
-            # TODO: How can I get the length of this scan?
+            if des.name in self.scan_data_options and \
+                    self.scan_data_options[des.name].save:
+
+                writer = None
+                if not self.scan_data_options[des.name].single_file:
+                    writer = self.main_writer
+                else:
+                    name = self.pattern.format(prefix=self.prefix,
+                                               scan_id=_id,
+                                               session=mamba_server.session_start_at)
+                    path = os.path.join(self.dir, name)
+                    writer = self.writer_type(path)
+                    writer.add_section("data")
+                    self.aux_writers[des.name] = writer
+
+                writer.add_dataset("data",
+                                   des.name,
+                                   des.type,
+                                   [1] + des.shape,
+                                   [None] + des.shape)
+                # TODO: How can I get the length of this scan?
 
     def scan_end(self, status):
-        if self.writer:
-            self.writer.close_file()
+        if self.main_writer:
+            self.main_writer.close_file()
+            self.main_writer = None
+
+        if self.aux_writers:
+            for writer in self.aux_writers:
+                writer.close_file()
+            self.aux_writers = []
+
         self.ongoing_scan_id = -1
 
     def data_update(self, frames):
         if self.ongoing_scan_id > 0:
             for frame in frames:
-                self.writer.append_data("data", frame.name,
-                                        data_frame_to_value(frame))
+                self.main_writer.append_data("data", frame.name,
+                                             data_frame_to_value(frame))
 
     def populate_env_items(self):
         for env_section in self.env_sections:
@@ -207,17 +240,16 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
             for item in self.data_items:
                 assert isinstance(item, FileWriterDataItem)
                 sec_path = sec_name + "/" + item.device_name
-                self.writer.add_section(sec_name + "/" + item.device_name)
+                self.main_writer.add_section(sec_name + "/" + item.device_name)
                 frame = self.dev_mgr.getDeviceField(item.device_name,
                                                     item.data_name)
-                self.writer.write_dataset(sec_path,
-                                          item.data_name,
-                                          frame.type,
-                                          data_frame_to_value(frame))
+                self.main_writer.write_dataset(sec_path,
+                                               item.data_name,
+                                               frame.type,
+                                               data_frame_to_value(frame))
 
 
-def initialize(communicator,
-               adapter,
+def initialize(adapter,
                device_mgr: DeviceManagerI,
                data_router: DataRouterI):
     mamba_server.file_writer_host = FileWriterHostI(
@@ -233,6 +265,6 @@ def initialize(communicator,
     data_router.local_subscribe_all("FileWriter")
 
     adapter.add(mamba_server.file_writer_host,
-                communicator.stringToIdentity("FileWriterHost"))
+                Ice.stringToIdentity("FileWriterHost"))
 
     mamba_server.logger.info("FileWriterHost initialized.")

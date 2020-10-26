@@ -196,12 +196,12 @@ class DataRouterI(DataRouter):
         del self.conn_to_client[conn_to_delete]
 
 
-def initialize(communicator, public_adapter, internal_adapter):
+def initialize(public_adapter, internal_adapter):
     mamba_server.data_router = DataRouterI()
 
     public_adapter.add(mamba_server.data_router,
-                       communicator.stringToIdentity("DataRouter"))
+                       Ice.stringToIdentity("DataRouter"))
     internal_adapter.add(mamba_server.data_router.get_recv_interface(),
-                         communicator.stringToIdentity("DataRouterRecv"))
+                         Ice.stringToIdentity("DataRouterRecv"))
 
     mamba_server.logger.info("DataRouter initialized.")

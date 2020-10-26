@@ -1,14 +1,9 @@
-import struct
-import time
-
 from PyQt5.QtWidgets import (QAction, QDialog, QVBoxLayout, QLabel, QPushButton,
                              QListWidget, QListWidgetItem, QTableWidget,
                              QTableWidgetItem, QSpacerItem, QHBoxLayout,
                              QSizePolicy)
 from PyQt5.QtCore import QSize, QEventLoop, Qt
 from PyQt5.QtGui import QIcon
-
-import MambaICE
 
 import mamba_client
 from mamba_client import (DeviceManagerPrx, DeviceEntry)

@@ -13,6 +13,7 @@ device_manager = None
 client_adapter = None
 data_client = None
 scan_manager = None
+file_writer = None
 
 
 if hasattr(MambaICE.Dashboard, 'DeviceManagerPrx') and \
@@ -22,17 +23,20 @@ if hasattr(MambaICE.Dashboard, 'DeviceManagerPrx') and \
         hasattr(MambaICE.Dashboard, 'TerminalHostPrx') and \
         hasattr(MambaICE.Dashboard, 'ScanManagerPrx') and \
         hasattr(MambaICE.Dashboard, 'SessionManagerPrx') and \
+        hasattr(MambaICE.Dashboard, 'FileWriterHostPrx') and \
         hasattr(MambaICE.Dashboard, 'UnauthorizedError')\
     :
         from MambaICE.Dashboard import (DeviceManagerPrx, DataClient,
                                         DataRouterPrx, DataClientPrx,
                                         TerminalHostPrx, ScanManagerPrx,
-                                        SessionManagerPrx, UnauthorizedError)
+                                        SessionManagerPrx, FileWriterHostPrx,
+                                        UnauthorizedError)
 else:
     from MambaICE.dashboard_ice import (DeviceManagerPrx, DataClient,
                                         DataRouterPrx, DataClientPrx,
                                         TerminalHostPrx, ScanManagerPrx,
-                                        SessionManagerPrx, UnauthorizedError)
+                                        SessionManagerPrx, FileWriterHostPrx,
+                                        UnauthorizedError)
 
 if hasattr(MambaICE, 'DeviceType') and hasattr(MambaICE, 'DataType') and \
         hasattr(MambaICE, 'TypedDataFrame') and \
