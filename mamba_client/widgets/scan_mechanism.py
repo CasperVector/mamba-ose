@@ -288,7 +288,7 @@ class ScanMechanismWidget(QWidget):
                 name_to_delete = self.ui.detectorTableWidget.item(
                     row, DETECTOR_NAME_COL).text()
                 self.scanned_detectors.remove(name_to_delete)
-                self.scan_data_options.remove(name_to_delete)
+                del self.scan_data_options[name_to_delete]
                 self.ui.detectorTableWidget.removeRow(row)
                 self.plan_changed()
         elif col == DETECTOR_SETUP_COL:
