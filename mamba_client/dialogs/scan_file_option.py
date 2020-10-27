@@ -18,6 +18,7 @@ class ScanFileOptionDialog(QDialog):
         self.ui = Ui_ScanFileOption()
         self.ui.setupUi(self)
 
+        self.ui.scanDatasetTable.setColumnCount(5)
         self.ui.scanDatasetTable.setHorizontalHeaderItem(
             DATA_DEV_COL, QTableWidgetItem("Dev"))
         self.ui.scanDatasetTable.setHorizontalHeaderItem(
@@ -37,18 +38,23 @@ class ScanFileOptionDialog(QDialog):
 
     def populate_scan_dataset(self, data_options):
         self.ui.scanDatasetTable.blockSignals(True)
-        self.config_widget.setRowCount(len(data_options))
-        for i, data_option in enumerate(data_options):
-            dev_item = self._get_table_uneditable_item(data_option['dev'])
-            name_item = self._get_table_uneditable_item(data_option['name'])
-            type_item = self._get_table_uneditable_item(str(data_option['type']))
-            save_item = self._get_table_checkbox_item(data_option['save'])
-            single_item = self._get_table_checkbox_item(data_option['single'])
-            self.ui.scanDatasetTable.setItem(i, DATA_DEV_COL, dev_item)
-            self.ui.scanDatasetTable.setItem(i, DATA_NAME_COL, name_item)
-            self.ui.scanDatasetTable.setItem(i, DATA_TYPE_COL, type_item)
-            self.ui.scanDatasetTable.setItem(i, DATA_SAVE_COL, save_item)
-            self.ui.scanDatasetTable.setItem(i, DATA_SINGLE_COL, single_item)
+        self.ui.scanDatasetTable.setRowCount(len(data_options))
+        i = 0
+        for dev_data_options in data_options.values():
+            for data_option in dev_data_options:
+                self.ui.scanDatasetTable.setRowCount(i + 1)
+                dev_item = self._get_table_uneditable_item(data_option['dev'])
+                name_item = self._get_table_uneditable_item(data_option['name'])
+                type_item = self._get_table_uneditable_item(str(data_option['type']))
+                save_item = self._get_table_checkbox_item(data_option['save'])
+                single_item = self._get_table_checkbox_item(data_option['single'])
+                self.ui.scanDatasetTable.setItem(i, DATA_DEV_COL, dev_item)
+                self.ui.scanDatasetTable.setItem(i, DATA_NAME_COL, name_item)
+                self.ui.scanDatasetTable.setItem(i, DATA_TYPE_COL, type_item)
+                self.ui.scanDatasetTable.setItem(i, DATA_SAVE_COL, save_item)
+                self.ui.scanDatasetTable.setItem(i, DATA_SINGLE_COL, single_item)
+
+                i += 1
 
         self.ui.scanDatasetTable.blockSignals(False)
 
@@ -66,13 +72,12 @@ class ScanFileOptionDialog(QDialog):
         return data_options
 
     def display(self, data_options):
-        loop = QEventLoop()
-        self.finished.connect(loop.quit)
         self.populate_scan_dataset(data_options)
-        self.show()
-        loop.exec()
 
-        return self.dump_data_options()
+        if self.exec() == QDialog.Accepted:
+            return self.dump_data_options()
+        else:
+            return {}
 
     @staticmethod
     def _get_table_uneditable_item(text):

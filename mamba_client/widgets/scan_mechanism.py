@@ -122,6 +122,7 @@ class ScanMechanismWidget(QWidget):
         self.ui.addPlanButton.clicked.connect(self.create_new_plan_clicked)
         self.ui.pauseButton.clicked.connect(self.pause_scan)
         self.ui.stopButton.clicked.connect(self.abort_scan)
+        self.ui.fileOptionButton.clicked.connect(self.display_scan_data_options_dialog)
 
         self.ui.pauseButton.setEnabled(False)
         self.ui.stopButton.setEnabled(False)
@@ -256,6 +257,7 @@ class ScanMechanismWidget(QWidget):
                 name_to_delete = self.ui.motorTableWidget.item(
                     row, MOTOR_NAME_COL).text()
                 del self.scanned_motors[name_to_delete]
+                del self.scan_data_options[name_to_delete]
                 self.ui.motorTableWidget.removeRow(row)
                 self.plan_changed()
         elif col == MOTOR_SETUP_COL:
@@ -351,6 +353,7 @@ class ScanMechanismWidget(QWidget):
         else:
             if not motor_id:
                 return
+            self.scan_data_options[motor_id] = self.prepare_scan_data_option(motor_id)
             self.scanned_motors[motor_id] = MotorScanInstruction(
                 name=motor_id,
                 start=start,
@@ -425,7 +428,7 @@ class ScanMechanismWidget(QWidget):
 
         self.ui.detectorTableWidget.blockSignals(True)
         self.scanned_detectors = []
-        self.scan_data_options = []
+        self.scan_data_options = {}
         for row in reversed(range(self.ui.detectorTableWidget.rowCount())):
             self.ui.detectorTableWidget.removeRow(row)
         self.add_detector()
@@ -504,12 +507,17 @@ class ScanMechanismWidget(QWidget):
 
     def display_scan_data_options_dialog(self):
         dialog = ScanFileOptionDialog()
+
+        print(self.scan_data_options)
+
         scan_data_options = dialog.display(self.scan_data_options)
 
         for sdo in scan_data_options:
             for dev_sdo in self.scan_data_options[sdo['dev']]:
                 if dev_sdo['name'] == sdo['name']:
                     dev_sdo.update(sdo)
+
+        print(self.scan_data_options)
 
     def scan_status_update(self, name, scan_id, value, timestamp):
         self.update_status_sig.emit(name, scan_id,

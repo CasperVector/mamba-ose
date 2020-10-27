@@ -121,18 +121,19 @@ class FileSection:
 
 class FileWriterHostI(FileWriterHost, DataClientCallback):
     def __init__(self, writer_type, device_mgr: DeviceManagerI,
-                 _dir, prefix, name_pattern):
+                 _dir, prefix, name_pattern, single_dev_name_pattern):
         super().__init__()
         self.logger = mamba_server.logger
         self.writer_type = writer_type
         self.dir = _dir
         self.prefix = prefix
         self.pattern = name_pattern
+        self.single_dev_name_pattern = single_dev_name_pattern
         self.dev_mgr = device_mgr
 
         self.ongoing_scan_id = -1
         self.main_writer = None
-        self.aux_writers = []
+        self.aux_writers = {}
 
         self.env_sections = {}
         self.data_items = {}
@@ -175,6 +176,8 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
 
     @client_verify
     def updateScanDataOptions(self, sdos: List[ScanDataOption], current=None):
+        self.logger.debug("SDO updated: ")
+        self.logger.debug(sdos)
         self.scan_data_options = {sdo.name: sdo for sdo in sdos}
 
     def scan_start(self, _id, data_descriptors: List[DataDescriptor]):
@@ -197,13 +200,16 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
             if des.name in self.scan_data_options and \
                     self.scan_data_options[des.name].save:
 
-                writer = None
                 if not self.scan_data_options[des.name].single_file:
                     writer = self.main_writer
                 else:
-                    name = self.pattern.format(prefix=self.prefix,
-                                               scan_id=_id,
-                                               session=mamba_server.session_start_at)
+                    name = self.single_dev_name_pattern.format(
+                        prefix=self.prefix,
+                        scan_id=_id,
+                        session=mamba_server.session_start_at,
+                        dev=self.scan_data_options[des.name].dev,
+                        source=des.name
+                    )
                     path = os.path.join(self.dir, name)
                     writer = self.writer_type(path)
                     writer.add_section("data")
@@ -222,17 +228,25 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
             self.main_writer = None
 
         if self.aux_writers:
-            for writer in self.aux_writers:
+            for writer in self.aux_writers.values():
                 writer.close_file()
-            self.aux_writers = []
+            self.aux_writers = {}
 
         self.ongoing_scan_id = -1
 
     def data_update(self, frames):
         if self.ongoing_scan_id > 0:
             for frame in frames:
-                self.main_writer.append_data("data", frame.name,
-                                             data_frame_to_value(frame))
+                if frame.name not in self.scan_data_options:
+                    continue
+                if frame.name in self.aux_writers:
+                    self.aux_writers[frame.name].append_data(
+                        "data", frame.name,
+                        data_frame_to_value(frame)
+                    )
+                else:
+                    self.main_writer.append_data("data", frame.name,
+                                                 data_frame_to_value(frame))
 
     def populate_env_items(self):
         for env_section in self.env_sections:
@@ -257,7 +271,8 @@ def initialize(adapter,
         device_mgr,
         mamba_server.config['files']['dir'],
         mamba_server.config['files']['prefix'],
-        mamba_server.config['files']['name_pattern']
+        mamba_server.config['files']['name_pattern'],
+        mamba_server.config['files']['name_pattern_with_source']
     )
 
     data_router.local_register_client("FileWriter",

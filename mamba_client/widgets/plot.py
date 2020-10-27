@@ -72,7 +72,11 @@ class PlotWidget(QWidget):
              for name, data_set in self.data_sets.items()]
         )
 
-        names, colors, self.xsource = data_source_select_dialog.display()
+        ret = data_source_select_dialog.display()
+        if not ret:
+            return
+
+        names, colors, self.xsource = ret
 
         for cbk in self.registered_data_callbacks:
             self.data_client.stop_requesting_data(cbk)
@@ -304,16 +308,14 @@ class PlotDataSelectDialog(QDialog):
         self.done(QDialog.Accepted)
 
     def display(self):
-        loop = QEventLoop()
-        self.finished.connect(loop.quit)
-        self.show()
-        loop.exec()
+        if self.exec() == QDialog.Accepted:
+            for i in range(self.name_table_widget.rowCount()):
+                if self.name_table_widget.item(i, X_COL).checkState() == Qt.Checked:
+                    self.x_source = self.source_names[i]
 
-        for i in range(self.name_table_widget.rowCount()):
-            if self.name_table_widget.item(i, X_COL).checkState() == Qt.Checked:
-                self.x_source = self.source_names[i]
-
-        return self.source_names, self.colors, self.x_source
+            return self.source_names, self.colors, self.x_source
+        else:
+            return []
 
     @staticmethod
     def _get_table_uneditable_item(text):
