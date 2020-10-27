@@ -6,6 +6,7 @@ from MambaICE.Dashboard import (TerminalHost, TerminalClientPrx, UnauthorizedErr
                                 TerminalEventHandler)
 import mamba_server
 from utils import general_utils
+from termqt import TerminalBuffer
 from mamba_server.experiment_subproc.subprocess_spawn import IPythonTerminalIO
 from mamba_server.session_manager import set_connection_closed_callback
 
@@ -19,6 +20,8 @@ class TerminalHostI(TerminalHost):
         self.conn_to_client = {}
         self.logger = mamba_server.logger
         self.event_hdl = event_hdl
+        self.terminal_buffer = TerminalBuffer(80, 24, self.logger)
+        self.spawn()
 
     @client_verify
     def registerClient(self, client: TerminalClientPrx, current):
@@ -40,8 +43,6 @@ class TerminalHostI(TerminalHost):
 
     def spawn(self):
         if not self._terminal:
-            from secrets import token_hex
-            event_token = token_hex(8)
             access_endpoint = general_utils.get_internal_endpoint()
             print(access_endpoint)
 
@@ -51,6 +52,7 @@ class TerminalHostI(TerminalHost):
 
             self._terminal.stdout_callback = self._stdout_callback
             self._terminal.terminated_callback = self._terminated_callback
+            self.terminal_buffer.stdin_callback = self.terminal.write
             self._terminal.spawn()
             self.logger.info("Terminal thread spawned, waiting for event "
                              "emitters to attach.")
@@ -66,9 +68,11 @@ class TerminalHostI(TerminalHost):
 
     @client_verify
     def resize(self, rows, cols, current):
+        self.terminal_buffer.resize(rows, cols)
         self.terminal.resize(rows, cols)
 
-    def _stdout_callback(self, s: str):
+    def _stdout_callback(self, s):
+        self.terminal_buffer.stdout(s)
         for client in self.clients:
             try:
                 client.stdout(s)
