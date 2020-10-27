@@ -112,7 +112,7 @@ class DeviceQueryI(dict, DeviceQuery):
 
         for cpt_name in cpt_lists:
             cpt = self.resolve_component(dev, cpt_name)
-            des = list(cpt.describe().values())
+            des = list(cpt.describe().values()) if cpt else None
             if des:
                 field = des[0]
                 _type = string_to_type(field['dtype'])
@@ -136,7 +136,7 @@ class DeviceQueryI(dict, DeviceQuery):
 
         for cpt_name in cpt_lists:
             cpt = self.resolve_component(dev, cpt_name)
-            des = list(cpt.describe().values())
+            des = list(cpt.describe().values()) if cpt else None
             if des:
                 field = des[0]
                 _type = string_to_type(field['dtype'])
@@ -164,6 +164,9 @@ class DeviceQueryI(dict, DeviceQuery):
             else:
                 _cpt = getattr(_cpt, split[0])
                 _name = split[1]
+
+        if hasattr(cpt, "component_names"):
+            return None
 
         return cpt
 
