@@ -89,7 +89,8 @@ class DataRouterRecvI(DataRouterRecv):
                     to_send.append(frame)
             if to_send:
                 try:
-                    self.data_router.logger.info(f"Forward data frames {frames} to {client}")
+                    names = [frame.name for frame in frames]
+                    self.data_router.logger.info(f"Forward data frames {names} to {client}")
                     if client.is_remote:
                         client.prx.dataUpdate(to_send)
                     else:
