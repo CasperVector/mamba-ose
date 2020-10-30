@@ -88,7 +88,7 @@ def main():
                                                       general_utils.get_bind_endpoint())
         mamba_server.public_adapter = public_adapter
 
-        internal_adapter = ic.createObjectAdapterWithEndpoints("MambaServerInternal",
+        internal_adapter = iic.createObjectAdapterWithEndpoints("MambaServerInternal",
                                                                general_utils.get_internal_endpoint())
         mamba_server.internal_adapter = internal_adapter
 

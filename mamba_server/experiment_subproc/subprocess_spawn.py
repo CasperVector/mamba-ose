@@ -78,18 +78,21 @@ def start_experiment_subprocess(host_endpoint):
             communicator.stringToProxy(
                 f"TerminalEventHandler:{host_endpoint}").ice_connectionId("MambaExperimentSubproc")
         )
+        event_hdl.ice_ping()
 
         event_hdl.attach(adapter.getEndpoints()[0].getInfo().port)
 
         data_router = DataRouterRecvPrx.checkedCast(
             communicator.stringToProxy(f"DataRouterRecv:{host_endpoint}").ice_connectionId("MambaExperimentSubproc")
         )
+        data_router.ice_ping()
         data_callback = DataDispatchCallback(data_router)
 
         experiment_subproc.device_manager = DeviceManagerInternalPrx.checkedCast(
             communicator.stringToProxy(f"DeviceManagerInternal:{host_endpoint}")
                 .ice_connectionId("MambaExperimentSubproc")
         )
+        experiment_subproc.device_manager.ice_ping()
 
         while True:
             from traitlets.config.loader import Config
