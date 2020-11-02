@@ -31,13 +31,14 @@ def string_to_type(string):
         return DataType.Array
 
 
-def to_data_frame(name, _type: DataType, value, timestamp=None):
+def to_data_frame(name, cpt, _type: DataType, value, timestamp=None):
     if not timestamp:
         timestamp = time.time()
 
     if _type == DataType.Float:
         return FloatDataFrame(
             name=name,
+            component=cpt,
             type=DataType.Float,
             timestamp=timestamp,
             value=float(value)
@@ -45,6 +46,7 @@ def to_data_frame(name, _type: DataType, value, timestamp=None):
     elif _type == DataType.Integer:
         return IntegerDataFrame(
             name=name,
+            component=cpt,
             type=DataType.Integer,
             timestamp=timestamp,
             value=int(value)
@@ -52,16 +54,17 @@ def to_data_frame(name, _type: DataType, value, timestamp=None):
     elif _type == DataType.String:
         return StringDataFrame(
             name=name,
+            component=cpt,
             type=DataType.String,
             timestamp=timestamp,
             value=str(value)
         )
     else:
         assert _type == DataType.Array, f"Wrong Type {_type}"
-        return to_array_data_frame(name, value, timestamp)
+        return to_array_data_frame(name, cpt, value, timestamp)
 
 
-def to_array_data_frame(name, array, timestamp):
+def to_array_data_frame(name, cpt, array, timestamp):
     if isinstance(array, str):
         array = json.loads(array)
 
@@ -70,6 +73,7 @@ def to_array_data_frame(name, array, timestamp):
     packed_array = np_array.flatten().astype(np.double)  # TODO: Typed Array!
     return ArrayDataFrame(
         name=name,
+        component=cpt,
         type=DataType.Array,
         shape=shape,
         timestamp=timestamp,
@@ -95,6 +99,7 @@ def data_frame_to_descriptor(data_frame):
 
     return DataDescriptor(
         name=data_frame.name,
+        component=data_frame.component,
         type=data_frame.type,
         shape=shape
     )

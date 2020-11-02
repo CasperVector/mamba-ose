@@ -67,6 +67,7 @@ class MotorWidget(QWidget):
             self.motor_id,
             to_data_frame(
                 "",
+                "",
                 DataType.Float,
                 float(self.ui.targetAbsEdit.text())
             )

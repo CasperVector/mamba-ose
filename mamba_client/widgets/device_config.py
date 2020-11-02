@@ -72,6 +72,7 @@ class DeviceConfigWidget(QWidget):
                     self.device_id,
                     to_data_frame(
                         old.name,
+                        old.component,
                         old.type,
                         value_str,
                         time.time()

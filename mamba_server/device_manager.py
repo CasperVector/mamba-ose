@@ -152,12 +152,12 @@ class DeviceManagerI(dict, DeviceManager):
                 type_str = 'motors'
             elif device.type == DeviceType.Detector:
                 type_str = 'dets'
-            config_name = frame.name
+            config_name = frame.component
 
             config_val = data_frame_to_value(frame).__repr__()
 
             if type_str:
-                command = f"{type_str}.{name}.{config_name}.set({config_val})"
+                command = f"{type_str}.{name}.{config_name}.set({config_val}).wait()"
                 self.terminal.emitCommand(command)
         else:
             v_dev = self.virtual_device[name]
@@ -176,7 +176,7 @@ class DeviceManagerI(dict, DeviceManager):
         val = data_frame_to_value(frame).__repr__()
 
         if type_str:
-            command = f"{type_str}.{name}.set({val})"
+            command = f"{type_str}.{name}.set({val}).wait()"
             self.terminal.emitCommand(command)
 
 

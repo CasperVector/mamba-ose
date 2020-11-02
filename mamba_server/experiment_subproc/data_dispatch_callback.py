@@ -27,6 +27,7 @@ class DataDispatchCallback(CallbackBase):
 
         data_descriptors = [
             DataDescriptor(key,
+                           "",
                            des['dtype'],
                            des['shape']) for key, des in keys.items()
         ]
@@ -40,6 +41,7 @@ class DataDispatchCallback(CallbackBase):
             data_frames.append(
                 to_data_frame(
                     key,
+                    "",
                     self.data_keys[key]['dtype'],
                     value,
                     doc['timestamps'][key])

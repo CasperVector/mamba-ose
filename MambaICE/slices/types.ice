@@ -11,6 +11,7 @@ module MambaICE {
 
     struct DataDescriptor {
         string name;
+        string component;
         DataType type;
         Shape shape;
     };
@@ -18,6 +19,7 @@ module MambaICE {
 
     class TypedDataFrame {
         string name;
+        string component;
         DataType type;
         double timestamp;
     };

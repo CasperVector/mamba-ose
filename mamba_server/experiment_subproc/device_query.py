@@ -88,8 +88,8 @@ class DeviceQueryI(dict, DeviceQuery):
         dev = self[dev_name]
         return self.get_device_field_descriptions(dev, Kind.read)
 
-    def getDeviceFieldValue(self, dev_name, field_name, current=None):
-        return self.get_device_field_value(self[dev_name], field_name)
+    def getDeviceFieldValue(self, dev_name, component_name, current=None):
+        return self.get_device_field_value(self[dev_name], component_name)
 
     def listDevices(self, current=None):
         """ICE function"""
@@ -118,10 +118,11 @@ class DeviceQueryI(dict, DeviceQuery):
                     _type = string_to_type(field['dtype'])
                     if 'enum_strs' in field:
                         _type = DataType.String
-                    field_val = list(cpt.read().values())[0]
+                    field_val = cpt.read()[key]
                     fields.append(
                         to_data_frame(
                             key,
+                            cpt_name,
                             _type,
                             field_val['value'],
                             timestamp=field_val['timestamp']
@@ -145,6 +146,7 @@ class DeviceQueryI(dict, DeviceQuery):
                     fields.append(
                         DataDescriptor(
                             name=key,
+                            component=cpt_name,
                             type=_type,
                             shape=field['shape']
                         )
@@ -170,22 +172,23 @@ class DeviceQueryI(dict, DeviceQuery):
 
         return cpt
 
-    def get_device_field_value(self, dev, field_name) -> TypedDataFrame:
-        if "." in field_name:
-            cpt, attr = field_name.split(".", 1)
+    def get_device_field_value(self, dev, cpt_name) -> TypedDataFrame:
+        if "." in cpt_name:
+            cpt, attr = cpt_name.split(".", 1)
             return self.get_device_field_value(getattr(dev, cpt), attr)
 
-        cpt = getattr(dev, field_name)
+        cpt = getattr(dev, cpt_name)
 
-        des = list(cpt.describe().values())
+        des = cpt.describe()
         if des:
-            field = des[0]
+            field = des.keys()[0]
             _type = string_to_type(field['dtype'])
             if 'enum_strs' in field:
                 _type = DataType.String
             field_val = list(cpt.read().values())[0]
             return to_data_frame(
-                field_name,
+                field,
+                cpt_name,
                 _type,
                 field_val['value'],
                 timestamp=field_val['timestamp']
