@@ -112,21 +112,21 @@ class DeviceQueryI(dict, DeviceQuery):
 
         for cpt_name in cpt_lists:
             cpt = self.resolve_component(dev, cpt_name)
-            des = list(cpt.describe().values()) if cpt else None
+            des = cpt.describe() if cpt else None
             if des:
-                field = des[0]
-                _type = string_to_type(field['dtype'])
-                if 'enum_strs' in field:
-                    _type = DataType.String
-                field_val = list(cpt.read().values())[0]
-                fields.append(
-                    to_data_frame(
-                        cpt_name,
-                        _type,
-                        field_val['value'],
-                        timestamp=field_val['timestamp']
+                for key, field in des.items():
+                    _type = string_to_type(field['dtype'])
+                    if 'enum_strs' in field:
+                        _type = DataType.String
+                    field_val = list(cpt.read().values())[0]
+                    fields.append(
+                        to_data_frame(
+                            key,
+                            _type,
+                            field_val['value'],
+                            timestamp=field_val['timestamp']
+                        )
                     )
-                )
 
         return fields
 
@@ -136,19 +136,19 @@ class DeviceQueryI(dict, DeviceQuery):
 
         for cpt_name in cpt_lists:
             cpt = self.resolve_component(dev, cpt_name)
-            des = list(cpt.describe().values()) if cpt else None
+            des = cpt.describe() if cpt else None
             if des:
-                field = des[0]
-                _type = string_to_type(field['dtype'])
-                if 'enum_strs' in field:
-                    _type = DataType.String
-                fields.append(
-                    DataDescriptor(
-                        name=cpt_name,
-                        type=_type,
-                        shape=field['shape']
+                for key, field in des.items():
+                    _type = string_to_type(field['dtype'])
+                    if 'enum_strs' in field:
+                        _type = DataType.String
+                    fields.append(
+                        DataDescriptor(
+                            name=key,
+                            type=_type,
+                            shape=field['shape']
+                        )
                     )
-                )
 
         return fields
 

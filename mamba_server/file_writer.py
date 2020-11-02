@@ -176,8 +176,8 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
 
     @client_verify
     def updateScanDataOptions(self, sdos: List[ScanDataOption], current=None):
-        self.logger.debug("SDO updated: ")
-        self.logger.debug(sdos)
+        self.logger.info("SDO updated: ")
+        self.logger.info(sdos)
         self.scan_data_options = {sdo.name: sdo for sdo in sdos}
 
     def scan_start(self, _id, data_descriptors: List[DataDescriptor]):
@@ -238,6 +238,8 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
         if self.ongoing_scan_id > 0:
             for frame in frames:
                 if frame.name not in self.scan_data_options:
+                    print(frame)
+                    print(self.scan_data_options)
                     continue
                 if frame.name in self.aux_writers:
                     self.aux_writers[frame.name].append_data(
