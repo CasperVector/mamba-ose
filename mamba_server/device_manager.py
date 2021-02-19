@@ -26,7 +26,6 @@ else:
 import mamba_server
 from utils.data_utils import (TypedDataFrame, DataDescriptor, DataType,
                               data_frame_to_value, data_frame_to_descriptor)
-from .virtual_device import VirtualDevice
 
 client_verify = mamba_server.verify
 
@@ -88,8 +87,6 @@ class DeviceManagerI(dict, DeviceManager):
                       in data_frames]
             )
         self.device_type_lookup[name] = DeviceType.Virtual
-
-        self.virtual_device[name] = VirtualDevice(data_frames)
 
     @client_verify
     def listDevices(self, current=None):
