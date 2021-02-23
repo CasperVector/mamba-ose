@@ -5,13 +5,11 @@ from abc import ABC
 
 import Ice
 import IcePy
-from MambaICE.Dashboard import DataRouter, DataRouterRecv, DataClient, UnauthorizedError
+from MambaICE.Dashboard import DataRouter, DataRouterRecv, DataClient
 from utils.data_utils import DataDescriptor, TypedDataFrame
 from mamba_server.session_manager import set_connection_closed_callback
 
 import mamba_server
-
-client_verify = mamba_server.verify
 
 Client = namedtuple("Client", ["is_remote", "prx", "callback"])
 # is_remote: bool, specify the client is Remote or Local.
@@ -122,7 +120,6 @@ class DataRouterI(DataRouter):
         self.scan_id = 0
         self.recv_interface = None
 
-    @client_verify
     def registerClient(self, client: DataClient, current=None):
         self.logger.info("Remote data client connected: "
                          + Ice.identityToString(client.ice_getIdentity()))
@@ -152,17 +149,14 @@ class DataRouterI(DataRouter):
     def remove_data_processor(self, data_processor: DataProcessor):
         self.data_process_chain.remove(data_processor)
 
-    @client_verify
     def subscribe(self, items, current=None):
         client = self.conn_to_client[current.con]
         self.subscription[client] = items
 
-    @client_verify
     def subscribeAll(self, current=None):
         client = self.conn_to_client[current.con]
         self.subscription[client] = ["*"]
 
-    @client_verify
     def unsubscribe(self, items, current=None):
         client = self.conn_to_client[current.con]
         for item in items:

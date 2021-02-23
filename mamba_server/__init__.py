@@ -1,7 +1,5 @@
 import logging
 
-from .session_manager import verify
-
 try:
     logger
 except NameError:

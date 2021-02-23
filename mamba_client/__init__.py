@@ -4,9 +4,7 @@ from .widgets.ui import rc_icons
 logger = None
 config = None
 
-credentials = ("", "")
 session = None
-
 terminal_host = None
 device_manager = None
 
@@ -23,20 +21,16 @@ if hasattr(MambaICE.Dashboard, 'DeviceManagerPrx') and \
         hasattr(MambaICE.Dashboard, 'TerminalHostPrx') and \
         hasattr(MambaICE.Dashboard, 'ScanManagerPrx') and \
         hasattr(MambaICE.Dashboard, 'SessionManagerPrx') and \
-        hasattr(MambaICE.Dashboard, 'FileWriterHostPrx') and \
-        hasattr(MambaICE.Dashboard, 'UnauthorizedError')\
-    :
+        hasattr(MambaICE.Dashboard, 'FileWriterHostPrx'):
         from MambaICE.Dashboard import (DeviceManagerPrx, DataClient,
                                         DataRouterPrx, DataClientPrx,
                                         TerminalHostPrx, ScanManagerPrx,
-                                        SessionManagerPrx, FileWriterHostPrx,
-                                        UnauthorizedError)
+                                        SessionManagerPrx, FileWriterHostPrx)
 else:
     from MambaICE.dashboard_ice import (DeviceManagerPrx, DataClient,
                                         DataRouterPrx, DataClientPrx,
                                         TerminalHostPrx, ScanManagerPrx,
-                                        SessionManagerPrx, FileWriterHostPrx,
-                                        UnauthorizedError)
+                                        SessionManagerPrx, FileWriterHostPrx)
 
 if hasattr(MambaICE, 'DeviceType') and hasattr(MambaICE, 'DataType') and \
         hasattr(MambaICE, 'TypedDataFrame') and \

@@ -1,17 +1,13 @@
-from functools import wraps
 import threading
 
 import Ice
-from MambaICE.Dashboard import (TerminalHost, TerminalClientPrx, UnauthorizedError,
+from MambaICE.Dashboard import (TerminalHost, TerminalClientPrx,
                                 TerminalEventHandler)
 import mamba_server
 from utils import general_utils
 from termqt import TerminalBuffer
 from mamba_server.experiment_subproc.subprocess_spawn import IPythonTerminalIO
 from mamba_server.session_manager import set_connection_closed_callback
-
-client_verify = mamba_server.verify
-
 
 class TerminalHostI(TerminalHost):
     def __init__(self, event_hdl: 'TerminalEventHandlerI'):
@@ -23,7 +19,6 @@ class TerminalHostI(TerminalHost):
         self.terminal_buffer = TerminalBuffer(80, 24, self.logger)
         self.spawn()
 
-    @client_verify
     def registerClient(self, client: TerminalClientPrx, current):
         self.logger.info("Terminal mamba_client connected: "
                          + Ice.identityToString(client.ice_getIdentity()))
@@ -57,16 +52,13 @@ class TerminalHostI(TerminalHost):
             self.logger.info("Terminal thread spawned, waiting for event "
                              "emitters to attach.")
 
-    @client_verify
     def emitCommand(self, cmd, current=None):
         self.event_hdl.idle.wait()
         self.terminal.write(b'\x15' + cmd.encode('utf-8') + b'\r')
 
-    @client_verify
     def stdin(self, s: bytes, current=None):
         self.terminal.write(s)
 
-    @client_verify
     def resize(self, rows, cols, current):
         self.terminal_buffer.resize(rows, cols)
         self.terminal.resize(rows, cols)

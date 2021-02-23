@@ -15,16 +15,12 @@ from utils.data_utils import data_frame_to_value, DataType, DataDescriptor
 
 if hasattr(MambaICE.Dashboard, 'FileWriterHost') and \
         hasattr(MambaICE.Dashboard, 'FileWriterDataItem') and \
-        hasattr(MambaICE.Dashboard, 'ScanDataOption') and \
-        hasattr(MambaICE.Dashboard, 'UnauthorizedError'):
-    from MambaICE.Dashboard import (FileWriterHost, UnauthorizedError,
+        hasattr(MambaICE.Dashboard, 'ScanDataOption'):
+    from MambaICE.Dashboard import (FileWriterHost,
                                     ScanDataOption, FileWriterDataItem)
 else:
-    from MambaICE.dashboard_ice import (FileWriterHost, UnauthorizedError,
+    from MambaICE.dashboard_ice import (FileWriterHost,
                                         ScanDataOption, FileWriterDataItem)
-
-client_verify = mamba_server.verify
-
 
 class FileWriter(ABC):
     def __init__(self, filepath):
@@ -143,20 +139,16 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
     def set_scan_data_options(self):
         pass
 
-    @client_verify
     def setDirectory(self, _dir, current=None):
         self.dir = _dir
 
-    @client_verify
     def addEnvironmentSection(self, section_name, current=None):
         self.env_sections[section_name] = FileSection(section_name)
 
-    @client_verify
     def addEnvironmentItems(self, section_name, items: List[FileWriterDataItem],
                             current=None):
         self.env_sections[section_name].data_items.extend(items)
 
-    @client_verify
     def removeEnvironmentItem(self, section_name, item: FileWriterDataItem,
                               current=None):
         sections = self.env_sections
@@ -170,11 +162,9 @@ class FileWriterHostI(FileWriterHost, DataClientCallback):
         if to_remove >= 0:
             del sections[section_name][to_remove]
 
-    @client_verify
     def removeAllEnvironmentItems(self, section_name, current=None):
         self.env_sections[section_name].data_items = []
 
-    @client_verify
     def updateScanDataOptions(self, sdos: List[ScanDataOption], current=None):
         self.logger.info("SDO updated: ")
         self.logger.info(sdos)

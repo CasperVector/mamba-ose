@@ -6,11 +6,10 @@ import Ice
 import MambaICE
 
 if hasattr(MambaICE.Dashboard, 'DeviceManager') and \
-        hasattr(MambaICE.Dashboard, 'DeviceManagerInternal') and \
-        hasattr(MambaICE.Dashboard, 'UnauthorizedError'):
-    from MambaICE.Dashboard import DeviceManager, DeviceManagerInternal, UnauthorizedError
+        hasattr(MambaICE.Dashboard, 'DeviceManagerInternal'):
+    from MambaICE.Dashboard import DeviceManager, DeviceManagerInternal
 else:
-    from MambaICE.dashboard_ice import DeviceManager, DeviceManagerInternal, UnauthorizedError
+    from MambaICE.dashboard_ice import DeviceManager, DeviceManagerInternal
 
 if hasattr(MambaICE, 'DeviceType') and \
         hasattr(MambaICE, 'DeviceEntry'):
@@ -26,9 +25,6 @@ else:
 import mamba_server
 from utils.data_utils import (TypedDataFrame, DataDescriptor, DataType,
                               data_frame_to_value, data_frame_to_descriptor)
-
-client_verify = mamba_server.verify
-
 
 class DeviceManagerInternalI(DeviceManagerInternal):
     def __init__(self, dev_mgr):
@@ -73,7 +69,6 @@ class DeviceManagerI(dict, DeviceManager):
 
         return self.internal_interface
 
-    @client_verify
     def addVirtualDevice(self, name, data_frames, current=None):
         if name in self:
             self.logger.error(f"Duplicated device name: {name}")
@@ -88,12 +83,10 @@ class DeviceManagerI(dict, DeviceManager):
             )
         self.device_type_lookup[name] = DeviceType.Virtual
 
-    @client_verify
     def listDevices(self, current=None):
         """ICE function"""
         return list(self.values())
 
-    @client_verify
     def getDevicesByType(self, _type: DeviceType, current=None) -> List[DeviceEntry]:
         """ICE function"""
         dev_list = []
@@ -103,7 +96,6 @@ class DeviceManagerI(dict, DeviceManager):
 
         return dev_list
 
-    @client_verify
     def getDeviceConfigurations(self, name, current=None) -> List[TypedDataFrame]:
         """ICE function"""
         if name in self:
@@ -114,7 +106,6 @@ class DeviceManagerI(dict, DeviceManager):
         else:
             raise NameError(f"Unknown device {name}")
 
-    @client_verify
     def getDeviceReadings(self, name, current=None) -> List[TypedDataFrame]:
         """ICE function"""
         if name in self:
@@ -125,21 +116,18 @@ class DeviceManagerI(dict, DeviceManager):
         else:
             raise NameError(f"Unknown device {name}")
 
-    @client_verify
     def describeDeviceReadings(self, dev_name, current=None) -> List[DataDescriptor]:
         if dev_name in self:
             return self.host.describeDeviceReadings(dev_name)
         else:
             raise NameError(f"Unknown device {dev_name}")
 
-    @client_verify
     def getDeviceField(self, dev_name, field_name, current=None) -> TypedDataFrame:
         if dev_name in self:
             return self.host.getDeviceFieldValue(dev_name, field_name)
         else:
             raise NameError(f"Unknown device {dev_name}")
 
-    @client_verify
     def setDeviceConfiguration(self, name, frame: TypedDataFrame, current=None):
         """ICE function"""
         device: DeviceEntry = self[name]
@@ -160,7 +148,6 @@ class DeviceManagerI(dict, DeviceManager):
             v_dev = self.virtual_device[name]
             v_dev[name] = frame
 
-    @client_verify
     def setDeviceValue(self, name, frame: TypedDataFrame, current=None):
         """ICE function"""
         device: DeviceEntry = self[name]

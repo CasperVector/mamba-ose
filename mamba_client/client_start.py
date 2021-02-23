@@ -78,12 +78,8 @@ def main():
         #     session.login happens (which is identified by name "MambaClient").
 
         # TODO: login window
-        mamba_client.credentials = (
-            mamba_client.config['user']['username'],
-            mamba_client.config['user']['password']
-        )
         mamba_client.session = mamba_client.session_helper.initialize(
-            communicator, ice_endpoint, mw, mamba_client.credentials)
+            communicator, ice_endpoint, mw)
 
         mamba_client.data_client = DataClientI(communicator, ice_endpoint, logger)
 

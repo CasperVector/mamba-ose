@@ -4,10 +4,6 @@
 
 module MambaICE {
     module Dashboard {
-        exception UnauthorizedError {
-            string reason;
-        };
-
         enum ScanExitStatus { Success, Abort, Fail };
 
         // --- Client Side ---
@@ -24,16 +20,16 @@ module MambaICE {
         // --- Server Side ---
 
         interface SessionManager {
-            void login(string username, string password) throws UnauthorizedError;
+            void login();
             void logout();
         };
 
         interface TerminalHost {
-            void emitCommand(string cmd) throws UnauthorizedError;
-            void registerClient(TerminalClient* client) throws UnauthorizedError;
+            void emitCommand(string cmd);
+            void registerClient(TerminalClient* client);
 
-            void stdin(bytes s) throws UnauthorizedError;
-            void resize(int rows, int cols) throws UnauthorizedError;
+            void stdin(bytes s);
+            void resize(int rows, int cols);
         };
 
         // Handling the event emitted by underlying IPython shell and bluesky.
@@ -44,10 +40,10 @@ module MambaICE {
         };
 
         interface DataRouter {
-            void registerClient(DataClient* client) throws UnauthorizedError;
-            void subscribe(strings items) throws UnauthorizedError;
-            void subscribeAll() throws UnauthorizedError;
-            void unsubscribe(strings items) throws UnauthorizedError;
+            void registerClient(DataClient* client);
+            void subscribe(strings items);
+            void subscribeAll();
+            void unsubscribe(strings items);
         };
 
         interface DataRouterRecv {

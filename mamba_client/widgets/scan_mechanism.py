@@ -20,15 +20,12 @@ from .ui.ui_scanmechanismwidget import Ui_ScanMechanicsWidget
 if hasattr(MambaICE.Dashboard, 'ScanManagerPrx') and \
         hasattr(MambaICE.Dashboard, 'MotorScanInstruction') and \
         hasattr(MambaICE.Dashboard, 'ScanDataOption') and \
-        hasattr(MambaICE.Dashboard, 'ScanInstruction') and \
-        hasattr(MambaICE.Dashboard, 'UnauthorizedError'):
+        hasattr(MambaICE.Dashboard, 'ScanInstruction'):
     from MambaICE.Dashboard import (ScanManagerPrx, MotorScanInstruction,
-                                    ScanInstruction, ScanDataOption,
-                                    UnauthorizedError)
+                                    ScanInstruction, ScanDataOption)
 else:
     from MambaICE.dashboard_ice import (ScanManagerPrx, MotorScanInstruction,
-                                        ScanInstruction, ScanDataOption,
-                                        UnauthorizedError)
+                                        ScanInstruction, ScanDataOption)
 
 from utils.data_utils import DataDescriptor
 

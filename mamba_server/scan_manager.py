@@ -16,23 +16,17 @@ from utils import general_utils
 if hasattr(MambaICE.Dashboard, 'ScanManager') and \
         hasattr(MambaICE.Dashboard, 'MotorScanInstruction') and \
         hasattr(MambaICE.Dashboard, 'ScanInstruction') and \
-        hasattr(MambaICE.Dashboard, 'ScanExitStatus') and \
-        hasattr(MambaICE.Dashboard, 'UnauthorizedError'):
+        hasattr(MambaICE.Dashboard, 'ScanExitStatus'):
     from MambaICE.Dashboard import (ScanManager, MotorScanInstruction,
-                                    ScanInstruction, ScanExitStatus,
-                                    UnauthorizedError)
+                                    ScanInstruction, ScanExitStatus)
 else:
     from MambaICE.dashboard_ice import (ScanManager, MotorScanInstruction,
-                                        ScanInstruction, ScanExitStatus,
-                                        UnauthorizedError)
+                                        ScanInstruction, ScanExitStatus)
 
 if hasattr(MambaICE.Experiment, 'ScanControllerPrx'):
     from MambaICE.Experiment import ScanControllerPrx
 else:
     from MambaICE.experiment_ice import ScanControllerPrx
-
-
-client_verify = mamba_server.verify
 
 PAUSED = 1
 RESUMED = 2
@@ -208,25 +202,20 @@ class ScanManagerI(ScanManager):
         else:
             raise RuntimeError("There's other scan running at this moment.")
 
-    @client_verify
     def getScanPlan(self, name, current=None) -> ScanInstruction:
         if name in self.plans:
             return self.plans[name]
 
-    @client_verify
     def listScanPlans(self, current=None) -> List[str]:
         return list(self.plans.keys())
 
-    @client_verify
     def setScanPlan(self, name, instruction, current=None):
         self.plans[name] = instruction
         self.save_plan(name, instruction)
 
-    @client_verify
     def runScan(self, name, current=None):
         self.run_scan_plan(self.plans[name])
 
-    @client_verify
     def pauseScan(self, current=None):
         if self.scan_running and not self.scan_paused:
             self.scan_paused = True
@@ -234,7 +223,6 @@ class ScanManagerI(ScanManager):
             self.data_router.get_recv_interface().pushData(
                 [to_data_frame("__scan_paused", "", DataType.Integer, PAUSED, time.time())])
 
-    @client_verify
     def resumeScan(self, current=None):
         if self.scan_paused:
             self.data_router.get_recv_interface().pushData(
@@ -242,7 +230,6 @@ class ScanManagerI(ScanManager):
             self.terminal.emitCommand("RE.resume()")
             self.scan_paused = False
 
-    @client_verify
     def terminateScan(self, current=None):
         self.scan_running = False
         self.scan_controller.abort()
