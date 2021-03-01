@@ -102,17 +102,6 @@ def start_experiment_subprocess(host_endpoint):
             cfg = Config()
             ipshell = InteractiveShellEmbed(config=cfg)
 
-            # Insert event hook
-            ipshell.events.register('pre_run_cell',
-                                    lambda info:
-                                    event_hdl.enterExecution(info.raw_cell)
-                                    )
-            ipshell.events.register('post_run_cell',
-                                    lambda result:
-                                    event_hdl.leaveExecution(
-                                        str(result.result))
-                                    )
-
             banner = f"** Mamba's IPython shell, with bluesky integration" \
                      f"\n   RunEngine has been initialized as RE."
 

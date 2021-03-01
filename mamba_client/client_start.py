@@ -13,7 +13,6 @@ from utils import general_utils
 import mamba_client
 import mamba_client.session_helper
 from mamba_client.main_window import MainWindow
-from mamba_client.widgets.terminal import TerminalWidget
 from mamba_client.widgets.plot import PlotWidget
 from mamba_client.widgets.plot_2d import Plot2DWidget
 from mamba_client.data_client import DataClientI
@@ -105,12 +104,6 @@ def main():
                                  mamba_client.device_manager,
                                  mw)
                              )
-            mw.add_widget("Terminal",
-                          TerminalWidget.get_init_func(
-                              communicator,
-                              mamba_client.terminal_host,
-                              mamba_client.logger)
-                          )
             mw.add_widget("Plot1D",
                           PlotWidget.get_init_func(mamba_client.data_client)
                           )
@@ -130,7 +123,6 @@ def main():
             mw.set_layout({
                 ("left", "Motor"),
                 ("left", "Scan Mechanism"),
-                ("left", "Terminal"),
                 ("right", "Plot1D"),
                 ("right", "Plot2D")
             })

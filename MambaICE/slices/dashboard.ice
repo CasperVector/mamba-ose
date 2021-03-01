@@ -6,11 +6,6 @@ module MambaICE {
     module Dashboard {
         enum ScanExitStatus { Success, Abort, Fail };
 
-        // --- Client Side ---
-        interface TerminalClient {
-            void stdout(bytes s);
-        };
-
         interface DataClient {
             void scanStart(int id, DataDescriptors keys);
             void dataUpdate(TypedDataFrames data);
@@ -26,17 +21,10 @@ module MambaICE {
 
         interface TerminalHost {
             void emitCommand(string cmd);
-            void registerClient(TerminalClient* client);
-
-            void stdin(bytes s);
-            void resize(int rows, int cols);
         };
 
-        // Handling the event emitted by underlying IPython shell and bluesky.
         interface TerminalEventHandler {
             void attach(int port);
-            void enterExecution(string cmd);
-            void leaveExecution(string result);
         };
 
         interface DataRouter {
