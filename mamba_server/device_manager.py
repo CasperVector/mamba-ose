@@ -47,7 +47,6 @@ class DeviceManagerI(dict, DeviceManager):
         super().__init__(self)
         self.logger = mamba_server.logger
         self.device_type_lookup = {}
-        self.virtual_device = {}
         self._host = None
         self.communicator = communicator
         self.terminal = terminal
@@ -69,50 +68,21 @@ class DeviceManagerI(dict, DeviceManager):
 
         return self.internal_interface
 
-    def addVirtualDevice(self, name, data_frames, current=None):
-        if name in self:
-            self.logger.error(f"Duplicated device name: {name}")
-            return
-
-        self[name] = DeviceEntry(
-            name=name,
-            type=DeviceType.Virtual,
-            configs=[],
-            readings=[data_frame_to_descriptor(data_frame) for data_frame
-                      in data_frames]
-            )
-        self.device_type_lookup[name] = DeviceType.Virtual
-
     def listDevices(self, current=None):
         """ICE function"""
         return list(self.values())
 
-    def getDevicesByType(self, _type: DeviceType, current=None) -> List[DeviceEntry]:
-        """ICE function"""
-        dev_list = []
-        for name, dev_type in self.device_type_lookup.items():
-            if dev_type == _type:
-                dev_list.append(self[name])
-
-        return dev_list
-
     def getDeviceConfigurations(self, name, current=None) -> List[TypedDataFrame]:
         """ICE function"""
         if name in self:
-            if self[name].type == DeviceType.Virtual:
-                return self.virtual_device[name].values()
-            else:
-                return self.host.getDeviceConfigurations(name)
+            return self.host.getDeviceConfigurations(name)
         else:
             raise NameError(f"Unknown device {name}")
 
     def getDeviceReadings(self, name, current=None) -> List[TypedDataFrame]:
         """ICE function"""
         if name in self:
-            if self[name].type == DeviceType.Virtual:
-                return self.virtual_device[name].values()
-            else:
-                return self.host.getDeviceReadings(name)
+            return self.host.getDeviceReadings(name)
         else:
             raise NameError(f"Unknown device {name}")
 
@@ -132,21 +102,17 @@ class DeviceManagerI(dict, DeviceManager):
         """ICE function"""
         device: DeviceEntry = self[name]
         type_str = None
-        if device.type != DeviceType.Virtual:
-            if device.type == DeviceType.Motor:
-                type_str = 'motors'
-            elif device.type == DeviceType.Detector:
-                type_str = 'dets'
-            config_name = frame.component
+        if device.type == DeviceType.Motor:
+            type_str = 'motors'
+        elif device.type == DeviceType.Detector:
+            type_str = 'dets'
+        config_name = frame.component
 
-            config_val = data_frame_to_value(frame).__repr__()
+        config_val = data_frame_to_value(frame).__repr__()
 
-            if type_str:
-                command = f"{type_str}.{name}.{config_name}.set({config_val}).wait()"
-                self.terminal.emitCommand(command)
-        else:
-            v_dev = self.virtual_device[name]
-            v_dev[name] = frame
+        if type_str:
+            command = f"{type_str}.{name}.{config_name}.set({config_val}).wait()"
+            self.terminal.emitCommand(command)
 
     def setDeviceValue(self, name, frame: TypedDataFrame, current=None):
         """ICE function"""

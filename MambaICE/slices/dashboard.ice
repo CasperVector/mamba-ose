@@ -42,7 +42,6 @@ module MambaICE {
 
         interface DeviceManager {
             DeviceEntries listDevices();
-            strings getDevicesByType(string type);
             TypedDataFrames getDeviceConfigurations(string name);
             TypedDataFrames getDeviceReadings(string name);
             DataDescriptors describeDeviceReadings(string name);
@@ -50,8 +49,6 @@ module MambaICE {
 
             void setDeviceConfiguration(string name, TypedDataFrame frame);
             void setDeviceValue(string name, TypedDataFrame frame);
-
-            void addVirtualDevice(string name, TypedDataFrames frames);
         };
 
         interface DeviceManagerInternal {

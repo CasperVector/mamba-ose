@@ -8,7 +8,6 @@ module MambaICE {
 
         interface DeviceQuery {
             DeviceEntries listDevices();
-            DeviceEntries getDevicesByType(string type);
             TypedDataFrames getDeviceConfigurations(string name);
             TypedDataFrames getDeviceReadings(string name);
             DataDescriptors describeDeviceReadings(string name);

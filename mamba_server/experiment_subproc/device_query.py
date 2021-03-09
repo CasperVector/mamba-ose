@@ -48,22 +48,6 @@ class DeviceQueryI(dict, DeviceQuery):
     def push_devices_to_host(self, host):
         host.addDevices(self.listDevices())
 
-    def getDevicesByType(self, _type, current=None) -> List[DeviceEntry]:
-        """ICE function"""
-        dev_list = []
-        for name, dev in self.items():
-            if self.device_type_lookup[name] == _type:
-                dev_list.append(
-                    DeviceEntry(
-                        name=name,
-                        type=self.device_type_lookup[name],
-                        configs=self.get_device_field_descriptions(dev, Kind.config),
-                        readings=self.get_device_field_descriptions(dev, Kind.hinted)
-                    )
-                )
-
-        return dev_list
-
     def getDeviceConfigurations(self, dev_name, current=None) -> List[TypedDataFrame]:
         """ICE function"""
         if dev_name not in self:
