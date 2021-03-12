@@ -9,6 +9,9 @@ session_start_at = ""
 
 logger = None
 config = None
+state = None
+mzs = None
+mrc = None
 
 public_communicator = None
 internal_communicator = None

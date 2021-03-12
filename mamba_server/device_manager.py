@@ -1,3 +1,4 @@
+import mamba_server
 import struct
 from functools import wraps
 from typing import List
@@ -111,8 +112,8 @@ class DeviceManagerI(dict, DeviceManager):
         config_val = data_frame_to_value(frame).__repr__()
 
         if type_str:
-            command = f"{type_str}.{name}.{config_name}.set({config_val}).wait()"
-            self.terminal.emitCommand(command)
+            command = f"{type_str}.{name}.{config_name}.set({config_val}).wait()\n"
+            mamba_server.mrc.do_cmd(command)
 
     def setDeviceValue(self, name, frame: TypedDataFrame, current=None):
         """ICE function"""
@@ -126,8 +127,8 @@ class DeviceManagerI(dict, DeviceManager):
         val = data_frame_to_value(frame).__repr__()
 
         if type_str:
-            command = f"{type_str}.{name}.set({val}).wait()"
-            self.terminal.emitCommand(command)
+            command = f"{type_str}.{name}.set({val}).wait()\n"
+            mamba_server.mrc.do_cmd(command)
 
 
 def initialize(internal_ic, public_adapter, internal_adapter, terminal):

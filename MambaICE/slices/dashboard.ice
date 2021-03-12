@@ -20,7 +20,6 @@ module MambaICE {
         };
 
         interface TerminalHost {
-            void emitCommand(string cmd);
         };
 
         interface TerminalEventHandler {

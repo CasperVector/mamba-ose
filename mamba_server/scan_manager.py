@@ -81,6 +81,7 @@ class ScanManagerI(ScanManager):
                  data_router: DataRouterI):
         self.logger = mamba_server.logger
         self.terminal = terminal
+        self.mrc = mamba_server.mrc
         self.data_router = data_router
         self.communicator = communicator
         self.plan_dir = plan_dir
@@ -165,10 +166,10 @@ class ScanManagerI(ScanManager):
         det_str = str(dets).replace("'", "")
         command = ""
         if len(plan.motors) > 1:
-            commands.append("from bluesky.plans import grid_scan")
+            commands.append("from bluesky.plans import grid_scan\n")
             command += f"RE(grid_scan({det_str},\n"
         else:
-            commands.append("from bluesky.plans import scan")
+            commands.append("from bluesky.plans import scan\n")
             command += f"RE(scan({det_str},\n"
 
         for motor in plan.motors:
@@ -176,7 +177,7 @@ class ScanManagerI(ScanManager):
                        f"{float(motor.stop)}, {int(motor.point_num)},\n"
 
         command = command[:-2]
-        command += "))"
+        command += "))\n"
 
         commands.append(command)
 
@@ -198,7 +199,7 @@ class ScanManagerI(ScanManager):
             self.scan_status_processor.scan_start(
                 self.calculate_scan_steps(plan))
             for cmd in self.generate_scan_command(plan):
-                self.terminal.emitCommand(cmd)
+                self.mrc.do_cmd(cmd)
         else:
             raise RuntimeError("There's other scan running at this moment.")
 
@@ -227,7 +228,7 @@ class ScanManagerI(ScanManager):
         if self.scan_paused:
             self.data_router.get_recv_interface().pushData(
                 [to_data_frame("__scan_paused", "", DataType.Integer, RESUMED, time.time())])
-            self.terminal.emitCommand("RE.resume()")
+            self.mrc.do_cmd("RE.resume()\n")
             self.scan_paused = False
 
     def terminateScan(self, current=None):

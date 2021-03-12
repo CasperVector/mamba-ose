@@ -2,6 +2,7 @@ import os
 import datetime
 import logging
 import Ice
+from .zserver import ZServer, ZrClient
 
 import mamba_server
 import mamba_server.session_manager as session_manager
@@ -16,6 +17,10 @@ from utils import general_utils
 
 
 def server_start(config_filename = None):
+    mamba_server.state = object()
+    mamba_server.mzs = ZServer(5678, mamba_server.state)
+    mamba_server.mzs.start()
+    mamba_server.mrc = ZrClient(5678)
     mamba_server.session_start_at = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
     # --- Ice properties setup ---

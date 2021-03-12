@@ -5,13 +5,8 @@ import mamba_server
 from utils import general_utils
 
 class TerminalHostI(TerminalHost):
-    def __init__(self, port, event_hdl):
-        self.sock = zmq.Context().socket(zmq.REQ)
-        self.sock.connect("tcp://127.0.0.1:%d" % port)
+    def __init__(self, event_hdl):
         self.event_hdl = event_hdl
-
-    def emitCommand(self, cmd, current=None):
-        self.sock.send(cmd.encode("UTF-8") + b"\n")
 
     def get_slave_endpoint(self):
         return general_utils.format_endpoint("127.0.0.1",
@@ -28,7 +23,7 @@ class TerminalEventHandlerI(TerminalEventHandler):
 
 def initialize(public_adapter, internal_adapter):
     event_hdl = TerminalEventHandlerI()
-    mamba_server.terminal = TerminalHostI(5678, event_hdl)
+    mamba_server.terminal = TerminalHostI(event_hdl)
     public_adapter.add(mamba_server.terminal,
                        Ice.stringToIdentity("TerminalHost"))
     internal_adapter.add(event_hdl,
