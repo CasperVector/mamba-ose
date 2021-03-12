@@ -1,6 +1,5 @@
 import os
 import datetime
-import argparse
 import logging
 import Ice
 
@@ -11,22 +10,15 @@ import mamba_server.data_router as data_router
 import mamba_server.device_manager as device_manager
 import mamba_server.file_writer as file_writer
 import mamba_server.scan_manager as scan_manager
+from mamba_server.experiment_subproc.subprocess_spawn \
+    import start_experiment_subprocess
 from utils import general_utils
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="The host of Mamba application."
-    )
-    parser.add_argument("-c", "--config", dest="config", type=str,
-                        default=None, help="the path to the config file")
-
-    args = parser.parse_args()
-
+def server_start(config_filename = None):
     mamba_server.session_start_at = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
     # --- Ice properties setup ---
-
     public_ice_props = Ice.createProperties()
     internal_ice_props = Ice.createProperties()
 
@@ -62,50 +54,48 @@ def main():
     int_ice_init_data = Ice.InitializationData()
     int_ice_init_data.properties = internal_ice_props
 
-    with Ice.initialize(pub_ice_init_data) as ic, Ice.initialize(int_ice_init_data) as iic:
-        mamba_server.public_communicator = ic
-        mamba_server.internal_communicator = iic
-        mamba_server.logger = logger = logging.getLogger()
+    ic = Ice.initialize(pub_ice_init_data)
+    iic = Ice.initialize(int_ice_init_data)
+    mamba_server.public_communicator = ic
+    mamba_server.internal_communicator = iic
+    mamba_server.logger = logger = logging.getLogger()
 
-        if args.config:
-            assert os.path.exists(args.config), "Invalid config path!"
-            logger.info(f"Loading config file {args.config}")
-            mamba_server.config_filename = args.config
-        elif os.path.exists("server_config.yaml"):
-            logger.info(f"Loading config file ./server_config.yaml")
-            mamba_server.config_filename = "server_config.yaml"
-        else:
-            logger.warning("No config file discovered. Using the default one.")
-            mamba_server.config_filename = general_utils.solve_filepath(
-                "server_config.yaml", os.path.realpath(__file__))
+    if config_filename:
+        assert os.path.exists(config_filename), "Invalid config path!"
+        logger.info(f"Loading config file {config_filename}")
+        mamba_server.config_filename = config_filename
+    elif os.path.exists("server_config.yaml"):
+        logger.info(f"Loading config file ./server_config.yaml")
+        mamba_server.config_filename = "server_config.yaml"
+    else:
+        logger.warning("No config file discovered. Using the default one.")
+        mamba_server.config_filename = general_utils.solve_filepath(
+            "server_config.yaml", os.path.realpath(__file__))
 
-        mamba_server.config = general_utils.load_config(
-            mamba_server.config_filename)
-        general_utils.setup_logger(logger)
+    mamba_server.config = general_utils.load_config(
+        mamba_server.config_filename)
+    general_utils.setup_logger(logger, mamba_server.config['logging']['logfile'])
 
-        mamba_server.logger.info(f"Server started. Bind at {general_utils.get_bind_endpoint()}.")
-        public_adapter = ic.createObjectAdapterWithEndpoints("MambaServer",
-                                                      general_utils.get_bind_endpoint())
-        mamba_server.public_adapter = public_adapter
+    mamba_server.logger.info(f"Server started. Bind at {general_utils.get_bind_endpoint()}.")
+    public_adapter = ic.createObjectAdapterWithEndpoints("MambaServer",
+                                                  general_utils.get_bind_endpoint())
+    mamba_server.public_adapter = public_adapter
 
-        internal_adapter = iic.createObjectAdapterWithEndpoints("MambaServerInternal",
-                                                               general_utils.get_internal_endpoint())
-        mamba_server.internal_adapter = internal_adapter
+    internal_adapter = iic.createObjectAdapterWithEndpoints("MambaServerInternal",
+                                                           general_utils.get_internal_endpoint())
+    mamba_server.internal_adapter = internal_adapter
 
-        session_manager.initialize(ic, public_adapter)
-        terminal.initialize(public_adapter, internal_adapter)
-        data_router.initialize(public_adapter, internal_adapter)
-        device_manager.initialize(iic, public_adapter, internal_adapter, mamba_server.terminal)
-        file_writer.initialize(public_adapter,
-                               mamba_server.device_manager,
-                               mamba_server.data_router)
-        scan_manager.initialize(ic, public_adapter, mamba_server.terminal,
-                                mamba_server.data_router)
+    session_manager.initialize(ic, public_adapter)
+    terminal.initialize(public_adapter, internal_adapter)
+    data_router.initialize(public_adapter, internal_adapter)
+    device_manager.initialize(iic, public_adapter, internal_adapter, mamba_server.terminal)
+    file_writer.initialize(public_adapter,
+                           mamba_server.device_manager,
+                           mamba_server.data_router)
+    scan_manager.initialize(ic, public_adapter, mamba_server.terminal,
+                            mamba_server.data_router)
 
-        public_adapter.activate()
-        internal_adapter.activate()
+    public_adapter.activate()
+    internal_adapter.activate()
+    start_experiment_subprocess(general_utils.get_internal_endpoint())
 
-        try:
-            ic.waitForShutdown()
-        except KeyboardInterrupt:
-            pass

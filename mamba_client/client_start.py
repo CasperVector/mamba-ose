@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import os
 import logging
 import argparse
@@ -133,3 +135,7 @@ def main():
 
         finally:
             mamba_client.session.logout()
+
+if __name__ == "__main__":
+    main()
+

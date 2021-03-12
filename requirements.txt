@@ -1,14 +1,12 @@
 bluesky
 h5py
-ipython
 matplotlib
 numpy
 ophyd
 pexpect
 PyQt5
 pyqtgraph
+pyzmq
 setuptools
-traitlets
-termqt
 zeroc-ice
 

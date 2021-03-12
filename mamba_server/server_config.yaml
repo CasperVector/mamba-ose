@@ -5,11 +5,7 @@ network:
   protocol: tcp
 
 logging:
-  logfile:
-  experiment_subproc_logfile: logs/experiment.log
-
-device:
-  init_module: user_scripts.device_init_example
+  logfile: mamba.log
 
 scan:
   plan_storage: "plans/"

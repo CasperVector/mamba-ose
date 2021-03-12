@@ -2,6 +2,7 @@ import logging
 
 logger: logging.Logger
 
+data_callback = None
 slave_adapter = None
 
 device_manager = None

@@ -30,9 +30,12 @@ def load_config(path):
         return yaml.safe_load(f)
 
 
-def setup_logger(logger, level=logging.INFO):
+def setup_logger(logger, logfile=None, level=logging.INFO):
     logger.setLevel(level)
-    handler = logging.StreamHandler()
+    if logfile:
+        handler = logging.FileHandler(logfile)
+    else:
+        handler = logging.StreamHandler()
     formatter = logging.Formatter(
                 "[%(asctime)s %(levelname)s] "
                 "[%(filename)s:%(lineno)d] %(message)s"
