@@ -77,13 +77,3 @@ def get_bind_endpoint():
         mamba_server.config['network']['protocol']
     )
 
-
-def get_internal_endpoint():
-    if mamba_server.internal_adapter:
-        return mamba_server.internal_adapter.getEndpoints()[0].toString()
-
-    return format_endpoint(
-        '127.0.0.1',
-        0,
-        'tcp'
-    )

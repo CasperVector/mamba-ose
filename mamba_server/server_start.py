@@ -24,19 +24,13 @@ def server_start(config_filename = None):
 
     # --- Ice properties setup ---
     public_ice_props = Ice.createProperties()
-    internal_ice_props = Ice.createProperties()
 
     # ACM setup for bidirectional connections.
     public_ice_props.setProperty("Ice.ACM.Close", "4")  # CloseOnIdleForceful
-    internal_ice_props.setProperty("Ice.ACM.Close", "4")
     public_ice_props.setProperty("Ice.ACM.Heartbeat", "0")  # HeartbeatOff
-    internal_ice_props.setProperty("Ice.ACM.Heartbeat", "0")
     public_ice_props.setProperty("Ice.ACM.Timeout", "30")
-    internal_ice_props.setProperty("Ice.ACM.Timeout", "10")
 
     public_ice_props.setProperty("Ice.MessageSizeMax", "10000")  # 10000KB ~ 10MB
-    internal_ice_props.setProperty("Ice.MessageSizeMax", "100000")  # 100000KB ~ 100MB
-
     # Increase the thread pool, to handle nested RPC calls
     # If the thread pool is exhausted, new RPC call will block the mamba_server.
     # When a deadlock happens, one can use
@@ -48,20 +42,12 @@ def server_start(config_filename = None):
     public_ice_props.setProperty("Ice.ThreadPool.Client.SizeMax", "10")
     public_ice_props.setProperty("Ice.ThreadPool.Server.Size", "1")
     public_ice_props.setProperty("Ice.ThreadPool.Server.SizeMax", "10")
-    internal_ice_props.setProperty("Ice.ThreadPool.Client.Size", "1")
-    internal_ice_props.setProperty("Ice.ThreadPool.Client.SizeMax", "10")
-    internal_ice_props.setProperty("Ice.ThreadPool.Server.Size", "1")
-    internal_ice_props.setProperty("Ice.ThreadPool.Server.SizeMax", "10")
 
     pub_ice_init_data = Ice.InitializationData()
     pub_ice_init_data.properties = public_ice_props
-    int_ice_init_data = Ice.InitializationData()
-    int_ice_init_data.properties = internal_ice_props
 
     ic = Ice.initialize(pub_ice_init_data)
-    iic = Ice.initialize(int_ice_init_data)
     mamba_server.public_communicator = ic
-    mamba_server.internal_communicator = iic
     mamba_server.logger = logger = logging.getLogger()
 
     if config_filename:
@@ -80,19 +66,14 @@ def server_start(config_filename = None):
         mamba_server.config_filename)
     general_utils.setup_logger(logger, mamba_server.config['logging']['logfile'])
 
-    mamba_server.logger.info(f"Server started. Bind at {general_utils.get_bind_endpoint()}.")
-    public_adapter = ic.createObjectAdapterWithEndpoints("MambaServer",
-                                                  general_utils.get_bind_endpoint())
+    public_endpoint = general_utils.get_bind_endpoint()
+    mamba_server.logger.info(f"Server started. Bind at {public_endpoint}.")
+    public_adapter = ic.createObjectAdapterWithEndpoints("MambaServer", public_endpoint)
     mamba_server.public_adapter = public_adapter
 
-    internal_endpoint = general_utils.get_internal_endpoint()
-    internal_adapter = iic.createObjectAdapterWithEndpoints("MambaServerInternal",
-                                                           internal_endpoint)
-    mamba_server.internal_adapter = internal_adapter
-
     session_manager.initialize(ic, public_adapter)
-    data_router.initialize(public_adapter, internal_adapter)
-    device_manager.initialize(ic, public_adapter, internal_adapter)
+    data_router.initialize(public_adapter)
+    device_manager.initialize(ic, public_adapter)
     file_writer.initialize(public_adapter,
                            mamba_server.device_manager,
                            mamba_server.data_router)
@@ -100,6 +81,5 @@ def server_start(config_filename = None):
                             mamba_server.data_router)
 
     public_adapter.activate()
-    internal_adapter.activate()
     start_experiment_subprocess()
 

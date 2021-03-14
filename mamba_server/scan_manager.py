@@ -226,10 +226,10 @@ class ScanManagerI(ScanManager):
         #self.data_router.scanEnd(ScanExitStatus.Abort)
 
 
-def initialize(internal_communicator, adapter, data_router: DataRouterI):
+def initialize(public_communicator, adapter, data_router: DataRouterI):
     mamba_server.scan_manager = ScanManagerI(
         mamba_server.config['scan']['plan_storage'],
-        internal_communicator,  # TODO: too ugly. refactor the exp process spawn mechanism
+        public_communicator,  # TODO: too ugly. refactor the exp process spawn mechanism
         data_router
     )
 

@@ -18,7 +18,7 @@ def start_experiment_subprocess():
     device_query.initialize()
     scan_controller.initialize()
     experiment_subproc.data_callback = DataDispatchCallback(mamba_server.data_router)
-    experiment_subproc.device_manager = mamba_server.device_manager.get_internal_interface()
+    experiment_subproc.device_manager = mamba_server.device_manager
 
 
 def post_start(RE, motors, dets):

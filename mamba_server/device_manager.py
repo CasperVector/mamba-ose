@@ -6,11 +6,10 @@ from typing import List
 import Ice
 import MambaICE
 
-if hasattr(MambaICE.Dashboard, 'DeviceManager') and \
-        hasattr(MambaICE.Dashboard, 'DeviceManagerInternal'):
-    from MambaICE.Dashboard import DeviceManager, DeviceManagerInternal
+if hasattr(MambaICE.Dashboard, 'DeviceManager'):
+    from MambaICE.Dashboard import DeviceManager
 else:
-    from MambaICE.dashboard_ice import DeviceManager, DeviceManagerInternal
+    from MambaICE.dashboard_ice import DeviceManager
 
 if hasattr(MambaICE, 'DeviceType') and \
         hasattr(MambaICE, 'DeviceEntry'):
@@ -22,22 +21,6 @@ import mamba_server
 from utils.data_utils import (TypedDataFrame, DataDescriptor, DataType,
                               data_frame_to_value, data_frame_to_descriptor)
 
-class DeviceManagerInternalI(DeviceManagerInternal):
-    def __init__(self, dev_mgr):
-        self.dev_mgr = dev_mgr
-
-    def addDevices(self, entries: List[DeviceEntry], current=None):
-        """ICE function"""
-        self.dev_mgr.logger.info("Received device list from experiment subproc:")
-        self.dev_mgr.logger.info(entries)
-        for entry in entries:
-            if entry.name in self.dev_mgr:
-                self.dev_mgr.logger.error(f"Duplicated device name: {entry.name}")
-                continue
-            self.dev_mgr[entry.name] = entry
-            self.dev_mgr.device_type_lookup[entry.name] = entry.type
-
-
 class DeviceManagerI(dict, DeviceManager):
     def __init__(self, communicator):
         super().__init__(self)
@@ -45,19 +28,12 @@ class DeviceManagerI(dict, DeviceManager):
         self.device_type_lookup = {}
         self._host = None
         self.communicator = communicator
-        self.internal_interface = None
 
     @property
     def host(self):
         if self._host is None:
             self._host = mamba_server.experiment_subproc.device_query_obj
         return self._host
-
-    def get_internal_interface(self):
-        if not self.internal_interface:
-            self.internal_interface = DeviceManagerInternalI(self)
-
-        return self.internal_interface
 
     def listDevices(self, current=None):
         """ICE function"""
@@ -120,13 +96,19 @@ class DeviceManagerI(dict, DeviceManager):
             command = f"{type_str}.{name}.set({val}).wait()\n"
             mamba_server.mrc.do_cmd(command)
 
+    def addDevices(self, entries: List[DeviceEntry], current=None):
+        """ICE function"""
+        self.logger.info("Received device list from experiment subproc:")
+        self.logger.info(entries)
+        for entry in entries:
+            if entry.name in self:
+                self.logger.error(f"Duplicated device name: {entry.name}")
+                continue
+            self[entry.name] = entry
+            self.device_type_lookup[entry.name] = entry.type
 
-def initialize(internal_ic, public_adapter, internal_adapter):
-    mamba_server.device_manager = DeviceManagerI(internal_ic)
-
+def initialize(public_ic, public_adapter):
+    mamba_server.device_manager = DeviceManagerI(public_ic)
     public_adapter.add(mamba_server.device_manager,
                        Ice.stringToIdentity("DeviceManager"))
-    internal_adapter.add(mamba_server.device_manager.get_internal_interface(),
-                         Ice.stringToIdentity("DeviceManagerInternal"))
-
     mamba_server.logger.info("DeviceManager initialized.")

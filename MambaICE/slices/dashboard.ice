@@ -42,9 +42,6 @@ module MambaICE {
 
             void setDeviceConfiguration(string name, TypedDataFrame frame);
             void setDeviceValue(string name, TypedDataFrame frame);
-        };
-
-        interface DeviceManagerInternal {
             void addDevices(DeviceEntries entries);
         };
 
