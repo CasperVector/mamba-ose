@@ -4,6 +4,7 @@
 
 module MambaICE {
     module Dashboard {
+        exception UnknownDeviceException { };
         enum ScanExitStatus { Success, Abort, Fail };
 
         interface DataClient {
@@ -17,13 +18,6 @@ module MambaICE {
         interface SessionManager {
             void login();
             void logout();
-        };
-
-        interface TerminalHost {
-        };
-
-        interface TerminalEventHandler {
-            void attach(int port);
         };
 
         interface DataRouter {

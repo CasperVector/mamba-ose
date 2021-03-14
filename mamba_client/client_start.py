@@ -5,7 +5,7 @@ import logging
 import argparse
 
 import Ice
-from mamba_client import (SessionManagerPrx, DeviceManagerPrx, TerminalHostPrx,
+from mamba_client import (SessionManagerPrx, DeviceManagerPrx,
                           ScanManagerPrx, FileWriterHostPrx)
 
 from PyQt5.QtWidgets import QApplication
@@ -87,10 +87,6 @@ def main():
         mamba_client.device_manager = DeviceManagerPrx.checkedCast(
             communicator.stringToProxy(f"DeviceManager:{ice_endpoint}")
                 .ice_connectionId("MambaClient"))
-        mamba_client.terminal_host = TerminalHostPrx.checkedCast(
-            communicator.stringToProxy(f"TerminalHost:{ice_endpoint}")
-                        .ice_connectionId("MambaClient")
-        )
         mamba_client.scan_manager = ScanManagerPrx.checkedCast(
             communicator.stringToProxy(f"ScanManager:{ice_endpoint}")
                 .ice_connectionId("MambaClient")

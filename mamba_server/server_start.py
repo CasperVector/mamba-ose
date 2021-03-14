@@ -6,7 +6,6 @@ from .zserver import ZServer, ZrClient
 
 import mamba_server
 import mamba_server.session_manager as session_manager
-import mamba_server.terminal_host as terminal
 import mamba_server.data_router as data_router
 import mamba_server.device_manager as device_manager
 import mamba_server.file_writer as file_writer
@@ -86,21 +85,21 @@ def server_start(config_filename = None):
                                                   general_utils.get_bind_endpoint())
     mamba_server.public_adapter = public_adapter
 
+    internal_endpoint = general_utils.get_internal_endpoint()
     internal_adapter = iic.createObjectAdapterWithEndpoints("MambaServerInternal",
-                                                           general_utils.get_internal_endpoint())
+                                                           internal_endpoint)
     mamba_server.internal_adapter = internal_adapter
 
     session_manager.initialize(ic, public_adapter)
-    terminal.initialize(public_adapter, internal_adapter)
     data_router.initialize(public_adapter, internal_adapter)
-    device_manager.initialize(iic, public_adapter, internal_adapter, mamba_server.terminal)
+    device_manager.initialize(ic, public_adapter, internal_adapter)
     file_writer.initialize(public_adapter,
                            mamba_server.device_manager,
                            mamba_server.data_router)
-    scan_manager.initialize(ic, public_adapter, mamba_server.terminal,
+    scan_manager.initialize(ic, public_adapter,
                             mamba_server.data_router)
 
     public_adapter.activate()
     internal_adapter.activate()
-    start_experiment_subprocess(general_utils.get_internal_endpoint())
+    start_experiment_subprocess()
 

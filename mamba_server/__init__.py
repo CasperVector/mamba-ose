@@ -20,7 +20,6 @@ public_adapter = None
 internal_adapter = None
 
 session = None
-terminal = None
 data_router = None
 device_manager = None
 file_writer_host = None

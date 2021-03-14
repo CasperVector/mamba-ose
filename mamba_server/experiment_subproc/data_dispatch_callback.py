@@ -2,13 +2,13 @@ from utils.data_utils import string_to_type, to_data_frame
 
 from MambaICE import (DataType, DataDescriptor, TypedDataFrame, StringDataFrame,
                       FloatDataFrame, IntegerDataFrame, ArrayDataFrame)
-from MambaICE.Dashboard import DataRouterPrx, ScanExitStatus
+from MambaICE.Dashboard import ScanExitStatus
 
 from bluesky.callbacks.core import CallbackBase, make_class_safe
 
 
 class DataDispatchCallback(CallbackBase):
-    def __init__(self, data_host: DataRouterPrx):
+    def __init__(self, data_host):
         super().__init__()
         self.data_host = data_host
         self.data_keys = {}

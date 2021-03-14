@@ -18,11 +18,6 @@ if hasattr(MambaICE, 'DeviceType') and \
 else:
     from MambaICE.types_ice import (DeviceType, DeviceEntry)
 
-if hasattr(MambaICE.Experiment, 'DeviceQueryPrx'):
-    from MambaICE.Experiment import DeviceQueryPrx
-else:
-    from MambaICE.experiment_ice import DeviceQueryPrx
-
 import mamba_server
 from utils.data_utils import (TypedDataFrame, DataDescriptor, DataType,
                               data_frame_to_value, data_frame_to_descriptor)
@@ -44,23 +39,18 @@ class DeviceManagerInternalI(DeviceManagerInternal):
 
 
 class DeviceManagerI(dict, DeviceManager):
-    def __init__(self, communicator, terminal):
+    def __init__(self, communicator):
         super().__init__(self)
         self.logger = mamba_server.logger
         self.device_type_lookup = {}
         self._host = None
         self.communicator = communicator
-        self.terminal = terminal
         self.internal_interface = None
 
     @property
-    def host(self) -> DeviceQueryPrx:
+    def host(self):
         if self._host is None:
-            self._host = DeviceQueryPrx.checkedCast(
-                self.communicator.stringToProxy(
-                    f"DeviceQuery:{self.terminal.get_slave_endpoint()}")
-            )
-            self.logger.info("Create proxy to DeviceQuery.")
+            self._host = mamba_server.experiment_subproc.device_query_obj
         return self._host
 
     def get_internal_interface(self):
@@ -131,8 +121,8 @@ class DeviceManagerI(dict, DeviceManager):
             mamba_server.mrc.do_cmd(command)
 
 
-def initialize(internal_ic, public_adapter, internal_adapter, terminal):
-    mamba_server.device_manager = DeviceManagerI(internal_ic, terminal)
+def initialize(internal_ic, public_adapter, internal_adapter):
+    mamba_server.device_manager = DeviceManagerI(internal_ic)
 
     public_adapter.add(mamba_server.device_manager,
                        Ice.stringToIdentity("DeviceManager"))

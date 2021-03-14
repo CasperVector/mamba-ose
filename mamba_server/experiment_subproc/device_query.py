@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 import struct
 
 import MambaICE
-import MambaICE.Experiment
+import MambaICE.Dashboard
 from utils.data_utils import string_to_type, to_data_frame
 
 # Fool the linter. The else branch will never be executed, but leave it here
@@ -18,11 +18,10 @@ else:
     from MambaICE.types_ice import (DeviceType, DataType, TypedDataFrame,
                                     DataDescriptor, DeviceEntry)
 
-if hasattr(MambaICE.Experiment, 'UnknownDeviceException') and \
-        hasattr(MambaICE.Experiment, 'DeviceQuery'):
-    from MambaICE.Experiment import UnknownDeviceException, DeviceQuery
+if hasattr(MambaICE.Dashboard, 'UnknownDeviceException'):
+    from MambaICE.Dashboard import UnknownDeviceException
 else:
-    from MambaICE.experiment_ice import UnknownDeviceException, DeviceQuery
+    from MambaICE.dashboard_ice import UnknownDeviceException
 
 from enum import Enum
 
@@ -32,7 +31,7 @@ class Kind(Enum):
     read = 1
 
 
-class DeviceQueryI(dict, DeviceQuery):
+class DeviceQueryI(dict):
     def __init__(self, typed_device_dict=None):
         super().__init__(self)
         self.device_type_lookup = {}
@@ -181,10 +180,7 @@ class DeviceQueryI(dict, DeviceQuery):
         raise Exception("No field description found.")
 
 
-def initialize(communicator, adapter):
+def initialize():
     import mamba_server.experiment_subproc
     device_query_obj = DeviceQueryI()
-    adapter.add(device_query_obj,
-                communicator.stringToIdentity("DeviceQuery"))
-
     mamba_server.experiment_subproc.device_query_obj = device_query_obj

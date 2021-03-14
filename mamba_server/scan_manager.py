@@ -6,7 +6,6 @@ import time
 import Ice
 import MambaICE
 import mamba_server
-from mamba_server.terminal_host import TerminalHostI
 from mamba_server.data_router import (DataClientCallback, DataProcessor,
                                       DataRouterI)
 from utils.data_utils import (TypedDataFrame, DataDescriptor, DataType,
@@ -22,11 +21,6 @@ if hasattr(MambaICE.Dashboard, 'ScanManager') and \
 else:
     from MambaICE.dashboard_ice import (ScanManager, MotorScanInstruction,
                                         ScanInstruction, ScanExitStatus)
-
-if hasattr(MambaICE.Experiment, 'ScanControllerPrx'):
-    from MambaICE.Experiment import ScanControllerPrx
-else:
-    from MambaICE.experiment_ice import ScanControllerPrx
 
 PAUSED = 1
 RESUMED = 2
@@ -77,10 +71,8 @@ class ScanManagerI(ScanManager):
             self.start_at = 0
 
     def __init__(self, plan_dir, communicator: Ice.Communicator,
-                 terminal: TerminalHostI,
                  data_router: DataRouterI):
         self.logger = mamba_server.logger
-        self.terminal = terminal
         self.mrc = mamba_server.mrc
         self.data_router = data_router
         self.communicator = communicator
@@ -103,10 +95,7 @@ class ScanManagerI(ScanManager):
     @property
     def scan_controller(self):
         if not self._scan_controller:
-            self._scan_controller = ScanControllerPrx.checkedCast(
-                self.communicator.stringToProxy(
-                    f"ScanController:{self.terminal.get_slave_endpoint()}")
-            )
+            self._scan_controller = mamba_server.experiment_subproc.scan_controller
         return self._scan_controller
 
     def load_all_plans(self):
@@ -237,13 +226,10 @@ class ScanManagerI(ScanManager):
         #self.data_router.scanEnd(ScanExitStatus.Abort)
 
 
-def initialize(internal_communicator, adapter,
-               terminal: TerminalHostI,
-               data_router: DataRouterI):
+def initialize(internal_communicator, adapter, data_router: DataRouterI):
     mamba_server.scan_manager = ScanManagerI(
         mamba_server.config['scan']['plan_storage'],
         internal_communicator,  # TODO: too ugly. refactor the exp process spawn mechanism
-        terminal,
         data_router
     )
 

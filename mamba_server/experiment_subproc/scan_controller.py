@@ -1,15 +1,6 @@
 import asyncio
-import MambaICE
-import MambaICE.Experiment
-from bluesky import RunEngine
 
-if hasattr(MambaICE.Experiment, 'ScanController'):
-    from MambaICE.Experiment import ScanController
-else:
-    from MambaICE.experiment_ice import ScanController
-
-
-class ScanControllerI(ScanController):
+class ScanControllerI(object):
     def __init__(self):
         self.RE = None
 
@@ -22,10 +13,7 @@ class ScanControllerI(ScanController):
     def halt(self, current=None):
         self.RE.halt()
 
-
-def initialize(communicator, adapter):
+def initialize():
     import mamba_server.experiment_subproc
     scan_controller_obj = ScanControllerI()
-    adapter.add(scan_controller_obj,
-                communicator.stringToIdentity("ScanController"))
     mamba_server.experiment_subproc.scan_controller_obj = scan_controller_obj
