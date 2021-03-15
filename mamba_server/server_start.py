@@ -4,18 +4,21 @@ import logging
 import Ice
 from .zserver import ZServer, ZrClient
 
+import MambaICE
 import mamba_server
 import mamba_server.session_manager as session_manager
 import mamba_server.data_router as data_router
 import mamba_server.device_manager as device_manager
 import mamba_server.file_writer as file_writer
 import mamba_server.scan_manager as scan_manager
-from mamba_server.experiment_subproc.subprocess_spawn \
-    import start_experiment_subprocess
 from utils import general_utils
 
+if hasattr(MambaICE, 'DeviceType'):
+    from MambaICE import DeviceType
+else:
+    from MambaICE.types_ice import DeviceType
 
-def server_start(config_filename = None):
+def server_start(RE, motors, dets):
     mamba_server.state = object()
     mamba_server.mzs = ZServer(5678, mamba_server.state)
     mamba_server.mzs.start()
@@ -50,11 +53,7 @@ def server_start(config_filename = None):
     mamba_server.public_communicator = ic
     mamba_server.logger = logger = logging.getLogger()
 
-    if config_filename:
-        assert os.path.exists(config_filename), "Invalid config path!"
-        logger.info(f"Loading config file {config_filename}")
-        mamba_server.config_filename = config_filename
-    elif os.path.exists("server_config.yaml"):
+    if os.path.exists("server_config.yaml"):
         logger.info(f"Loading config file ./server_config.yaml")
         mamba_server.config_filename = "server_config.yaml"
     else:
@@ -79,7 +78,14 @@ def server_start(config_filename = None):
                            mamba_server.data_router)
     scan_manager.initialize(ic, public_adapter,
                             mamba_server.data_router)
-
     public_adapter.activate()
-    start_experiment_subprocess()
+
+    devices = {DeviceType.Motor: motors, DeviceType.Detector: dets}
+    mamba_server.device_query_obj.load_devices(devices)
+    mamba_server.device_query_obj.push_devices_to_host(
+        mamba_server.device_manager
+    )
+    RE.subscribe(mamba_server.data_callback)
+    mamba_server.scan_controller_obj.RE = RE
+    return general_utils.AttrDict(motors), general_utils.AttrDict(dets)
 

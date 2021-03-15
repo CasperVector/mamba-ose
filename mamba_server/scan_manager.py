@@ -1,5 +1,6 @@
 import os
 from typing import List
+import asyncio
 import yaml
 import time
 
@@ -24,6 +25,20 @@ else:
 
 PAUSED = 1
 RESUMED = 2
+
+
+class ScanControllerI(object):
+    def __init__(self):
+        self.RE = None
+
+    def pause(self, current=None):
+        self.RE.request_pause()
+
+    def abort(self, current=None):
+        asyncio.run_coroutine_threadsafe(self.RE._abort_coro(""), loop=self.RE.loop)
+
+    def halt(self, current=None):
+        self.RE.halt()
 
 
 class ScanManagerI(ScanManager):
@@ -77,7 +92,7 @@ class ScanManagerI(ScanManager):
         self.data_router = data_router
         self.communicator = communicator
         self.plan_dir = plan_dir
-        self._scan_controller = None
+        self.scan_controller = mamba_server.scan_controller_obj
         self.plans = {}
 
         self.scan_status_processor = ScanManagerI.ScanStatusDataProcessor(self)
@@ -91,12 +106,6 @@ class ScanManagerI(ScanManager):
         self.ongoing_scan_id = -1
 
         self.load_all_plans()
-
-    @property
-    def scan_controller(self):
-        if not self._scan_controller:
-            self._scan_controller = mamba_server.experiment_subproc.scan_controller
-        return self._scan_controller
 
     def load_all_plans(self):
         if not os.path.exists(self.plan_dir):
@@ -227,6 +236,7 @@ class ScanManagerI(ScanManager):
 
 
 def initialize(public_communicator, adapter, data_router: DataRouterI):
+    mamba_server.scan_controller_obj = ScanControllerI()
     mamba_server.scan_manager = ScanManagerI(
         mamba_server.config['scan']['plan_storage'],
         public_communicator,  # TODO: too ugly. refactor the exp process spawn mechanism

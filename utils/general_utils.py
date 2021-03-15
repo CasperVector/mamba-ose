@@ -5,7 +5,6 @@ import logging
 
 import mamba_client
 import mamba_server
-import mamba_server.experiment_subproc
 
 
 class AttrDict(dict):
