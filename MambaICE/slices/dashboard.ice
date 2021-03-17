@@ -45,32 +45,6 @@ module MambaICE {
             void addDevices(DeviceEntries entries);
         };
 
-        struct FileWriterDataItem {
-            string device_name;
-            string data_name;
-        };
-
-        sequence<FileWriterDataItem> FileWriterDataItems;
-
-        struct ScanDataOption {
-            string dev;
-            string name;
-            bool save;
-            bool single_file;
-        };
-
-        sequence<ScanDataOption> ScanDataOptions;
-
-        interface FileWriterHost {
-            void setDirectory(string dir);
-            // void setFileNamePattern
-            void addEnvironmentSection(string section_name);
-            void addEnvironmentItems(string section_name, FileWriterDataItems items);
-            void removeEnvironmentItem(string section_name, FileWriterDataItem item);
-            void removeAllEnvironmentItems(string section_name);
-            void updateScanDataOptions(ScanDataOptions sdos);
-        }
-
         // --- Scan ---
 
         struct MotorScanInstruction {

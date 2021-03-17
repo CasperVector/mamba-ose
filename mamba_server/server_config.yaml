@@ -10,8 +10,3 @@ logging:
 scan:
   plan_storage: "plans/"
 
-files:
-  dir: "data/"
-  prefix: 3w1_data
-  name_pattern: "{session}_{prefix}_{scan_id:03d}.nxs"
-  name_pattern_with_source: "{session}_{prefix}_{scan_id:03d}_{dev}_{source}.nxs"

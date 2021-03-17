@@ -9,7 +9,6 @@ device_manager = None
 client_adapter = None
 data_client = None
 scan_manager = None
-file_writer = None
 
 
 if hasattr(MambaICE.Dashboard, 'DeviceManagerPrx') and \
@@ -17,15 +16,14 @@ if hasattr(MambaICE.Dashboard, 'DeviceManagerPrx') and \
         hasattr(MambaICE.Dashboard, 'DataRouterPrx') and \
         hasattr(MambaICE.Dashboard, 'DataClientPrx') and \
         hasattr(MambaICE.Dashboard, 'ScanManagerPrx') and \
-        hasattr(MambaICE.Dashboard, 'SessionManagerPrx') and \
-        hasattr(MambaICE.Dashboard, 'FileWriterHostPrx'):
+        hasattr(MambaICE.Dashboard, 'SessionManagerPrx'):
         from MambaICE.Dashboard import (DeviceManagerPrx, DataClient,
-                                        DataRouterPrx, DataClientPrx, ScanManagerPrx,
-                                        SessionManagerPrx, FileWriterHostPrx)
+                                        DataRouterPrx, DataClientPrx,
+                                        ScanManagerPrx, SessionManagerPrx)
 else:
     from MambaICE.dashboard_ice import (DeviceManagerPrx, DataClient,
-                                        DataRouterPrx, DataClientPrx, ScanManagerPrx,
-                                        SessionManagerPrx, FileWriterHostPrx)
+                                        DataRouterPrx, DataClientPrx,
+                                        ScanManagerPrx, SessionManagerPrx)
 
 if hasattr(MambaICE, 'DeviceType') and hasattr(MambaICE, 'DataType') and \
         hasattr(MambaICE, 'TypedDataFrame') and \

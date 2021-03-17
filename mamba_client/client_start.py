@@ -5,8 +5,7 @@ import logging
 import argparse
 
 import Ice
-from mamba_client import (SessionManagerPrx, DeviceManagerPrx,
-                          ScanManagerPrx, FileWriterHostPrx)
+from mamba_client import (SessionManagerPrx, DeviceManagerPrx, ScanManagerPrx)
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QCoreApplication
@@ -91,10 +90,6 @@ def main():
             communicator.stringToProxy(f"ScanManager:{ice_endpoint}")
                 .ice_connectionId("MambaClient")
         )
-        mamba_client.file_writer = FileWriterHostPrx.checkedCast(
-            communicator.stringToProxy(f"FileWriterHost:{ice_endpoint}")
-                .ice_connectionId("MambaClient")
-        )
 
         try:
             mw.add_menu_item("Device",
@@ -112,8 +107,7 @@ def main():
                           ScanMechanismWidget.get_init_func(
                               mamba_client.device_manager,
                               mamba_client.scan_manager,
-                              mamba_client.data_client,
-                              mamba_client.file_writer)
+                              mamba_client.data_client)
                           )
             mw.add_widget("Motor",
                           MotorWidget.get_init_func(mamba_client.device_manager)

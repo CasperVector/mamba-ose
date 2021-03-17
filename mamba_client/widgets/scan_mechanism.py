@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt, QSize, QTimer, QMutex, pyqtSignal
 
 import MambaICE
 import mamba_client
-from mamba_client import (DeviceManagerPrx, DeviceType, FileWriterHostPrx)
+from mamba_client import (DeviceManagerPrx, DeviceType)
 from mamba_client.data_client import DataClientI
 from mamba_client.dialogs.device_setect import DeviceSelectDialog
 from mamba_client.dialogs.device_config import DeviceConfigDialog
@@ -19,13 +19,12 @@ from .ui.ui_scanmechanismwidget import Ui_ScanMechanicsWidget
 
 if hasattr(MambaICE.Dashboard, 'ScanManagerPrx') and \
         hasattr(MambaICE.Dashboard, 'MotorScanInstruction') and \
-        hasattr(MambaICE.Dashboard, 'ScanDataOption') and \
         hasattr(MambaICE.Dashboard, 'ScanInstruction'):
     from MambaICE.Dashboard import (ScanManagerPrx, MotorScanInstruction,
-                                    ScanInstruction, ScanDataOption)
+                                    ScanInstruction)
 else:
     from MambaICE.dashboard_ice import (ScanManagerPrx, MotorScanInstruction,
-                                        ScanInstruction, ScanDataOption)
+                                        ScanInstruction)
 
 from utils.data_utils import DataDescriptor
 
@@ -78,14 +77,12 @@ class ScanMechanismWidget(QWidget):
 
     def __init__(self, device_manager: DeviceManagerPrx,
                  scan_manager: ScanManagerPrx,
-                 data_client: DataClientI,
-                 file_writer: FileWriterHostPrx):
+                 data_client: DataClientI):
         super().__init__()
         self.logger = mamba_client.logger
         self.device_manager = device_manager
         self.scan_manager = scan_manager
         self.data_client = data_client
-        self.file_writer = file_writer
 
         self.scanned_motors = {}
         self.scanned_detectors = []
@@ -446,24 +443,7 @@ class ScanMechanismWidget(QWidget):
         elif self.save_scan_plan():
             name = self.ui.planComboBox.currentText()
             self.ui.statusLabel.setText("PENDING")
-            self.update_remote_scan_data_options()
             self.scan_manager.runScan(name)
-
-    def update_remote_scan_data_options(self):
-        result_sdos = []
-
-        for dev, sdos in self.scan_data_options.items():
-            for sdo in sdos:
-                result_sdos.append(
-                    ScanDataOption(
-                        dev=dev,
-                        name=sdo['name'],
-                        save=sdo['save'],
-                        single_file=sdo['single']
-                    )
-                )
-
-        self.file_writer.updateScanDataOptions(result_sdos)
 
     def save_scan_plan(self):
         if not self.validate_plan_input():
@@ -618,9 +598,8 @@ class ScanMechanismWidget(QWidget):
     @classmethod
     def get_init_func(cls, device_manager: DeviceManagerPrx,
                       scan_manager: ScanManagerPrx,
-                      data_client: DataClientI,
-                      file_writer: FileWriterHostPrx):
-        return lambda: cls(device_manager, scan_manager, data_client, file_writer)
+                      data_client: DataClientI):
+        return lambda: cls(device_manager, scan_manager, data_client)
 
     def __del__(self):
         for cbk in self.registered_data_callbacks:

@@ -1,5 +1,4 @@
 import os
-import datetime
 import logging
 import Ice
 from .zserver import ZServer, ZrClient
@@ -9,7 +8,6 @@ import mamba_server
 import mamba_server.session_manager as session_manager
 import mamba_server.data_router as data_router
 import mamba_server.device_manager as device_manager
-import mamba_server.file_writer as file_writer
 import mamba_server.scan_manager as scan_manager
 from utils import general_utils
 
@@ -23,7 +21,6 @@ def server_start(RE, motors, dets):
     mamba_server.mzs = ZServer(5678, mamba_server.state)
     mamba_server.mzs.start()
     mamba_server.mrc = ZrClient(5678)
-    mamba_server.session_start_at = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
     # --- Ice properties setup ---
     public_ice_props = Ice.createProperties()
@@ -73,9 +70,6 @@ def server_start(RE, motors, dets):
     session_manager.initialize(ic, public_adapter)
     data_router.initialize(public_adapter)
     device_manager.initialize(ic, public_adapter)
-    file_writer.initialize(public_adapter,
-                           mamba_server.device_manager,
-                           mamba_server.data_router)
     scan_manager.initialize(ic, public_adapter,
                             mamba_server.data_router)
     public_adapter.activate()
