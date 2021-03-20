@@ -85,12 +85,10 @@ class ScanManagerI(ScanManager):
             self.current_step = 0
             self.start_at = 0
 
-    def __init__(self, plan_dir, communicator: Ice.Communicator,
-                 data_router: DataRouterI):
+    def __init__(self, plan_dir, data_router: DataRouterI):
         self.logger = mamba_server.logger
         self.mrc = mamba_server.mrc
         self.data_router = data_router
-        self.communicator = communicator
         self.plan_dir = plan_dir
         self.scan_controller = mamba_server.scan_controller_obj
         self.plans = {}
@@ -235,15 +233,10 @@ class ScanManagerI(ScanManager):
         #self.data_router.scanEnd(ScanExitStatus.Abort)
 
 
-def initialize(public_communicator, adapter, data_router: DataRouterI):
+def initialize(adapter, data_router: DataRouterI):
     mamba_server.scan_controller_obj = ScanControllerI()
-    mamba_server.scan_manager = ScanManagerI(
-        mamba_server.config['scan']['plan_storage'],
-        public_communicator,  # TODO: too ugly. refactor the exp process spawn mechanism
-        data_router
-    )
-
+    mamba_server.scan_manager = \
+        ScanManagerI(mamba_server.config['scan']['plan_storage'], data_router)
     adapter.add(mamba_server.scan_manager,
                 Ice.stringToIdentity("ScanManager"))
-
     mamba_server.logger.info("ScanManager initialized.")

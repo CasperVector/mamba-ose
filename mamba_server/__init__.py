@@ -11,9 +11,6 @@ state = None
 mzs = None
 mrc = None
 
-public_communicator = None
-public_adapter = None
-
 session = None
 data_router = None
 device_manager = None

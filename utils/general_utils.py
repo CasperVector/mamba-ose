@@ -67,9 +67,6 @@ def get_host_endpoint():
 
 
 def get_bind_endpoint():
-    if mamba_server.public_adapter:
-        return mamba_server.public_adapter.getEndpoints()[0].toString()
-
     return format_endpoint(
         mamba_server.config['network']['server_bind_address'],
         mamba_server.config['network']['server_bind_port'],

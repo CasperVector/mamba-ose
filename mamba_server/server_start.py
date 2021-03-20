@@ -47,7 +47,6 @@ def server_start(RE, motors, dets):
     pub_ice_init_data.properties = public_ice_props
 
     ic = Ice.initialize(pub_ice_init_data)
-    mamba_server.public_communicator = ic
     mamba_server.logger = logger = logging.getLogger()
 
     if os.path.exists("server_config.yaml"):
@@ -65,13 +64,11 @@ def server_start(RE, motors, dets):
     public_endpoint = general_utils.get_bind_endpoint()
     mamba_server.logger.info(f"Server started. Bind at {public_endpoint}.")
     public_adapter = ic.createObjectAdapterWithEndpoints("MambaServer", public_endpoint)
-    mamba_server.public_adapter = public_adapter
 
-    session_manager.initialize(ic, public_adapter)
+    session_manager.initialize(public_adapter)
     data_router.initialize(public_adapter)
-    device_manager.initialize(ic, public_adapter)
-    scan_manager.initialize(ic, public_adapter,
-                            mamba_server.data_router)
+    device_manager.initialize(public_adapter)
+    scan_manager.initialize(public_adapter, mamba_server.data_router)
     public_adapter.activate()
 
     devices = {DeviceType.Motor: motors, DeviceType.Detector: dets}

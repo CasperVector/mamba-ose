@@ -1,3 +1,4 @@
+import Ice
 import MambaICE.Dashboard as Dashboard
 import mamba_server
 
@@ -34,11 +35,11 @@ class SessionManagerI(Dashboard.SessionManager):
     def add_connection_closed_callback(self, conn, cbk):
         self.conn_closed_callback[conn].append(cbk)
 
-def initialize(communicator, adapter):
+def initialize(adapter):
     global ses_mgr
     ses_mgr = mamba_server.session = SessionManagerI()
 
     adapter.add(mamba_server.session,
-                communicator.stringToIdentity("SessionManager"))
+                Ice.stringToIdentity("SessionManager"))
 
     mamba_server.logger.info("SessionManager initialized.")

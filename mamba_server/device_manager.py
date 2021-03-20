@@ -187,12 +187,11 @@ class DeviceQueryI(dict):
 
 
 class DeviceManagerI(dict, DeviceManager):
-    def __init__(self, communicator):
+    def __init__(self):
         super().__init__(self)
         self.logger = mamba_server.logger
         self.device_type_lookup = {}
         self.host = mamba_server.device_query_obj
-        self.communicator = communicator
 
     def listDevices(self, current=None):
         """ICE function"""
@@ -266,9 +265,9 @@ class DeviceManagerI(dict, DeviceManager):
             self[entry.name] = entry
             self.device_type_lookup[entry.name] = entry.type
 
-def initialize(public_ic, public_adapter):
+def initialize(public_adapter):
     mamba_server.device_query_obj = DeviceQueryI()
-    mamba_server.device_manager = DeviceManagerI(public_ic)
+    mamba_server.device_manager = DeviceManagerI()
     public_adapter.add(mamba_server.device_manager,
                        Ice.stringToIdentity("DeviceManager"))
     mamba_server.logger.info("DeviceManager initialized.")
