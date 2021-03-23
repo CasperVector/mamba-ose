@@ -6,7 +6,6 @@ from .zserver import ZServer, ZrClient
 import MambaICE
 import mamba_server
 import mamba_server.session_manager as session_manager
-import mamba_server.data_router as data_router
 import mamba_server.device_manager as device_manager
 import mamba_server.scan_manager as scan_manager
 from utils import general_utils
@@ -66,9 +65,8 @@ def server_start(RE, motors, dets):
     public_adapter = ic.createObjectAdapterWithEndpoints("MambaServer", public_endpoint)
 
     session_manager.initialize(public_adapter)
-    data_router.initialize(public_adapter)
     device_manager.initialize(public_adapter)
-    scan_manager.initialize(public_adapter, mamba_server.data_router)
+    scan_manager.initialize(public_adapter)
     public_adapter.activate()
 
     devices = {DeviceType.Motor: motors, DeviceType.Detector: dets}

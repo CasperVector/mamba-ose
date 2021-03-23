@@ -5,7 +5,6 @@
 module MambaICE {
     module Dashboard {
         exception UnknownDeviceException { };
-        enum ScanExitStatus { Success, Abort, Fail };
 
         interface DataClient {
             void scanStart(int id, DataDescriptors keys);
@@ -18,19 +17,6 @@ module MambaICE {
         interface SessionManager {
             void login();
             void logout();
-        };
-
-        interface DataRouter {
-            void registerClient(DataClient* client);
-            void subscribe(strings items);
-            void subscribeAll();
-            void unsubscribe(strings items);
-        };
-
-        interface DataRouterRecv {
-            void scanStart(int id, DataDescriptors keys);
-            void pushData(TypedDataFrames frames);
-            void scanEnd(ScanExitStatus status);
         };
 
         interface DeviceManager {

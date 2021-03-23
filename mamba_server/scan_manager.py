@@ -1,27 +1,35 @@
+import base64
+import pickle
 import os
 from typing import List
 import asyncio
 import yaml
-import time
 
 import Ice
 import MambaICE
 import mamba_server
-from mamba_server.data_router import DataClientCallback, DataRouterI
-from utils.data_utils import DataType, to_data_frame
 
 if hasattr(MambaICE.Dashboard, 'ScanManager') and \
         hasattr(MambaICE.Dashboard, 'MotorScanInstruction') and \
-        hasattr(MambaICE.Dashboard, 'ScanInstruction') and \
-        hasattr(MambaICE.Dashboard, 'ScanExitStatus'):
+        hasattr(MambaICE.Dashboard, 'ScanInstruction'):
     from MambaICE.Dashboard import (ScanManager, MotorScanInstruction,
-                                    ScanInstruction, ScanExitStatus)
+                                    ScanInstruction)
 else:
     from MambaICE.dashboard_ice import (ScanManager, MotorScanInstruction,
-                                        ScanInstruction, ScanExitStatus)
+                                        ScanInstruction)
 
-PAUSED = 1
-RESUMED = 2
+
+def mzserver_callback(mzs, scan_manager):
+    notify = mzs.notify
+    def cb(name, doc):
+        if name == "start":
+            notify({"typ": "scan/start", "id": doc["scan_id"]})
+        notify({"typ": "doc/" + name,
+            "doc": base64.b64encode(pickle.dumps(doc)).decode("UTF-8")})
+        if name == "stop":
+            notify({"typ": "scan/stop"})
+            scan_manager.scan_ended()
+    return cb
 
 
 class ScanControllerI(object):
@@ -40,35 +48,16 @@ class ScanControllerI(object):
 
 class ScanManagerI(ScanManager):
 
-    class ScanStatusDataCallback(DataClientCallback):
-        def __init__(self, parent):
-            self.parent = parent
-
-        def scan_start(self, _id, data_descriptors):
-            self.parent.scan_started(_id)
-
-        def data_update(self, frames):
-            pass
-
-        def scan_end(self, status):
-            self.parent.scan_ended()
-
-    def __init__(self, plan_dir, data_router: DataRouterI):
+    def __init__(self, plan_dir):
         self.logger = mamba_server.logger
         self.mrc = mamba_server.mrc
-        self.data_router = data_router
+        self.mzs = mamba_server.mzs
         self.plan_dir = plan_dir
         self.scan_controller = mamba_server.scan_controller_obj
         self.plans = {}
 
-        self.scan_status_callback = ScanManagerI.ScanStatusDataCallback(self)
-        self.data_router.local_register_client("ScanStatusCallback",
-                                               self.scan_status_callback)
-
         self.scan_running = False
         self.scan_paused = False
-        self.ongoing_scan_id = -1
-
         self.load_all_plans()
 
     def load_all_plans(self):
@@ -137,13 +126,8 @@ class ScanManagerI(ScanManager):
 
         return commands
 
-    def scan_started(self, _id):
-        if self.scan_running:
-            self.ongoing_scan_id = _id
-
     def scan_ended(self):
         self.scan_running = False
-        self.ongoing_scan_id = -1
 
     def run_scan_plan(self, plan: ScanInstruction):
         if not self.scan_running:
@@ -172,26 +156,25 @@ class ScanManagerI(ScanManager):
         if self.scan_running and not self.scan_paused:
             self.scan_paused = True
             self.scan_controller.pause()
-            self.data_router.get_recv_interface().pushData(
-                [to_data_frame("__scan_paused", "", DataType.Integer, PAUSED, time.time())])
+            self.mzs.notify({"typ": "scan/pause"})
 
     def resumeScan(self, current=None):
         if self.scan_paused:
-            self.data_router.get_recv_interface().pushData(
-                [to_data_frame("__scan_paused", "", DataType.Integer, RESUMED, time.time())])
+            self.mzs.notify({"typ": "scan/resume"})
             self.mrc.do_cmd("RE.resume()\n")
             self.scan_paused = False
 
     def terminateScan(self, current=None):
         self.scan_running = False
         self.scan_controller.abort()
-        #self.data_router.scanEnd(ScanExitStatus.Abort)
 
 
-def initialize(adapter, data_router: DataRouterI):
+def initialize(adapter):
     mamba_server.scan_controller_obj = ScanControllerI()
     mamba_server.scan_manager = \
-        ScanManagerI(mamba_server.config['scan']['plan_storage'], data_router)
+        ScanManagerI(mamba_server.config['scan']['plan_storage'])
+    mamba_server.data_callback = \
+        mzserver_callback(mamba_server.mzs, mamba_server.scan_manager)
     adapter.add(mamba_server.scan_manager,
                 Ice.stringToIdentity("ScanManager"))
     mamba_server.logger.info("ScanManager initialized.")

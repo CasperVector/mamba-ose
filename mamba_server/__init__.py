@@ -12,7 +12,6 @@ mzs = None
 mrc = None
 
 session = None
-data_router = None
 device_manager = None
 scan_manager = None
 
