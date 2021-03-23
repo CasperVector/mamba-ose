@@ -1,5 +1,3 @@
-from functools import partial
-
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QFrame,
                              QDialog, QGridLayout, QLabel, QSizePolicy,
                              QLineEdit, QPushButton, QColorDialog, QTableWidget,
@@ -11,17 +9,17 @@ from matplotlib.backends.backend_qt5agg import (
     NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
 
+from datetime import datetime
 import mamba_client
-from mamba_client.data_client import DataClientI
 
 
 DEFAULT_COLOR = QColor("blue")
 
 
 class PlotWidget(QWidget):
-    def __init__(self, data_client: DataClientI):
+    def __init__(self, mnc):
         super().__init__()
-        self.data_client = data_client
+        self.mnc = mnc
         self.logger = mamba_client.logger
         self.layout = QVBoxLayout(self)
         self.figure = Figure(figsize=(4, 2))
@@ -45,25 +43,15 @@ class PlotWidget(QWidget):
         self.data_sets = {}
         self.xsource = ""
         self.lines = {}
-
         self.scanning = False
 
-        self.registered_data_callbacks = []
-
-    def register_scan_stop_cbk(self):
-        for name in ["__scan_ended"]:
-            cbk = partial(self.update_data, name)
-            self.registered_data_callbacks.append(cbk)
-            self.data_client.request_data(name, cbk)
+        self.mnc.subs["scan"].append(self.update_scan)
+        self.mnc.subs["doc"].append(self.update_doc)
 
     @staticmethod
     def _icon(path):
         pm = QPixmap(path)
         return QIcon(pm)
-
-    @classmethod
-    def get_init_func(cls, data_client):
-        return lambda: cls(data_client)
 
     def show_data_source_dialog(self):
         data_source_select_dialog = PlotDataSelectDialog(
@@ -77,59 +65,50 @@ class PlotWidget(QWidget):
             return
 
         names, colors, self.xsource = ret
-
-        for cbk in self.registered_data_callbacks:
-            self.data_client.stop_requesting_data(cbk)
-        self.register_scan_stop_cbk()
-
+        self.data_sets = {}
         for name, color in zip(names, colors):
-            if name not in self.data_sets:
-                cbk = partial(self.update_data, name)
-                self.registered_data_callbacks.append(cbk)
-                self.data_client.request_data(name, cbk)
-                self.data_sets[name] = {
-                    'data': [],
-                    'timestamp': [],
-                    'label': name,
-                }
+            self.data_sets[name] = {
+                'data': [],
+                'timestamp': [],
+                'label': name,
+            }
             color_hex = hex(color.rgba())
             self.data_sets[name]['color'] = "#" + color_hex[4:] + color_hex[2:4]
             self.data_sets[name]['qcolor'] = color
 
-    def update_data(self, name, _id, value, timestamp):
-        if value is None:
-            if not self.scanning:
-                self.scanning = True
-                self.figure.clf()
-                self.axs = self.figure.subplots()
-                self.figure.set_tight_layout(True)
-                self.legend = self.figure.legend()
+    def update_scan(self, msg):
+        if msg["typ"][1] == "stop":
+            self.scanning = False
 
-                for name in self.data_sets:
-                    self.data_sets[name]['data'] = []
-                    self.data_sets[name]['timestamp'] = []
-                    if name in self.lines:
-                        for line in self.lines[name]:
-                            line.remove()
-                        self.lines[name] = []
+    def update_doc(self, msg):
+        if msg["typ"][1] == "event":
+            data, ts = msg["doc"]["data"], msg["doc"]["timestamps"]
+            for name in self.data_sets:
+                self.data_sets[name]["data"].append(data[name])
+                self.data_sets[name]["timestamp"].append\
+                    (datetime.fromtimestamp(ts[name]))
+            self.plot()
+        elif msg["typ"][1] == "descriptor":
+            if self.scanning:
+                return
+            self.scanning = True
+            self.figure.clf()
+            self.axs = self.figure.subplots()
+            self.figure.set_tight_layout(True)
+            self.legend = self.figure.legend()
 
-                if self.xsource:
-                    self.axs.set_xlabel(self.xsource)
-                else:
-                    self.axs.set_xlabel("Time")
-            elif name == "__scan_ended":
-                self.scanning = False
-        else:
-            self.data_sets[name]['data'].append(value)
-            self.data_sets[name]['timestamp'].append(timestamp)
+            for name in self.data_sets:
+                self.data_sets[name]['data'] = []
+                self.data_sets[name]['timestamp'] = []
+                if name in self.lines:
+                    for line in self.lines[name]:
+                        line.remove()
+                    self.lines[name] = []
 
-        if self.xsource:
-            x_len = len(self.data_sets[self.xsource]['data'])
-            for dataset in self.data_sets.values():
-                #  wait for all data to be at the same length
-                if x_len > len(dataset['data']):
-                    return
-        self.plot()
+            if self.xsource:
+                self.axs.set_xlabel(self.xsource)
+            else:
+                self.axs.set_xlabel("Time")
 
     def plot(self):
         self.legend.remove()
@@ -159,10 +138,6 @@ class PlotWidget(QWidget):
 
         self.legend = self.figure.legend()
         self.canvas.draw()
-
-    def __del__(self):
-        for cbk in self.registered_data_callbacks:
-            self.data_client.stop_requesting_data(cbk)
 
 
 NAME_COL = 0

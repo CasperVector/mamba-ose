@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from functools import partial
 from typing import List
 from collections import namedtuple
 
@@ -11,7 +10,6 @@ from PyQt5.QtCore import Qt, QSize, QTimer, QMutex, pyqtSignal
 import MambaICE
 import mamba_client
 from mamba_client import (DeviceManagerPrx, DeviceType)
-from mamba_client.data_client import DataClientI
 from mamba_client.dialogs.device_setect import DeviceSelectDialog
 from mamba_client.dialogs.device_config import DeviceConfigDialog
 from mamba_client.dialogs.scan_file_option import ScanFileOptionDialog
@@ -38,9 +36,6 @@ MOTOR_NUM_COL = 5
 DETECTOR_ADD_COL = 0
 DETECTOR_NAME_COL = 1
 DETECTOR_SETUP_COL = 2
-
-PAUSED = 1
-RESUMED = 2
 
 
 class ScanInstructionSet:
@@ -73,16 +68,13 @@ class ScanInstructionSet:
 
 
 class ScanMechanismWidget(QWidget):
-    update_status_sig = pyqtSignal(str, int, int)
-
     def __init__(self, device_manager: DeviceManagerPrx,
-                 scan_manager: ScanManagerPrx,
-                 data_client: DataClientI):
+                 scan_manager: ScanManagerPrx, mnc):
         super().__init__()
         self.logger = mamba_client.logger
         self.device_manager = device_manager
         self.scan_manager = scan_manager
-        self.data_client = data_client
+        self.mnc = mnc
 
         self.scanned_motors = {}
         self.scanned_detectors = []
@@ -140,18 +132,8 @@ class ScanMechanismWidget(QWidget):
         self.scan_status_timer.timeout.connect(self.update_elapse)
         self.scan_status_timer.start(500)
 
-        self.status_update_lock = QMutex()
-        self.update_status_sig.connect(self._scan_status_update)
-
         self.populate_plan_combo()
-
-        self.registered_data_callbacks = []
-
-        for data in ["__scan_length", "__scan_step", "__scan_paused",
-                     "__scan_ended"]:
-            cbk = partial(self.scan_status_update, data)
-            self.registered_data_callbacks.append(cbk)
-            self.data_client.request_data(data, cbk)
+        self.mnc.subs["scan"].append(self.scan_status_update)
 
     def create_new_plan_clicked(self):
         name, ok = QInputDialog.getText(self, "Create new plan", "Plan name:")
@@ -496,58 +478,40 @@ class ScanMechanismWidget(QWidget):
 
         print(self.scan_data_options)
 
-    def scan_status_update(self, name, scan_id, value, timestamp):
-        self.update_status_sig.emit(name, scan_id,
-                                    value if value is not None else 0)
-
-    def _scan_status_update(self, name, scan_id, value):
-        if name == "__scan_length":
-            if not self.scanning:
-                self.scanning = True
-                self.scan_paused = False
-                self.ui.statusLabel.setText("RUNNING")
-                self.ui.scanIDLabel.setText(str(scan_id))
-                self.scan_length = 0
-                self.scan_step = 0
-                self.frame_count_from_paused = 0
-                self.scan_start_at = datetime.now()
-                self.ui.frameLabel.setText(f"-/-")
-                self.ui.runButton.setEnabled(False)
-                self.ui.stopButton.setEnabled(True)
-                self.ui.pauseButton.setEnabled(True)
-                return
-
-            self.scan_length = int(value)
+    def scan_status_update(self, msg):
+        name = msg["typ"][1]
+        if name == "start":
+            self.scanning = True
+            self.scan_paused = False
+            self.ui.statusLabel.setText("RUNNING")
+            self.ui.scanIDLabel.setText(str(msg["id"]))
+            self.scan_step = 0
+            self.scan_length = 1  # XXX
             self.ui.progressBar.setMaximum(self.scan_length)
-        elif name == "__scan_ended":
+            self.frame_count_from_paused = 0
+            self.scan_start_at = datetime.now()
+            self.ui.frameLabel.setText(f"-/-")
+            self.ui.runButton.setEnabled(False)
+            self.ui.stopButton.setEnabled(True)
+            self.ui.pauseButton.setEnabled(True)
+        elif name == "stop":
             self.ui.statusLabel.setText("IDLE")
             self.scanning = False
             self.ui.runButton.setEnabled(True)
             self.ui.stopButton.setEnabled(False)
             self.ui.pauseButton.setEnabled(False)
-            return
-        elif name == "__scan_paused":
-            if value:
-                if value == PAUSED:
-                    self.scan_paused = True
-                    self.ui.runButton.setEnabled(True)
-                    self.ui.pauseButton.setEnabled(False)
-                    self.ui.statusLabel.setText("PAUSED")
-                elif value == RESUMED:
-                    self.frame_count_from_paused = 0
-                    self.scan_start_at = datetime.now()
-                    self.scan_paused = False
-                    self.ui.runButton.setEnabled(False)
-                    self.ui.pauseButton.setEnabled(True)
-                    self.ui.statusLabel.setText("RUNNING")
-
-        elif name == "__scan_step":
-            if value is None:
-                return
-            self.frame_count_from_paused += 1
-            self.scan_step = int(value)
-            self.ui.progressBar.setValue(self.scan_step)
-            self.ui.frameLabel.setText(f"{self.scan_step}/{self.scan_length}")
+        elif name == "pause":
+            self.scan_paused = True
+            self.ui.runButton.setEnabled(True)
+            self.ui.pauseButton.setEnabled(False)
+            self.ui.statusLabel.setText("PAUSED")
+        elif name == "resume":
+            self.frame_count_from_paused = 0
+            self.scan_start_at = datetime.now()
+            self.scan_paused = False
+            self.ui.runButton.setEnabled(False)
+            self.ui.pauseButton.setEnabled(True)
+            self.ui.statusLabel.setText("RUNNING")
 
     def update_elapse(self):
         if self.scanning and not self.scan_paused:
@@ -594,15 +558,4 @@ class ScanMechanismWidget(QWidget):
         mins = int((seconds % 3600) / 60)
         seconds = int((seconds % 3600) % 60)
         return f"{hours}:{mins:02d}:{seconds:02d}"
-
-    @classmethod
-    def get_init_func(cls, device_manager: DeviceManagerPrx,
-                      scan_manager: ScanManagerPrx,
-                      data_client: DataClientI):
-        return lambda: cls(device_manager, scan_manager, data_client)
-
-    def __del__(self):
-        for cbk in self.registered_data_callbacks:
-            self.data_client.stop_requesting_data(cbk)
-
 

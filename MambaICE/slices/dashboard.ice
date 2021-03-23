@@ -6,12 +6,6 @@ module MambaICE {
     module Dashboard {
         exception UnknownDeviceException { };
 
-        interface DataClient {
-            void scanStart(int id, DataDescriptors keys);
-            void dataUpdate(TypedDataFrames data);
-            void scanEnd(ScanExitStatus status);
-        };
-
         // --- Server Side ---
 
         interface SessionManager {

@@ -9,6 +9,7 @@ from mamba_client import (SessionManagerPrx, DeviceManagerPrx, ScanManagerPrx)
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QCoreApplication
+from mamba_server.mzserver import MnClient
 
 from utils import general_utils
 import mamba_client
@@ -16,7 +17,6 @@ import mamba_client.session_helper
 from mamba_client.main_window import MainWindow
 from mamba_client.widgets.plot import PlotWidget
 from mamba_client.widgets.plot_2d import Plot2DWidget
-from mamba_client.data_client import DataClientI
 from mamba_client.dialogs.device_list_config import DeviceListConfigDialog
 from mamba_client.widgets.scan_mechanism import ScanMechanismWidget
 from mamba_client.widgets.motor import MotorWidget
@@ -81,7 +81,7 @@ def main():
         mamba_client.session = mamba_client.session_helper.initialize(
             communicator, ice_endpoint, mw)
 
-        mamba_client.data_client = DataClientI(communicator, ice_endpoint, logger)
+        mamba_client.mnc = MnClient(5678)
 
         mamba_client.device_manager = DeviceManagerPrx.checkedCast(
             communicator.stringToProxy(f"DeviceManager:{ice_endpoint}")
@@ -97,18 +97,13 @@ def main():
                                  mamba_client.device_manager,
                                  mw)
                              )
-            mw.add_widget("Plot1D",
-                          PlotWidget.get_init_func(mamba_client.data_client)
-                          )
-            mw.add_widget("Plot2D",
-                          Plot2DWidget.get_init_func(mamba_client.data_client)
-                          )
+            mw.add_widget("Plot1D", lambda: PlotWidget(mamba_client.mnc))
+            mw.add_widget("Plot2D", lambda: Plot2DWidget(mamba_client.mnc))
             mw.add_widget("Scan Mechanism",
-                          ScanMechanismWidget.get_init_func(
+                          lambda: ScanMechanismWidget(
                               mamba_client.device_manager,
                               mamba_client.scan_manager,
-                              mamba_client.data_client)
-                          )
+                              mamba_client.mnc))
             mw.add_widget("Motor",
                           MotorWidget.get_init_func(mamba_client.device_manager)
                           )
@@ -119,8 +114,8 @@ def main():
                 ("right", "Plot2D")
             })
 
+            mamba_client.mnc.start()
             mw.show()
-
             app.exec_()
 
         finally:
