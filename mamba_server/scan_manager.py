@@ -7,11 +7,8 @@ import time
 import Ice
 import MambaICE
 import mamba_server
-from mamba_server.data_router import (DataClientCallback, DataProcessor,
-                                      DataRouterI)
-from utils.data_utils import (TypedDataFrame, DataDescriptor, DataType,
-                              to_data_frame)
-from utils import general_utils
+from mamba_server.data_router import DataClientCallback, DataRouterI
+from utils.data_utils import DataType, to_data_frame
 
 if hasattr(MambaICE.Dashboard, 'ScanManager') and \
         hasattr(MambaICE.Dashboard, 'MotorScanInstruction') and \
@@ -56,35 +53,6 @@ class ScanManagerI(ScanManager):
         def scan_end(self, status):
             self.parent.scan_ended()
 
-    class ScanStatusDataProcessor(DataProcessor):
-        def __init__(self, parent):
-            self.parent = parent
-            self.reset()
-
-        def process_data_descriptors(self, _id, keys: List[DataDescriptor])\
-                -> List[DataDescriptor]:
-            self.start_at = time.time()
-            return keys
-
-        def process_data(self, frames: List[TypedDataFrame])\
-                -> List[TypedDataFrame]:
-            self.current_step += 1
-            frames.append(
-                to_data_frame("__scan_length", "", DataType.Integer, self.scan_length,
-                              self.start_at))
-            frames.append(
-                to_data_frame("__scan_step","", DataType.Integer, self.current_step,
-                              time.time()))
-            return frames
-
-        def scan_start(self, length):
-            self.scan_length = length
-
-        def reset(self):
-            self.scan_length = 0
-            self.current_step = 0
-            self.start_at = 0
-
     def __init__(self, plan_dir, data_router: DataRouterI):
         self.logger = mamba_server.logger
         self.mrc = mamba_server.mrc
@@ -93,8 +61,6 @@ class ScanManagerI(ScanManager):
         self.scan_controller = mamba_server.scan_controller_obj
         self.plans = {}
 
-        self.scan_status_processor = ScanManagerI.ScanStatusDataProcessor(self)
-        self.data_router.append_data_processor(self.scan_status_processor)
         self.scan_status_callback = ScanManagerI.ScanStatusDataCallback(self)
         self.data_router.local_register_client("ScanStatusCallback",
                                                self.scan_status_callback)
@@ -148,14 +114,6 @@ class ScanManagerI(ScanManager):
             yaml.safe_dump(plan_dic, f)
 
     @staticmethod
-    def calculate_scan_steps(plan: ScanInstruction):
-        length = 1
-        for mot in plan.motors:
-            length *= mot.point_num
-
-        return length
-
-    @staticmethod
     def generate_scan_command(plan: ScanInstruction):
         commands = []
         dets = [f'dets.{name}' for name in plan.detectors]
@@ -184,7 +142,6 @@ class ScanManagerI(ScanManager):
             self.ongoing_scan_id = _id
 
     def scan_ended(self):
-        self.scan_status_processor.reset()
         self.scan_running = False
         self.ongoing_scan_id = -1
 
@@ -192,8 +149,6 @@ class ScanManagerI(ScanManager):
         if not self.scan_running:
             self.scan_running = True
             self.scan_paused = False
-            self.scan_status_processor.scan_start(
-                self.calculate_scan_steps(plan))
             for cmd in self.generate_scan_command(plan):
                 self.mrc.do_cmd(cmd)
         else:

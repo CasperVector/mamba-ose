@@ -33,16 +33,6 @@ class DataClientCallback(ABC):
         raise NotImplementedError
 
 
-class DataProcessor(ABC):
-    def process_data_descriptors(self, _id, keys: List[DataDescriptor])\
-            -> List[DataDescriptor]:
-        raise NotImplementedError
-
-    def process_data(self, frames: List[TypedDataFrame])\
-            -> List[TypedDataFrame]:
-        raise NotImplementedError
-
-
 class DataRouterRecvI(DataRouterRecv):
     def __init__(self, data_router):
         self.data_router = data_router
@@ -50,10 +40,6 @@ class DataRouterRecvI(DataRouterRecv):
     def scanStart(self, _id, keys, current=None):
         self.data_router.logger.info(f"Scan start received, scan id {_id}")
         self.data_router.scan_id = _id
-
-        for dp in self.data_router.data_process_chain:
-            assert isinstance(dp, DataProcessor)
-            keys = dp.process_data_descriptors(_id, keys)
 
         # forward data
         for client in self.data_router.clients:
@@ -77,10 +63,6 @@ class DataRouterRecvI(DataRouterRecv):
                 pass
 
     def pushData(self, frames, current=None):
-        for dp in self.data_router.data_process_chain:
-            assert isinstance(dp, DataProcessor)
-            frames = dp.process_data(frames)
-
         for client in self.data_router.clients:
             to_send = []
             for frame in frames:
@@ -119,7 +101,6 @@ class DataRouterI(DataRouter):
         self.local_clients = {}
         self.conn_to_client = {}
         self.subscription = {}
-        self.data_process_chain = []
         self.keys = {}
         self.scan_id = 0
         self.recv_interface = None
@@ -143,15 +124,6 @@ class DataRouterI(DataRouter):
         self.clients.append(client)
         self.local_clients[name] = client
         self.subscription[client] = []
-
-    def append_data_processor(self, data_processor: DataProcessor):
-        self.data_process_chain.append(data_processor)
-
-    def clear_data_processors(self):
-        self.data_process_chain = []
-
-    def remove_data_processor(self, data_processor: DataProcessor):
-        self.data_process_chain.remove(data_processor)
 
     def subscribe(self, items, current=None):
         client = self.conn_to_client[current.con]
