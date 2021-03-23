@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt, QSize, QTimer, QMutex, pyqtSignal
 import MambaICE
 import mamba_client
 from mamba_client import (DeviceManagerPrx, DeviceType)
-from mamba_client.dialogs.device_setect import DeviceSelectDialog
+from mamba_client.dialogs.device_select import DeviceSelectDialog
 from mamba_client.dialogs.device_config import DeviceConfigDialog
 from mamba_client.dialogs.scan_file_option import ScanFileOptionDialog
 from .ui.ui_scanmechanismwidget import Ui_ScanMechanicsWidget

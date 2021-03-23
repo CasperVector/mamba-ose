@@ -4,7 +4,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
 import mamba_client
 from mamba_client import (DeviceManagerPrx, DeviceEntry, DeviceType)
-from mamba_client.dialogs.device_setect import DeviceSelectDialog
+from mamba_client.dialogs.device_select import DeviceSelectDialog
 from utils.data_utils import DataType, data_frame_to_value, to_data_frame
 from .ui.ui_motorwidget import Ui_MotorWidget
 
@@ -140,10 +140,6 @@ class MotorWidget(QWidget):
             self.ui.targetAbsEdit.setText("{:.2f}".format(
                 rel_val + self.cur_pos))
             self.ui.targetAbsEdit.blockSignals(False)
-
-    @classmethod
-    def get_init_func(cls, device_manager: DeviceManagerPrx):
-        return lambda: cls(device_manager)
 
     @staticmethod
     def set_text_color(text_edit, color):

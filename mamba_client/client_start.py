@@ -5,7 +5,7 @@ import logging
 import argparse
 
 import Ice
-from mamba_client import (SessionManagerPrx, DeviceManagerPrx, ScanManagerPrx)
+from mamba_client import (DeviceManagerPrx, ScanManagerPrx)
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QCoreApplication
@@ -13,7 +13,6 @@ from mamba_server.mzserver import MnClient
 
 from utils import general_utils
 import mamba_client
-import mamba_client.session_helper
 from mamba_client.main_window import MainWindow
 from mamba_client.widgets.plot import PlotWidget
 from mamba_client.widgets.plot_2d import Plot2DWidget
@@ -69,57 +68,33 @@ def main():
         QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
         app = QApplication([])
         mw = MainWindow()
+        mnc = MnClient(5678)
 
-        # We have adapted a connection-based authentication method,
-        # which means all communication has be done with a single connection.
-        # It requires:
-        #  1. The established connection must not be closed all the time.
-        #  2. All proxy has to be created with the very connection that the
-        #     session.login happens (which is identified by name "MambaClient").
-
-        # TODO: login window
-        mamba_client.session = mamba_client.session_helper.initialize(
-            communicator, ice_endpoint, mw)
-
-        mamba_client.mnc = MnClient(5678)
-
-        mamba_client.device_manager = DeviceManagerPrx.checkedCast(
+        device_manager = DeviceManagerPrx.checkedCast(
             communicator.stringToProxy(f"DeviceManager:{ice_endpoint}")
                 .ice_connectionId("MambaClient"))
-        mamba_client.scan_manager = ScanManagerPrx.checkedCast(
+        scan_manager = ScanManagerPrx.checkedCast(
             communicator.stringToProxy(f"ScanManager:{ice_endpoint}")
                 .ice_connectionId("MambaClient")
         )
 
-        try:
-            mw.add_menu_item("Device",
-                             DeviceListConfigDialog.get_action(
-                                 mamba_client.device_manager,
-                                 mw)
-                             )
-            mw.add_widget("Plot1D", lambda: PlotWidget(mamba_client.mnc))
-            mw.add_widget("Plot2D", lambda: Plot2DWidget(mamba_client.mnc))
-            mw.add_widget("Scan Mechanism",
-                          lambda: ScanMechanismWidget(
-                              mamba_client.device_manager,
-                              mamba_client.scan_manager,
-                              mamba_client.mnc))
-            mw.add_widget("Motor",
-                          MotorWidget.get_init_func(mamba_client.device_manager)
-                          )
-            mw.set_layout({
-                ("left", "Motor"),
-                ("left", "Scan Mechanism"),
-                ("right", "Plot1D"),
-                ("right", "Plot2D")
-            })
+        mw.add_menu_item("Device", DeviceListConfigDialog.get_action(
+                             device_manager, mw))
+        mw.add_widget("Plot1D", lambda: PlotWidget(mnc))
+        mw.add_widget("Plot2D", lambda: Plot2DWidget(mnc))
+        mw.add_widget("Scan Mechanism", lambda: ScanMechanismWidget
+                          (device_manager, scan_manager, mnc))
+        mw.add_widget("Motor", lambda: MotorWidget(device_manager))
+        mw.set_layout({
+            ("left", "Motor"),
+            ("left", "Scan Mechanism"),
+            ("right", "Plot1D"),
+            ("right", "Plot2D")
+        })
 
-            mamba_client.mnc.start()
-            mw.show()
-            app.exec_()
-
-        finally:
-            mamba_client.session.logout()
+        mnc.start()
+        mw.show()
+        app.exec_()
 
 if __name__ == "__main__":
     main()

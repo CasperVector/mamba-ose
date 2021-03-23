@@ -8,11 +8,6 @@ module MambaICE {
 
         // --- Server Side ---
 
-        interface SessionManager {
-            void login();
-            void logout();
-        };
-
         interface DeviceManager {
             DeviceEntries listDevices();
             TypedDataFrames getDeviceConfigurations(string name);

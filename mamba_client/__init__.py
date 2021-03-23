@@ -3,20 +3,12 @@ from .widgets.ui import rc_icons
 
 logger = None
 config = None
-mnc = None
-
-session = None
-device_manager = None
-data_client = None
-scan_manager = None
-
 
 if hasattr(MambaICE.Dashboard, 'DeviceManagerPrx') and \
-        hasattr(MambaICE.Dashboard, 'ScanManagerPrx') and \
-        hasattr(MambaICE.Dashboard, 'SessionManagerPrx'):
-        from MambaICE.Dashboard import (DeviceManagerPrx, ScanManagerPrx, SessionManagerPrx)
+        hasattr(MambaICE.Dashboard, 'ScanManagerPrx'):
+        from MambaICE.Dashboard import (DeviceManagerPrx, ScanManagerPrx)
 else:
-    from MambaICE.dashboard_ice import (DeviceManagerPrx, ScanManagerPrx, SessionManagerPrx)
+    from MambaICE.dashboard_ice import (DeviceManagerPrx, ScanManagerPrx)
 
 if hasattr(MambaICE, 'DeviceType') and hasattr(MambaICE, 'DataType') and \
         hasattr(MambaICE, 'TypedDataFrame') and \
