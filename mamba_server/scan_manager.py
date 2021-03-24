@@ -1,7 +1,6 @@
 import base64
 import pickle
 import os
-from typing import List
 import yaml
 
 import Ice
@@ -18,7 +17,7 @@ else:
                                         ScanInstruction)
 
 
-def mzserver_callback(mzs, scan_manager):
+def mzserver_callback(mzs):
     notify = mzs.notify
     def cb(name, doc):
         if name == "start":
@@ -27,7 +26,6 @@ def mzserver_callback(mzs, scan_manager):
             "doc": base64.b64encode(pickle.dumps(doc)).decode("UTF-8")})
         if name == "stop":
             notify({"typ": "scan/stop"})
-            scan_manager.scan_ended()
     return cb
 
 
@@ -38,9 +36,6 @@ class ScanManagerI(ScanManager):
         self.mrc = mamba_server.mrc
         self.plan_dir = plan_dir
         self.plans = {}
-
-        self.scan_running = False
-        self.scan_paused = False
         self.load_all_plans()
 
     def load_all_plans(self):
@@ -68,7 +63,7 @@ class ScanManagerI(ScanManager):
             except (OSError, KeyError):
                 continue
 
-    def save_plan(self, name, instruction: ScanInstruction):
+    def save_plan(self, name, instruction):
         file = "plan_" + name + ".yaml"
         with open(os.path.join(self.plan_dir, file), "w") as f:
             plan_dic = {
@@ -86,7 +81,7 @@ class ScanManagerI(ScanManager):
             yaml.safe_dump(plan_dic, f)
 
     @staticmethod
-    def generate_scan_command(plan: ScanInstruction):
+    def generate_scan_command(plan):
         commands = []
         dets = [f'dets.{name}' for name in plan.detectors]
         det_str = str(dets).replace("'", "")
@@ -109,23 +104,15 @@ class ScanManagerI(ScanManager):
 
         return commands
 
-    def scan_ended(self):
-        self.scan_running = False
+    def run_scan_plan(self, plan):
+        for cmd in self.generate_scan_command(plan):
+            self.mrc.do_cmd(cmd)
 
-    def run_scan_plan(self, plan: ScanInstruction):
-        if not self.scan_running:
-            self.scan_running = True
-            self.scan_paused = False
-            for cmd in self.generate_scan_command(plan):
-                self.mrc.do_cmd(cmd)
-        else:
-            raise RuntimeError("There's other scan running at this moment.")
-
-    def getScanPlan(self, name, current=None) -> ScanInstruction:
+    def getScanPlan(self, name, current=None):
         if name in self.plans:
             return self.plans[name]
 
-    def listScanPlans(self, current=None) -> List[str]:
+    def listScanPlans(self, current=None):
         return list(self.plans.keys())
 
     def setScanPlan(self, name, instruction, current=None):
@@ -136,25 +123,19 @@ class ScanManagerI(ScanManager):
         self.run_scan_plan(self.plans[name])
 
     def pauseScan(self, current=None):
-        if self.scan_running and not self.scan_paused:
-            self.scan_paused = True
-            self.mrc.do_scan("pause")
+        self.mrc.do_scan("pause")
 
     def resumeScan(self, current=None):
-        if self.scan_paused:
-            self.mrc.do_scan("resume")
-            self.scan_paused = False
+        self.mrc.do_scan("resume")
 
     def terminateScan(self, current=None):
-        self.scan_running = False
         self.mrc.do_scan("abort")
 
 
 def initialize(adapter):
     mamba_server.scan_manager = \
         ScanManagerI(mamba_server.config['scan']['plan_storage'])
-    mamba_server.data_callback = \
-        mzserver_callback(mamba_server.mzs, mamba_server.scan_manager)
+    mamba_server.data_callback = mzserver_callback(mamba_server.mzs)
     adapter.add(mamba_server.scan_manager,
                 Ice.stringToIdentity("ScanManager"))
     mamba_server.logger.info("ScanManager initialized.")
