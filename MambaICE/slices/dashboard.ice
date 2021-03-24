@@ -19,21 +19,5 @@ module MambaICE {
             void setDeviceValue(string name, TypedDataFrame frame);
             void addDevices(DeviceEntries entries);
         };
-
-        // --- Scan ---
-
-        struct MotorScanInstruction {
-            string name;
-            double start;
-            double stop;
-            int point_num;
-        }
-
-        sequence<MotorScanInstruction> ScanMotorInstructionSet;
-
-        struct ScanInstruction {
-            ScanMotorInstructionSet motors;
-            strings detectors;
-        }
     };
 };

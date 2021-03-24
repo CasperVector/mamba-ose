@@ -17,12 +17,6 @@ from mamba_client.dialogs.device_config import DeviceConfigDialog
 from mamba_client.dialogs.scan_file_option import ScanFileOptionDialog
 from .ui.ui_scanmechanismwidget import Ui_ScanMechanicsWidget
 
-if hasattr(MambaICE.Dashboard, 'MotorScanInstruction') and \
-        hasattr(MambaICE.Dashboard, 'ScanInstruction'):
-    from MambaICE.Dashboard import MotorScanInstruction, ScanInstruction
-else:
-    from MambaICE.dashboard_ice import MotorScanInstruction, ScanInstruction
-
 from utils.data_utils import DataDescriptor
 
 MOTOR_ADD_COL = 0
@@ -35,6 +29,10 @@ MOTOR_NUM_COL = 5
 DETECTOR_ADD_COL = 0
 DETECTOR_NAME_COL = 1
 DETECTOR_SETUP_COL = 2
+
+MotorScanInstruction = namedtuple("MotorScanInstruction",
+    ["name", "start", "stop", "point_num"])
+ScanInstruction = namedtuple("ScanInstruction", ["motors", "detectors"])
 
 
 class ScanManager(object):
@@ -361,26 +359,14 @@ class ScanMechanismWidget(QWidget):
                 item.setForeground(QBrush())
                 inst = self.scanned_motors[name]
                 if col == MOTOR_START_COL:
-                    self.scanned_motors[name] = MotorScanInstruction(
-                        name=name,
-                        start=num,
-                        stop=inst.stop,
-                        point_num=inst.point_num
-                    )
+                    self.scanned_motors[name] = \
+                        self.scanned_motors[name]._replace(start = num)
                 elif col == MOTOR_END_COL:
-                    self.scanned_motors[name] = MotorScanInstruction(
-                        name=name,
-                        start=inst.start,
-                        stop=num,
-                        point_num=inst.point_num
-                    )
+                    self.scanned_motors[name] = \
+                        self.scanned_motors[name]._replace(stop = num)
                 elif col == MOTOR_NUM_COL:
-                    self.scanned_motors[name] = MotorScanInstruction(
-                        name=name,
-                        start=inst.start,
-                        stop=inst.stop,
-                        point_num=num
-                    )
+                    self.scanned_motors[name] = \
+                        self.scanned_motors[name]._replace(point_num = num)
             except ValueError:
                 item.setForeground(Qt.red)
 
