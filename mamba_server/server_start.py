@@ -1,12 +1,11 @@
 import os
 import logging
 import Ice
-from .mzserver import MzServer, MrClient
+from .mzserver import MzServer, MrClient, mzserver_callback
 
 import MambaICE
 import mamba_server
 import mamba_server.device_manager as device_manager
-import mamba_server.scan_manager as scan_manager
 from utils import general_utils
 
 if hasattr(MambaICE, 'DeviceType'):
@@ -58,13 +57,12 @@ def server_start(RE, motors, dets):
     mamba_server.config = general_utils.load_config(
         mamba_server.config_filename)
     general_utils.setup_logger(logger, mamba_server.config['logging']['logfile'])
+    mamba_server.data_callback = mzserver_callback(mamba_server.mzs)
 
     public_endpoint = general_utils.get_bind_endpoint()
     mamba_server.logger.info(f"Server started. Bind at {public_endpoint}.")
     public_adapter = ic.createObjectAdapterWithEndpoints("MambaServer", public_endpoint)
-
     device_manager.initialize(public_adapter)
-    scan_manager.initialize(public_adapter)
     public_adapter.activate()
 
     devices = {DeviceType.Motor: motors, DeviceType.Detector: dets}

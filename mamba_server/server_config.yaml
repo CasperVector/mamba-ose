@@ -7,6 +7,3 @@ network:
 logging:
   logfile: mamba.log
 
-scan:
-  plan_storage: "plans/"
-

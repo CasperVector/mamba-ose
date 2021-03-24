@@ -1,3 +1,5 @@
+import os
+import yaml
 from datetime import datetime, timedelta
 from typing import List
 from collections import namedtuple
@@ -15,14 +17,11 @@ from mamba_client.dialogs.device_config import DeviceConfigDialog
 from mamba_client.dialogs.scan_file_option import ScanFileOptionDialog
 from .ui.ui_scanmechanismwidget import Ui_ScanMechanicsWidget
 
-if hasattr(MambaICE.Dashboard, 'ScanManagerPrx') and \
-        hasattr(MambaICE.Dashboard, 'MotorScanInstruction') and \
+if hasattr(MambaICE.Dashboard, 'MotorScanInstruction') and \
         hasattr(MambaICE.Dashboard, 'ScanInstruction'):
-    from MambaICE.Dashboard import (ScanManagerPrx, MotorScanInstruction,
-                                    ScanInstruction)
+    from MambaICE.Dashboard import MotorScanInstruction, ScanInstruction
 else:
-    from MambaICE.dashboard_ice import (ScanManagerPrx, MotorScanInstruction,
-                                        ScanInstruction)
+    from MambaICE.dashboard_ice import MotorScanInstruction, ScanInstruction
 
 from utils.data_utils import DataDescriptor
 
@@ -38,42 +37,115 @@ DETECTOR_NAME_COL = 1
 DETECTOR_SETUP_COL = 2
 
 
-class ScanInstructionSet:
-    def __init__(self, motors: List[MotorScanInstruction], detectors: list):
-        self.motors = motors
-        self.detectors = detectors
+class ScanManager(object):
+    def __init__(self, mrc, plan_dir):
+        self.logger = mamba_client.logger
+        self.mrc = mrc
+        self.plan_dir = plan_dir
+        self.plans = {}
+        self.load_all_plans()
 
-    def generate_command(self):
+    def load_all_plans(self):
+        if not os.path.exists(self.plan_dir):
+            os.mkdir(self.plan_dir)
+            return
+
+        files = filter(lambda s: s.endswith(".yaml") and s.startswith("plan_"),
+                       os.listdir(self.plan_dir))
+        for file in files:
+            try:
+                with open(os.path.join(self.plan_dir, file), "r") as f:
+                    plan_dic = yaml.safe_load(f)
+                    motors = [MotorScanInstruction(
+                        name=mot['name'],
+                        start=float(mot['start']),
+                        stop=float(mot['stop']),
+                        point_num=int(mot['point_num'])
+                    ) for mot in plan_dic['motors']]
+                    self.plans[plan_dic['name']] = ScanInstruction(
+                        motors=motors,
+                        detectors=plan_dic['detectors']
+                    )
+                    self.logger.info(f"Scan plan loaded: {plan_dic['name']}")
+            except (OSError, KeyError):
+                continue
+
+    def save_plan(self, name, instruction):
+        file = "plan_" + name + ".yaml"
+        with open(os.path.join(self.plan_dir, file), "w") as f:
+            plan_dic = {
+                'name': name,
+                'detectors': instruction.detectors,
+                'motors': [
+                    {
+                        'name': mot.name,
+                        'start': mot.start,
+                        'stop': mot.stop,
+                        'point_num': mot.point_num
+                     } for mot in instruction.motors
+                ]
+            }
+            yaml.safe_dump(plan_dic, f)
+
+    @staticmethod
+    def generate_scan_command(plan):
         commands = []
-        dets = [f'dets.{name}' for name in self.detectors]
+        dets = [f'dets.{name}' for name in plan.detectors]
         det_str = str(dets).replace("'", "")
         command = ""
-        if len(self.motors) > 1:
-            commands.append("from bluesky.plans import grid_scan")
+        if len(plan.motors) > 1:
+            commands.append("from bluesky.plans import grid_scan\n")
             command += f"RE(grid_scan({det_str},\n"
         else:
-            commands.append("from bluesky.plans import scan")
+            commands.append("from bluesky.plans import scan\n")
             command += f"RE(scan({det_str},\n"
 
-        for motor in self.motors:
+        for motor in plan.motors:
             command += f"motors.{motor.name}, {float(motor.start)}, " \
                        f"{float(motor.stop)}, {int(motor.point_num)},\n"
 
         command = command[:-2]
-        command += "))"
+        command += "))\n"
 
         commands.append(command)
 
         return commands
 
+    def run_scan_plan(self, plan):
+        for cmd in self.generate_scan_command(plan):
+            self.mrc.do_cmd(cmd)
+
+    def getScanPlan(self, name):
+        if name in self.plans:
+            return self.plans[name]
+
+    def listScanPlans(self):
+        return list(self.plans.keys())
+
+    def setScanPlan(self, name, instruction):
+        self.plans[name] = instruction
+        self.save_plan(name, instruction)
+
+    def runScan(self, name):
+        self.run_scan_plan(self.plans[name])
+
+    def pauseScan(self):
+        self.mrc.do_scan("pause")
+
+    def resumeScan(self):
+        self.mrc.do_scan("resume")
+
+    def terminateScan(self):
+        self.mrc.do_scan("abort")
+
 
 class ScanMechanismWidget(QWidget):
-    def __init__(self, device_manager: DeviceManagerPrx,
-                 scan_manager: ScanManagerPrx, mnc):
+    def __init__(self, device_manager: DeviceManagerPrx, mrc, mnc):
         super().__init__()
         self.logger = mamba_client.logger
         self.device_manager = device_manager
-        self.scan_manager = scan_manager
+        self.scan_manager = \
+            ScanManager(mrc, mamba_client.config['scan']['plan_storage'])
         self.mnc = mnc
 
         self.scanned_motors = {}

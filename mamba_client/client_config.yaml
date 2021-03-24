@@ -4,3 +4,6 @@ network:
   host_port: 10076
   protocol: tcp
 
+scan:
+  plan_storage: "plans/"
+

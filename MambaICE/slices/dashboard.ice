@@ -35,15 +35,5 @@ module MambaICE {
             ScanMotorInstructionSet motors;
             strings detectors;
         }
-
-        interface ScanManager {
-            ScanInstruction getScanPlan(string name);
-            strings listScanPlans();
-            void setScanPlan(string name, ScanInstruction instruction);
-            void runScan(string plan_name);
-            void terminateScan();
-            void resumeScan();
-            void pauseScan();
-        };
     };
 };

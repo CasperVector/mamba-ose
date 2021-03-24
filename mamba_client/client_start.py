@@ -3,13 +3,14 @@
 import os
 import logging
 import argparse
+import zmq
 
 import Ice
-from mamba_client import (DeviceManagerPrx, ScanManagerPrx)
+from mamba_client import DeviceManagerPrx
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QCoreApplication
-from mamba_server.mzserver import MnClient
+from mamba_server.mzserver import MrClient, MnClient
 
 from utils import general_utils
 import mamba_client
@@ -68,22 +69,19 @@ def main():
         QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
         app = QApplication([])
         mw = MainWindow()
-        mnc = MnClient(5678)
-
+        ctx = zmq.Context()
+        mrc = MrClient(5678, ctx = ctx)
+        mnc = MnClient(5678, ctx = ctx)
         device_manager = DeviceManagerPrx.checkedCast(
             communicator.stringToProxy(f"DeviceManager:{ice_endpoint}")
                 .ice_connectionId("MambaClient"))
-        scan_manager = ScanManagerPrx.checkedCast(
-            communicator.stringToProxy(f"ScanManager:{ice_endpoint}")
-                .ice_connectionId("MambaClient")
-        )
 
         mw.add_menu_item("Device", DeviceListConfigDialog.get_action(
                              device_manager, mw))
         mw.add_widget("Plot1D", lambda: PlotWidget(mnc))
         mw.add_widget("Plot2D", lambda: Plot2DWidget(mnc))
         mw.add_widget("Scan Mechanism", lambda: ScanMechanismWidget
-                          (device_manager, scan_manager, mnc))
+                          (device_manager, mrc, mnc))
         mw.add_widget("Motor", lambda: MotorWidget(device_manager))
         mw.set_layout({
             ("left", "Motor"),

@@ -42,3 +42,14 @@ class MnClient(ZnClient):
         for sub in self.subs["scan"]:
             sub(msg)
 
+def mzserver_callback(mzs):
+    notify = mzs.notify
+    def cb(name, doc):
+        if name == "start":
+            notify({"typ": "scan/start", "id": doc["scan_id"]})
+        notify({"typ": "doc/" + name,
+            "doc": base64.b64encode(pickle.dumps(doc)).decode("UTF-8")})
+        if name == "stop":
+            notify({"typ": "scan/stop"})
+    return cb
+
