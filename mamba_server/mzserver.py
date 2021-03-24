@@ -1,6 +1,30 @@
 import base64
 import pickle
-from .zserver import ZnClient
+from .zserver import ZServer, ZrClient, ZnClient
+
+class MzServer(ZServer):
+    handles = ZServer.handles + ["scan"]
+
+    def do_scan(self, req):
+        try:
+            op, = req["typ"][1:]
+        except:
+            return {"err": "syntax"}
+        RE = self.state.RE
+        if op == "pause":
+            RE.request_pause()
+            self.notify({"typ": "scan/pause"})
+        elif op == "resume":
+            self.notify({"typ": "scan/resume"})
+            self.do_cmd({"cmd": "RE.resume()\n"})
+        elif op == "abort":
+            RE.abort()
+        else:
+            return {"err": "syntax"}
+        return {"err": ""}
+
+class MrClient(ZrClient):
+    do_scan = lambda self, op: self.req_rep_chk("scan", op) and None
 
 class MnClient(ZnClient):
     handles = ZnClient.handles + ["doc", "scan"]

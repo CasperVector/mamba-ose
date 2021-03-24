@@ -2,7 +2,6 @@ import base64
 import pickle
 import os
 from typing import List
-import asyncio
 import yaml
 
 import Ice
@@ -32,28 +31,12 @@ def mzserver_callback(mzs, scan_manager):
     return cb
 
 
-class ScanControllerI(object):
-    def __init__(self):
-        self.RE = None
-
-    def pause(self, current=None):
-        self.RE.request_pause()
-
-    def abort(self, current=None):
-        asyncio.run_coroutine_threadsafe(self.RE._abort_coro(""), loop=self.RE.loop)
-
-    def halt(self, current=None):
-        self.RE.halt()
-
-
 class ScanManagerI(ScanManager):
 
     def __init__(self, plan_dir):
         self.logger = mamba_server.logger
         self.mrc = mamba_server.mrc
-        self.mzs = mamba_server.mzs
         self.plan_dir = plan_dir
-        self.scan_controller = mamba_server.scan_controller_obj
         self.plans = {}
 
         self.scan_running = False
@@ -155,22 +138,19 @@ class ScanManagerI(ScanManager):
     def pauseScan(self, current=None):
         if self.scan_running and not self.scan_paused:
             self.scan_paused = True
-            self.scan_controller.pause()
-            self.mzs.notify({"typ": "scan/pause"})
+            self.mrc.do_scan("pause")
 
     def resumeScan(self, current=None):
         if self.scan_paused:
-            self.mzs.notify({"typ": "scan/resume"})
-            self.mrc.do_cmd("RE.resume()\n")
+            self.mrc.do_scan("resume")
             self.scan_paused = False
 
     def terminateScan(self, current=None):
         self.scan_running = False
-        self.scan_controller.abort()
+        self.mrc.do_scan("abort")
 
 
 def initialize(adapter):
-    mamba_server.scan_controller_obj = ScanControllerI()
     mamba_server.scan_manager = \
         ScanManagerI(mamba_server.config['scan']['plan_storage'])
     mamba_server.data_callback = \

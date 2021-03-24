@@ -1,7 +1,7 @@
 import os
 import logging
 import Ice
-from .zserver import ZServer, ZrClient
+from .mzserver import MzServer, MrClient
 
 import MambaICE
 import mamba_server
@@ -15,10 +15,10 @@ else:
     from MambaICE.types_ice import DeviceType
 
 def server_start(RE, motors, dets):
-    mamba_server.state = object()
-    mamba_server.mzs = ZServer(5678, mamba_server.state)
+    mamba_server.state = type("MzState", (object,), {"RE": RE})()
+    mamba_server.mzs = MzServer(5678, mamba_server.state)
     mamba_server.mzs.start()
-    mamba_server.mrc = ZrClient(5678)
+    mamba_server.mrc = MrClient(5678)
 
     # --- Ice properties setup ---
     public_ice_props = Ice.createProperties()
@@ -73,6 +73,5 @@ def server_start(RE, motors, dets):
         mamba_server.device_manager
     )
     RE.subscribe(mamba_server.data_callback)
-    mamba_server.scan_controller_obj.RE = RE
     return general_utils.AttrDict(motors), general_utils.AttrDict(dets)
 

@@ -15,5 +15,4 @@ device_manager = None
 scan_manager = None
 data_callback = None
 device_query_obj = None
-scan_controller_obj = None
 
