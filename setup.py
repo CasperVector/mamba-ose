@@ -25,8 +25,7 @@ setup(
     },
     package_data={
         'MambaICE': ["slices/*.ice"],
-        'mamba_client': ["widgets/ui/*.ui", "widgets/ui/*.qrc", "widgets/ui/icons/*.png", "*.yaml"],
-        'mamba_server': ["*.yaml"]
+        'mamba_client': ["widgets/ui/*.ui", "widgets/ui/*.qrc", "widgets/ui/icons/*.png", "*.yaml"]
     }
 )
 

@@ -3,7 +3,36 @@ import pickle
 from .zserver import ZServer, ZrClient, ZnClient
 
 class MzServer(ZServer):
-    handles = ZServer.handles + ["scan"]
+    handles = ZServer.handles + ["dev", "scan"]
+
+    def do_dev(self, req):
+        try:
+            op, = req["typ"][1:]
+            path = req["path"].split(".", 2)
+            if op == "keys":
+                assert len(path) == 1
+            else:
+                assert len(path) > 1 and op in ["describe", "read",
+                    "describe_configuration", "read_configuration"]
+            assert path[0] in ["M", "D"]
+        except:
+            return {"err": "syntax"}
+        try:
+            obj, p = self.state, path
+            while p:
+                obj, p = getattr(obj, p[0]), p[1:]
+        except:
+            return {"err": "key"}
+        try:
+            f = getattr(obj, op)
+            if op == "keys":
+                prefix = path[0] + "."
+                ret = [prefix + k for k in f()]
+            else:
+                ret = f(dot = True)
+        except:
+            return {"err": "call"}
+        return {"err": "", "ret": ret}
 
     def do_scan(self, req):
         try:
@@ -24,6 +53,8 @@ class MzServer(ZServer):
         return {"err": ""}
 
 class MrClient(ZrClient):
+    do_dev = lambda self, op, path: \
+        self.req_rep_chk("dev", op, path = path)["ret"]
     do_scan = lambda self, op: self.req_rep_chk("scan", op) and None
 
 class MnClient(ZnClient):
@@ -52,4 +83,11 @@ def mzserver_callback(mzs):
         if name == "stop":
             notify({"typ": "scan/stop"})
     return cb
+
+def server_start(M, D, RE, lport = 5678):
+    state = type("MzState", (object,), {"M": M, "D": D, "RE": RE})()
+    mzs = MzServer(lport, state)
+    RE.subscribe(mzserver_callback(mzs))
+    mzs.start()
+    return mzs
 
