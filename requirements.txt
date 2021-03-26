@@ -8,5 +8,4 @@ PyQt5
 pyqtgraph
 pyzmq
 setuptools
-zeroc-ice
 

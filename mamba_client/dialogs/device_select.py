@@ -6,25 +6,20 @@ from PyQt5.QtCore import QSize, QEventLoop, Qt
 from PyQt5.QtGui import QIcon
 
 import mamba_client
-from mamba_client import (DeviceManagerPrx, DeviceEntry)
 from mamba_client.widgets.device_select import DeviceSelectWidget
 
-
 class DeviceSelectDialog(QDialog):
-    def __init__(self,
-                 device_manager: DeviceManagerPrx,
-                 _filter=None,
-                 parent=None):
+    def __init__(self, parent, typ, name_exclude = []):
         super().__init__(parent)
         self.setWindowTitle("Select Device")
         self.logger = mamba_client.logger
-        self.device_manager = device_manager
-        self.filter = _filter
+        self.mrc = parent.mrc
 
         self.layout = QVBoxLayout()
 
         self.selected_device = None
-        self.device_select_widget = DeviceSelectWidget(device_manager, _filter)
+        self.device_select_widget = \
+            DeviceSelectWidget(self.mrc, typ, name_exclude)
         self.layout.addWidget(self.device_select_widget)
 
         self.button_layout = QHBoxLayout()
@@ -55,17 +50,17 @@ class DeviceSelectDialog(QDialog):
 
         self.device_select_widget.device_selected.connect(self.device_selected)
 
-    def device_selected(self, device: DeviceEntry):
+    def device_selected(self, device):
         self.selected_device = device
         self.submit_button.setEnabled(True)
 
     def submit(self):
         self.accept()
 
-    def display(self) -> DeviceEntry:
+    def display(self):
         loop = QEventLoop()
         self.finished.connect(loop.quit)
         self.show()
         loop.exec()
-
         return self.selected_device
+

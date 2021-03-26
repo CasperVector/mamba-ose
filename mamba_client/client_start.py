@@ -5,9 +5,6 @@ import logging
 import argparse
 import zmq
 
-import Ice
-from mamba_client import DeviceManagerPrx
-
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QCoreApplication
 from mamba_server.mzserver import MrClient, MnClient
@@ -21,7 +18,6 @@ from mamba_client.dialogs.device_list_config import DeviceListConfigDialog
 from mamba_client.widgets.scan_mechanism import ScanMechanismWidget
 from mamba_client.widgets.motor import MotorWidget
 
-
 def main():
     parser = argparse.ArgumentParser(
         description="The GUI client of Mamba application."
@@ -30,22 +26,6 @@ def main():
                         default=None, help="the path to the config file")
 
     args = parser.parse_args()
-
-    # --- Ice properties setup ---
-    ice_props = Ice.createProperties()
-
-    # ACM setup for bidirectional connections.
-
-    # Don't actively close connection
-    ice_props.setProperty("Ice.ACM.Close", "4")  # CloseOnIdleForceful
-    # Always send heartbeat message to keep the connection alive.
-    ice_props.setProperty("Ice.ACM.Heartbeat", "3")  # HeartbeatAlways
-    ice_props.setProperty("Ice.ACM.Timeout", "10")
-
-    ice_props.setProperty("Ice.MessageSizeMax", "4000")  # 4000KB ~ 4MB
-
-    ice_init_data = Ice.InitializationData()
-    ice_init_data.properties = ice_props
     mamba_client.logger = logger = logging.getLogger()
     general_utils.setup_logger(logger)
 
@@ -63,36 +43,28 @@ def main():
                                          os.path.realpath(__file__))
         )
 
-    ice_endpoint = general_utils.get_host_endpoint()
+    QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
+    app = QApplication([])
+    mw = MainWindow()
+    ctx = zmq.Context()
+    mrc = MrClient(5678, ctx = ctx)
+    mnc = MnClient(5678, ctx = ctx)
 
-    with Ice.initialize(ice_init_data) as communicator:
-        QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
-        app = QApplication([])
-        mw = MainWindow()
-        ctx = zmq.Context()
-        mrc = MrClient(5678, ctx = ctx)
-        mnc = MnClient(5678, ctx = ctx)
-        device_manager = DeviceManagerPrx.checkedCast(
-            communicator.stringToProxy(f"DeviceManager:{ice_endpoint}")
-                .ice_connectionId("MambaClient"))
+    mw.add_menu_item("Device", DeviceListConfigDialog.get_action(mrc, mw))
+    mw.add_widget("Motor", lambda: MotorWidget(mrc))
+    mw.add_widget("Scan Mechanism", lambda: ScanMechanismWidget(mrc, mnc))
+    mw.add_widget("Plot1D", lambda: PlotWidget(mnc))
+    mw.add_widget("Plot2D", lambda: Plot2DWidget(mnc))
+    mw.set_layout({
+        ("left", "Motor"),
+        ("left", "Scan Mechanism"),
+        ("right", "Plot1D"),
+        ("right", "Plot2D")
+    })
 
-        mw.add_menu_item("Device", DeviceListConfigDialog.get_action(
-                             device_manager, mw))
-        mw.add_widget("Plot1D", lambda: PlotWidget(mnc))
-        mw.add_widget("Plot2D", lambda: Plot2DWidget(mnc))
-        mw.add_widget("Scan Mechanism", lambda: ScanMechanismWidget
-                          (device_manager, mrc, mnc))
-        mw.add_widget("Motor", lambda: MotorWidget(device_manager))
-        mw.set_layout({
-            ("left", "Motor"),
-            ("left", "Scan Mechanism"),
-            ("right", "Plot1D"),
-            ("right", "Plot2D")
-        })
-
-        mnc.start()
-        mw.show()
-        app.exec_()
+    mnc.start()
+    mw.show()
+    app.exec_()
 
 if __name__ == "__main__":
     main()

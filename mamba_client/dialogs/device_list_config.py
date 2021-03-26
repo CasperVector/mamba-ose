@@ -1,6 +1,3 @@
-import struct
-import time
-
 from PyQt5.QtWidgets import (QAction, QDialog, QGridLayout, QHBoxLayout,
                              QLabel, QPushButton, QListWidget, QListWidgetItem,
                              QTableWidget, QTableWidgetItem, QSizePolicy,
@@ -9,25 +6,22 @@ from PyQt5.QtCore import QSize, QEventLoop, Qt
 from PyQt5.QtGui import QIcon
 
 import mamba_client
-from mamba_client import DeviceManagerPrx, DeviceEntry, DeviceType, DataType
 from mamba_client.widgets.device_select import DeviceSelectWidget
 from mamba_client.widgets.device_config import DeviceConfigWidget
 
-
 class DeviceListConfigDialog(QDialog):
-    def __init__(self, device_manager: DeviceManagerPrx, parent=None):
+    def __init__(self, mrc, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Configure Device")
         self.logger = mamba_client.logger
-        self.device_manager = device_manager
-
+        self.mrc = mrc
         self.layout = QGridLayout()
 
         self.selected_device = None
-        self.device_select_widget = DeviceSelectWidget(device_manager)
+        self.device_select_widget = DeviceSelectWidget(mrc, "DM")
         self.layout.addWidget(self.device_select_widget, 0, 0)
 
-        self.config_widget = DeviceConfigWidget(device_manager)
+        self.config_widget = DeviceConfigWidget(mrc)
         self.config_widget.config_changed.connect(self.config_changed)
         self.layout.addWidget(self.config_widget, 0, 1)
 
@@ -60,10 +54,10 @@ class DeviceListConfigDialog(QDialog):
         self.device_select_widget.device_selected.connect(self.device_selected)
         self.config_widget.config_changed.connect(self.config_changed)
 
-    def device_selected(self, device: DeviceEntry):
+    def device_selected(self, device):
         self.submit_button.setEnabled(False)
         self.selected_device = device
-        self.config_widget.prepare_config_list(device.name)
+        self.config_widget.prepare_config_list(device)
 
     def config_changed(self):
         self.submit_button.setEnabled(True)
@@ -75,13 +69,11 @@ class DeviceListConfigDialog(QDialog):
         self.close()
 
     @classmethod
-    def get_action(cls, device_manager, parent=None):
+    def get_action(cls, mrc, parent=None):
         device_config_action = QAction("Device Config", parent)
-
         def show_dialog():
-            dialog = cls(device_manager, parent)
+            dialog = cls(mrc, parent)
             dialog.show()
-
         device_config_action.triggered.connect(show_dialog)
-
         return device_config_action
+

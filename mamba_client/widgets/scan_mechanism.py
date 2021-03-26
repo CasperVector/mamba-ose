@@ -1,23 +1,17 @@
 import os
 import yaml
 from datetime import datetime, timedelta
-from typing import List
 from collections import namedtuple
 
 from PyQt5.QtWidgets import QWidget, QTableWidgetItem, QMessageBox, QInputDialog
 from PyQt5.QtGui import QIcon, QColor, QPixmap, QBrush
-
 from PyQt5.QtCore import Qt, QSize, QTimer, QMutex, pyqtSignal
 
-import MambaICE
 import mamba_client
-from mamba_client import (DeviceManagerPrx, DeviceType)
 from mamba_client.dialogs.device_select import DeviceSelectDialog
 from mamba_client.dialogs.device_config import DeviceConfigDialog
 from mamba_client.dialogs.scan_file_option import ScanFileOptionDialog
 from .ui.ui_scanmechanismwidget import Ui_ScanMechanicsWidget
-
-from utils.data_utils import DataDescriptor
 
 MOTOR_ADD_COL = 0
 MOTOR_NAME_COL = 1
@@ -33,7 +27,6 @@ DETECTOR_SETUP_COL = 2
 MotorScanInstruction = namedtuple("MotorScanInstruction",
     ["name", "start", "stop", "point_num"])
 ScanInstruction = namedtuple("ScanInstruction", ["motors", "detectors"])
-
 
 class ScanManager(object):
     def __init__(self, mrc, plan_dir):
@@ -88,7 +81,7 @@ class ScanManager(object):
     @staticmethod
     def generate_scan_command(plan):
         commands = []
-        dets = [f'dets.{name}' for name in plan.detectors]
+        dets = [f'{name}' for name in plan.detectors]
         det_str = str(dets).replace("'", "")
         command = ""
         if len(plan.motors) > 1:
@@ -99,7 +92,7 @@ class ScanManager(object):
             command += f"RE(scan({det_str},\n"
 
         for motor in plan.motors:
-            command += f"motors.{motor.name}, {float(motor.start)}, " \
+            command += f"{motor.name}, {float(motor.start)}, " \
                        f"{float(motor.stop)}, {int(motor.point_num)},\n"
 
         command = command[:-2]
@@ -136,14 +129,13 @@ class ScanManager(object):
     def terminateScan(self):
         self.mrc.do_scan("abort")
 
-
 class ScanMechanismWidget(QWidget):
-    def __init__(self, device_manager: DeviceManagerPrx, mrc, mnc):
+    def __init__(self, mrc, mnc):
         super().__init__()
         self.logger = mamba_client.logger
-        self.device_manager = device_manager
         self.scan_manager = \
             ScanManager(mrc, mamba_client.config['scan']['plan_storage'])
+        self.mrc = mrc
         self.mnc = mnc
 
         self.scanned_motors = {}
@@ -187,11 +179,8 @@ class ScanMechanismWidget(QWidget):
         self.editing_plan = False
         self.current_plan_index = 0
 
-        self.scan_length = 0
         self.scan_start_at = datetime.now()
-        self.scan_step = 0
         self.scan_paused = False
-        self.frame_count_from_paused = 0
         self.scanning = False
 
         self.ui.progressBar.setMinimum(0)
@@ -288,16 +277,11 @@ class ScanMechanismWidget(QWidget):
 
         if col == MOTOR_ADD_COL:
             if row == self.ui.motorTableWidget.rowCount() - 1:
-                dialog = DeviceSelectDialog(
-                    self.device_manager,
-                    {
-                        'type': [DeviceType.Motor],
-                        'name_exclude': self.scanned_motors.keys()
-                    },
-                    self)
+                dialog = DeviceSelectDialog(self, "M",
+                    self.scanned_motors.keys())
                 device = dialog.display()
                 if device:
-                    self.add_motor(device.name)
+                    self.add_motor(device)
                     self.plan_changed()
             else:
                 name_to_delete = self.ui.motorTableWidget.item(
@@ -310,7 +294,7 @@ class ScanMechanismWidget(QWidget):
             if row < self.ui.motorTableWidget.rowCount() - 1:
                 name = self.ui.motorTableWidget.item(row,
                                                      MOTOR_NAME_COL).text()
-                dialog = DeviceConfigDialog(name, self.device_manager, self)
+                dialog = DeviceConfigDialog(name, self.mrc, self)
                 dialog.show()
 
     def detector_table_clicked(self, item):
@@ -319,16 +303,11 @@ class ScanMechanismWidget(QWidget):
 
         if col == DETECTOR_ADD_COL:
             if row == self.ui.detectorTableWidget.rowCount() - 1:
-                dialog = DeviceSelectDialog(
-                    self.device_manager,
-                    {
-                        'type': [DeviceType.Detector],
-                        'name_exclude': self.scanned_detectors
-                    },
-                    self)
+                dialog = DeviceSelectDialog(self, "DM",
+                    self.scanned_detectors)
                 device = dialog.display()
                 if device:
-                    self.add_detector(device.name)
+                    self.add_detector(device)
                     self.plan_changed()
             else:
                 name_to_delete = self.ui.detectorTableWidget.item(
@@ -341,7 +320,7 @@ class ScanMechanismWidget(QWidget):
             if row < self.ui.detectorTableWidget.rowCount() - 1:
                 name = self.ui.detectorTableWidget.item(
                     row, DETECTOR_NAME_COL).text()
-                dialog = DeviceConfigDialog(name, self.device_manager, self)
+                dialog = DeviceConfigDialog(name, self.mrc, self)
                 dialog.show()
 
     def motor_table_changed(self, item):
@@ -506,21 +485,10 @@ class ScanMechanismWidget(QWidget):
         return True
 
     def prepare_scan_data_option(self, detector_id):
-        data_descriptors: List[DataDescriptor] = \
-            self.device_manager.describeDeviceReadings(detector_id)
-
-        data_options = []
-        for data_descriptor in data_descriptors:
-            data_option = {
-                'dev': detector_id,
-                'name': data_descriptor.name,
-                'type': data_descriptor.type,
-                'save': True,
-                'single': False
-            }
-            data_options.append(data_option)
-
-        return data_options
+        return [{
+            "dev": detector_id, "name": k,
+            "type": v["dtype"], "save": True, "single": False
+        } for k, v in sorted(self.mrc.do_dev("describe", detector_id).items())]
 
     def display_scan_data_options_dialog(self):
         dialog = ScanFileOptionDialog()
@@ -543,10 +511,7 @@ class ScanMechanismWidget(QWidget):
             self.scan_paused = False
             self.ui.statusLabel.setText("RUNNING")
             self.ui.scanIDLabel.setText(str(msg["id"]))
-            self.scan_step = 0
-            self.scan_length = 1  # XXX
-            self.ui.progressBar.setMaximum(self.scan_length)
-            self.frame_count_from_paused = 0
+            self.ui.progressBar.setMaximum(1)
             self.scan_start_at = datetime.now()
             self.ui.frameLabel.setText(f"-/-")
             self.ui.runButton.setEnabled(False)
@@ -564,7 +529,6 @@ class ScanMechanismWidget(QWidget):
             self.ui.pauseButton.setEnabled(False)
             self.ui.statusLabel.setText("PAUSED")
         elif name == "resume":
-            self.frame_count_from_paused = 0
             self.scan_start_at = datetime.now()
             self.scan_paused = False
             self.ui.runButton.setEnabled(False)
@@ -575,9 +539,7 @@ class ScanMechanismWidget(QWidget):
         if self.scanning and not self.scan_paused:
             elapsed = datetime.now() - self.scan_start_at
             self.ui.elapsedLabel.setText(self.convert_to_time(elapsed))
-            time_per_frame = elapsed / self.frame_count_from_paused
-            eta = time_per_frame * (self.scan_length - self.scan_step)
-            self.ui.etaLabel.setText(self.convert_to_time(eta))
+            self.ui.etaLabel.setText("inf")
         else:
             self.ui.elapsedLabel.setText("0:00:00")
 

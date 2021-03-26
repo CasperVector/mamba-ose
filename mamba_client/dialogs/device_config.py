@@ -4,23 +4,22 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
                              QSizePolicy, QSpacerItem)
 
 import mamba_client
-from mamba_client import DeviceManagerPrx
 from mamba_client.widgets.device_config import DeviceConfigWidget
 
 
 class DeviceConfigDialog(QDialog):
-    def __init__(self, device_id, device_manager: DeviceManagerPrx, parent=None):
+    def __init__(self, device_id, mrc, parent=None):
         super().__init__(parent)
         self.setWindowTitle(f"Configure Device: {device_id}")
         self.device_id = device_id
         self.logger = mamba_client.logger
-        self.device_manager = device_manager
+        self.mrc = mrc
 
         self.layout = QVBoxLayout()
 
         self.old_config_list = []
         self.changed_config_rows = []
-        self.config_widget = DeviceConfigWidget(device_manager, device_id)
+        self.config_widget = DeviceConfigWidget(mrc, device_id)
         self.layout.addWidget(self.config_widget)
 
         self.button_layout = QHBoxLayout()
