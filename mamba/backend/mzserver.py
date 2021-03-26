@@ -89,7 +89,7 @@ def server_start(M, D, RE, config = ""):
     if not config:
         config = os.path.expanduser("~/.mamba/config.yaml")
     with open(config, "r") as f:
-        lport = int(yaml.safe_load(f)["network"]["lport"])
+        lport = int(yaml.safe_load(f)["backend"]["lport"])
     state = type("MzState", (object,), {"M": M, "D": D, "RE": RE})()
     mzs = MzServer(lport, state)
     RE.subscribe(mzserver_callback(mzs))

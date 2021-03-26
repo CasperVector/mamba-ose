@@ -1,161 +1,47 @@
-# Mamba
+## Mamba
 
-_Mamba_ is the experimental control framework-to-be of HEPS. It aims to provide
+Mamba is the experimental control framework-to-be of HEPS. It aims to provide
 
--  A GUI frontend (client) on users' PC, with a variety of widgets available to 
-    1. Design experiment patterns (scan routine),
-    2. Control the parameters of all devices of a beamline,
-    3. Run experiments,
-    4. Visualize the experiment data in real time,
-    5. Interact with the data analysis system of the HEPS central computational cluster,
-    6. And more...
--  All of these are supported by a backend (server) running on the _beamline control server_, which consists of multiple service providers and the _bluesky_ experiment control software embedded inside a IPython shell.
+* A GUI frontend with a variety of widgets available to (but not limited to)
+  - Control the parameters of devices on the beamline;
+  - Design experiment patterns and run experiments routines;
+  - Do data analysis and visualisation, online or off-line, using HPC or not.
 
-Mamba' versatile GUI gathers everything one experimentalist need to run an experiment, meanwhile offer flexibilities for him to customize the interface and components he uses.
+* All of these are supported by a backend running inside an IPython shell,
+  and communicates with the frontend using ZeroMQ; the backend is the part
+  of Mamba which actually interacts with the Bluesky objects inside the shell.
 
-Clients and servers talk through ICE, a RPC framework. The separation of client and the server increases the robustness of the entire system, naturally offers ways for multiple clients cooperating at the same time.
+* Both the frontend and the backend run on the Linux-based beamline-control
+  server, and both are Python 3 only; the xpra GUI forwarding system allows
+  for comfortable remote access from popular operating systems.
 
-Mamba is powered by a series of open source projects: PyQt, scipy environment, ICE, termqt.
+## Usage
 
-## Get Started
-
-### Server Side
-
-1. Open a new terminal window (PowerShell on Windows), clone this repo and
-`cd` to the path of device_repo you have cloned/downloaded. 
-Activate _anaconda_ if you use anaconda.
-
-   ```bash
-   git clone http://heps-se.ihep.ac.cn/gengyd/mamba.git
-   cd mamba
-   activate  # activate conda, if you use conda
-   python -m venv venv  # Create a new virtual environment
-   ```
-
-2. Activate the `venv` just created. On Linux:
-   ```bash
-   ./venv/bin/activate
-   ```
-   On Windows:
-   ```bash
-   .\venv\Scripts\activate
-   ```
-   
-
-3. bluesky need to be installed first. See [bluesky's tutorial](https://blueskyproject.io/bluesky/tutorial.html) (remember to install everything with `venv/bin/python3 -m pip`).
-
-4. Install termqt
-
-   ```bash
-   git clone https://github.com/TerryGeng/termqt
-   (cd termqt && python setup.py install)
-   ```
-
-5. Install all other dependencies
-
-   ```
-   python -m pip install --upgrade pip
-   python -m pip install -r requirements.txt
-   ```
-
-6. Install mamba
-
-    ```bash
-    python setup.py develop
+* Building and (optionally) installation:
+    ```sh
+    $ pip3 install -r requirements.txt
+    $ ./prepare.sh
+    $ python3 ./setup.py install  # For real installation; maybe with `--user`.
     ```
 
-7. Run the server
-
-   ```
-   mamba_host
-   ```
-
-   
-
-### Client Side
-
-1. Clone this repo
-
-   ```bash
-   git clone http://heps-se.ihep.ac.cn/gengyd/mamba.git
-   cd mamba
-   ```
-   
-2. Activate the `venv` just created. See above.
-
-3. Install termqt
-
-   ```bash
-   python -m pip install --upgrade pip  # upgrade pip
-   python -m pip install pyqt5
-   git clone https://github.com/TerryGeng/termqt
-   (cd termqt && python setup.py develop)
-   ```
- 
-4. Install all other dependencies
-
-   ```
-   python -m pip install -r requirements.txt
-   ```
-
-5. Install mamba
-
-    ```bash
-    python setup.py develop
+* Before first use (customise the config after this):
+    ```sh
+    $ mkdir -p ~/.mamba
+    $ cp docs/example_config.yaml ~/.mamba/config.yaml
+    $ cp docs/example_init.py ~/.mamba/init.py
     ```
 
-6. Make a copy of `mamba_client/client_config.yaml`, correctly set the IP address of the server inside your copy:
+* Routine use, starting the backend first:
+    ```sh
+    $ mamba-cli  # After real installation; otherwise see below.
+    $ cd /path/to/mamba
+    $ python3 -m mamba.backend.mamba_cli
+    ```
 
-   ```yaml
-   ---
-   network:
-     host_address: 127.0.0.1 # <--- edit this line
-   ```
+* Routine use, starting the frontend in another terminal:
+    ```sh
+    $ mamba-gui  # After real installation; otherwise see below.
+    $ cd /path/to/mamba
+    $ python3 -m mamba.frontend.mamba_gui
+    ```
 
-6. Run the client
-
-   ```
-   mamba_client -c {the path to your copy of client_config.yaml}
-   ```
-
-   
-
-
-## TODO List
-
-- [x] Ice session management (https://doc.zeroc.com/technical-articles/general-topics/design-patterns-for-secure-ice-applications)
-- [x] Ice configuration file, avoid hardcoded port number in the program
-- [x] Ice interface
-- [x] IPython prompt enhancement (https://github.com/ipython/ipython/pull/10500/files, https://ipython.readthedocs.io/en/stable/config/details.html#custom-prompts)
-- [x] termqt: bug fixes and allow customized escape sequence
-- [x] Bluesky data callback
-- [x] Slice interface refactored - _2020.9.13_
-- [x] DeviceQuery interface, handle device config query request - _2020.9.13_
-- [x] Server: DeviceManager - _2020.9.14_
-  - [x] cache device descriptions - _2020.9.14_
-  - [x] relay config query request - _2020.9.14_
-  - [x] set config value interface - _2020.9.14_
-  - [ ] periodically push reading back? (DataRouter?)
-- [x] Client: DeviceConfigDialog - _2020.9.14_
-- [ ] ~~Motor control panel~~
-- [x] DataType.Array - _2020.9.24_
-- [x] Server: File storing mechanism - _2020.9.25_
-  - [x] Scan metadata storage
-  - [x] AreaDetector save into files
-  - [x] Debug - _2020.9.26_
-- [ ] Client: Environment data selection dialog
-- [x] Client: Scan mechanics design widget - _2020.9.22_
-  - [x] Experiment control navbar (pause, continue, halt)
-  - [x] Save plan (server side) - _2020.9.25_
-  - [x] Save plan UI
-  - [x] Scan status - _2020.9.26_
-  - [x] Scan control - _2020.9.26_
-  - [ ] File Options
-- [ ] Client: 2D visualization
-- [ ] Client: plot widgets improvement
-  - [ ] draw multiple lines on the same plot
-  - [ ] customizable x-axis
-- [ ] Terminal buffer on server-side
-- [x] Server: Lost connection management - _2020.9.26_
-- [x] Subprocess logging mechanism
-- [ ] Documentation

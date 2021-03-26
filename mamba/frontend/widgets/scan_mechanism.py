@@ -129,7 +129,8 @@ class ScanManager(object):
 class ScanMechanismWidget(QWidget):
     def __init__(self, mrc, mnc, config):
         super().__init__()
-        self.scan_manager = ScanManager(mrc, config['scan']['plan_storage'])
+        self.scan_manager = ScanManager(mrc,
+            os.path.expanduser(config['scan']['plans']))
         self.mrc = mrc
         self.mnc = mnc
 

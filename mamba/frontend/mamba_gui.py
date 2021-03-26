@@ -7,7 +7,7 @@ import zmq
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt, QCoreApplication
-from mamba_server.mzserver import MrClient, MnClient
+from ..backend.mzserver import MrClient, MnClient
 
 from .widgets.ui import rc_icons
 from .main_window import MainWindow
@@ -27,7 +27,7 @@ def main():
     app = QApplication([])
     mw = MainWindow()
     ctx = zmq.Context()
-    lport = int(config["network"]["lport"])
+    lport = int(config["backend"]["lport"])
     mrc = MrClient(lport, ctx = ctx)
     mnc = MnClient(lport, ctx = ctx)
 

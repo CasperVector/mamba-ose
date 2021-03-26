@@ -1,11 +1,11 @@
-# Usage: python3 ./mamba_server/zspawn.py 5678 ipython3 \
+# Usage: python3 -m mamba.backend.zspawn 5678 ipython3 \
 #            --InteractiveShellApp.exec_files='["docs/example_init.py"]'
 
 print("Example beamline init script loading...")
 
 from bluesky import RunEngine
 from ophyd.sim import SynAxis, SynGauss, DirectImage, np
-from mamba_server.mzserver import server_start
+from mamba.backend.mzserver import server_start
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):

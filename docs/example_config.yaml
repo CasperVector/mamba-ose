@@ -1,7 +1,8 @@
 ---
-network:
-  lport: 5678
+backend:
+    lport: 5678
+    init: "~/.mamba/init.py"
 
 scan:
-  plan_storage: "plans/"
+    plans: "~/.mamba/plans"
 
