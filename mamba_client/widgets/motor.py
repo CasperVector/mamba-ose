@@ -2,8 +2,7 @@ from PyQt5.QtWidgets import QWidget
 from PyQt5.QtGui import QIcon, QPixmap, QPalette
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
-import mamba_client
-from mamba_client.dialogs.device_select import DeviceSelectDialog
+from ..dialogs.device_select import DeviceSelectDialog
 from .ui.ui_motorwidget import Ui_MotorWidget
 
 class MotorWidget(QWidget):
@@ -12,7 +11,6 @@ class MotorWidget(QWidget):
     def __init__(self, mrc, motor_id=""):
         super().__init__()
 
-        self.logger = mamba_client.logger
         self.motor_id = motor_id
         self.mrc = mrc
         self.cur_pos = 0

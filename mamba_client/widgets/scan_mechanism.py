@@ -7,10 +7,9 @@ from PyQt5.QtWidgets import QWidget, QTableWidgetItem, QMessageBox, QInputDialog
 from PyQt5.QtGui import QIcon, QColor, QPixmap, QBrush
 from PyQt5.QtCore import Qt, QSize, QTimer, QMutex, pyqtSignal
 
-import mamba_client
-from mamba_client.dialogs.device_select import DeviceSelectDialog
-from mamba_client.dialogs.device_config import DeviceConfigDialog
-from mamba_client.dialogs.scan_file_option import ScanFileOptionDialog
+from ..dialogs.device_select import DeviceSelectDialog
+from ..dialogs.device_config import DeviceConfigDialog
+from ..dialogs.scan_file_option import ScanFileOptionDialog
 from .ui.ui_scanmechanismwidget import Ui_ScanMechanicsWidget
 
 MOTOR_ADD_COL = 0
@@ -30,7 +29,6 @@ ScanInstruction = namedtuple("ScanInstruction", ["motors", "detectors"])
 
 class ScanManager(object):
     def __init__(self, mrc, plan_dir):
-        self.logger = mamba_client.logger
         self.mrc = mrc
         self.plan_dir = plan_dir
         self.plans = {}
@@ -57,7 +55,6 @@ class ScanManager(object):
                         motors=motors,
                         detectors=plan_dic['detectors']
                     )
-                    self.logger.info(f"Scan plan loaded: {plan_dic['name']}")
             except (OSError, KeyError):
                 continue
 
@@ -130,11 +127,9 @@ class ScanManager(object):
         self.mrc.do_scan("abort")
 
 class ScanMechanismWidget(QWidget):
-    def __init__(self, mrc, mnc):
+    def __init__(self, mrc, mnc, config):
         super().__init__()
-        self.logger = mamba_client.logger
-        self.scan_manager = \
-            ScanManager(mrc, mamba_client.config['scan']['plan_storage'])
+        self.scan_manager = ScanManager(mrc, config['scan']['plan_storage'])
         self.mrc = mrc
         self.mnc = mnc
 
@@ -492,17 +487,12 @@ class ScanMechanismWidget(QWidget):
 
     def display_scan_data_options_dialog(self):
         dialog = ScanFileOptionDialog()
-
-        print(self.scan_data_options)
-
         scan_data_options = dialog.display(self.scan_data_options)
 
         for sdo in scan_data_options:
             for dev_sdo in self.scan_data_options[sdo['dev']]:
                 if dev_sdo['name'] == sdo['name']:
                     dev_sdo.update(sdo)
-
-        print(self.scan_data_options)
 
     def scan_status_update(self, msg):
         name = msg["typ"][1]

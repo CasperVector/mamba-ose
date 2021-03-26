@@ -5,15 +5,13 @@ from PyQt5.QtWidgets import (QAction, QDialog, QGridLayout, QHBoxLayout,
 from PyQt5.QtCore import QSize, QEventLoop, Qt
 from PyQt5.QtGui import QIcon
 
-import mamba_client
-from mamba_client.widgets.device_select import DeviceSelectWidget
-from mamba_client.widgets.device_config import DeviceConfigWidget
+from ..widgets.device_select import DeviceSelectWidget
+from ..widgets.device_config import DeviceConfigWidget
 
 class DeviceListConfigDialog(QDialog):
     def __init__(self, mrc, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Configure Device")
-        self.logger = mamba_client.logger
         self.mrc = mrc
         self.layout = QGridLayout()
 

@@ -5,14 +5,12 @@ from PyQt5.QtWidgets import (QAction, QDialog, QVBoxLayout, QLabel, QPushButton,
 from PyQt5.QtCore import QSize, QEventLoop, Qt
 from PyQt5.QtGui import QIcon
 
-import mamba_client
-from mamba_client.widgets.device_select import DeviceSelectWidget
+from ..widgets.device_select import DeviceSelectWidget
 
 class DeviceSelectDialog(QDialog):
     def __init__(self, parent, typ, name_exclude = []):
         super().__init__(parent)
         self.setWindowTitle("Select Device")
-        self.logger = mamba_client.logger
         self.mrc = parent.mrc
 
         self.layout = QVBoxLayout()

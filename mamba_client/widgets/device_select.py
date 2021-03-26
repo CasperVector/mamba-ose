@@ -4,14 +4,12 @@ from PyQt5.QtWidgets import (QWidget, QGridLayout, QLabel, QPushButton,
                              QSizePolicy)
 from PyQt5.QtCore import QSize, QEventLoop, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
-import mamba_client
 
 class DeviceSelectWidget(QWidget):
     device_selected = pyqtSignal(str)
 
     def __init__(self, mrc, typ, name_exclude = []):
         super().__init__()
-        self.logger = mamba_client.logger
         self.mrc = mrc
         self.typ = typ
         self.name_exclude = name_exclude

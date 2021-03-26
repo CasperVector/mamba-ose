@@ -5,12 +5,10 @@ from PyQt5.QtGui import QPixmap, QIcon, QColor
 
 import numpy as np
 import pyqtgraph as pg
-import mamba_client
 
 class Plot2DWidget(QWidget):
     def __init__(self, mnc):
         super().__init__()
-        self.logger = mamba_client.logger
         self.mnc = mnc
 
         self.layout = QVBoxLayout(self)
@@ -54,7 +52,6 @@ class Plot2DWidget(QWidget):
             return
         shape = np.shape(value)
         if len(shape) != 2:
-            self.logger.warning(f"Unsupported image shape {shape}.")
             return
         self.image_view.setImage(value)
         # levels = np.ptp(value)

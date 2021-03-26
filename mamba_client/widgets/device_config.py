@@ -4,14 +4,12 @@ from PyQt5.QtWidgets import (QWidget, QGridLayout, QVBoxLayout,
                              QSpacerItem)
 from PyQt5.QtCore import QSize, QEventLoop, Qt, pyqtSignal
 from PyQt5.QtGui import QIcon
-import mamba_client
 
 class DeviceConfigWidget(QWidget):
     config_changed = pyqtSignal()
 
     def __init__(self, mrc, device_id=""):
         super().__init__()
-        self.logger = mamba_client.logger
         self.mrc = mrc
         self.layout = QVBoxLayout()
 

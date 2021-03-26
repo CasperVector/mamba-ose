@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import QDialog, QTableWidgetItem
 from PyQt5.QtCore import Qt, QEventLoop
 
-from mamba_client.widgets.ui.ui_scanfileoption import Ui_ScanFileOption
+from ..widgets.ui.ui_scanfileoption import Ui_ScanFileOption
 
 
 DATA_DEV_COL = 0

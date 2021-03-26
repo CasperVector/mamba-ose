@@ -84,7 +84,12 @@ def mzserver_callback(mzs):
             notify({"typ": "scan/stop"})
     return cb
 
-def server_start(M, D, RE, lport = 5678):
+def server_start(M, D, RE, config = ""):
+    import os, yaml
+    if not config:
+        config = os.path.expanduser("~/.mamba/config.yaml")
+    with open(config, "r") as f:
+        lport = int(yaml.safe_load(f)["network"]["lport"])
     state = type("MzState", (object,), {"M": M, "D": D, "RE": RE})()
     mzs = MzServer(lport, state)
     RE.subscribe(mzserver_callback(mzs))

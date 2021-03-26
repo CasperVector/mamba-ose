@@ -1,0 +1,7 @@
+---
+network:
+  lport: 5678
+
+scan:
+  plan_storage: "plans/"
+

@@ -24,7 +24,8 @@ setup(
             "mamba_client=mamba_client.client_start:main"]
     },
     package_data={
-        'mamba_client': ["widgets/ui/*.ui", "widgets/ui/*.qrc", "widgets/ui/icons/*.png", "*.yaml"]
+        'mamba_client':
+            ["widgets/ui/*.ui", "widgets/ui/*.qrc", "widgets/ui/icons/*.png"]
     }
 )
 

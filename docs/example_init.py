@@ -5,8 +5,12 @@ print("Example beamline init script loading...")
 
 from bluesky import RunEngine
 from ophyd.sim import SynAxis, SynGauss, DirectImage, np
-from utils.general_utils import AttrDict
 from mamba_server.mzserver import server_start
+
+class AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__dict__ = self
 
 M = AttrDict(
     motor1 = SynAxis(name = "M.motor1", labels = {"motors"}),

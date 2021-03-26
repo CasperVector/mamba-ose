@@ -8,9 +8,7 @@ from matplotlib.backends.backend_qt5agg import (
     FigureCanvasQTAgg as FigureCanvas,
     NavigationToolbar2QT as NavigationToolbar)
 from matplotlib.figure import Figure
-
 from datetime import datetime
-import mamba_client
 
 
 DEFAULT_COLOR = QColor("blue")
@@ -20,7 +18,6 @@ class PlotWidget(QWidget):
     def __init__(self, mnc):
         super().__init__()
         self.mnc = mnc
-        self.logger = mamba_client.logger
         self.layout = QVBoxLayout(self)
         self.figure = Figure(figsize=(4, 2))
         self.canvas = FigureCanvas(self.figure)

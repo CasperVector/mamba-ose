@@ -3,8 +3,7 @@ from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QPushButton,
                              QSizePolicy, QSpacerItem)
 
-import mamba_client
-from mamba_client.widgets.device_config import DeviceConfigWidget
+from ..widgets.device_config import DeviceConfigWidget
 
 
 class DeviceConfigDialog(QDialog):
@@ -12,7 +11,6 @@ class DeviceConfigDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle(f"Configure Device: {device_id}")
         self.device_id = device_id
-        self.logger = mamba_client.logger
         self.mrc = mrc
 
         self.layout = QVBoxLayout()
