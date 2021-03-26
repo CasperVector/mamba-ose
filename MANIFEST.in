@@ -1,4 +1,0 @@
-include *.ice
-include *.yaml
-recursive-include mamba_client/widgets/ui/ *
-recursive-include mamba_client/widgets/ui/icons *.png
