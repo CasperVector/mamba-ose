@@ -9,7 +9,7 @@ from PyQt5.QtCore import Qt, QSize, QTimer, QMutex, pyqtSignal
 
 from ..dialogs.device_select import DeviceSelectDialog
 from ..dialogs.device_config import DeviceConfigDialog
-from ..dialogs.scan_file_option import ScanFileOptionDialog
+from ..dialogs.metadata_generator import MetadataGenerator
 from .ui.ui_scanmechanismwidget import Ui_ScanMechanicsWidget
 
 MOTOR_ADD_COL = 0
@@ -93,7 +93,7 @@ class ScanManager(object):
                        f"{float(motor.stop)}, {int(motor.point_num)},\n"
 
         command = command[:-2]
-        command += "))\n"
+        command += "), md = U.mdg.read_advance())\n"
 
         commands.append(command)
 
@@ -101,7 +101,7 @@ class ScanManager(object):
 
     def run_scan_plan(self, plan):
         for cmd in self.generate_scan_command(plan):
-            self.mrc.do_cmd(cmd)
+            self.mrc.do_cmd(cmd, wait = False)
 
     def getScanPlan(self, name):
         if name in self.plans:
@@ -136,7 +136,6 @@ class ScanMechanismWidget(QWidget):
 
         self.scanned_motors = {}
         self.scanned_detectors = []
-        self.scan_data_options = {}
 
         self.ui = Ui_ScanMechanicsWidget()
         self.ui.setupUi(self)
@@ -166,7 +165,7 @@ class ScanMechanismWidget(QWidget):
         self.ui.addPlanButton.clicked.connect(self.create_new_plan_clicked)
         self.ui.pauseButton.clicked.connect(self.pause_scan)
         self.ui.stopButton.clicked.connect(self.abort_scan)
-        self.ui.fileOptionButton.clicked.connect(self.display_scan_data_options_dialog)
+        self.ui.mdgButton.clicked.connect(self.display_mdg_dialog)
 
         self.ui.pauseButton.setEnabled(False)
         self.ui.stopButton.setEnabled(False)
@@ -179,16 +178,12 @@ class ScanMechanismWidget(QWidget):
         self.scan_paused = False
         self.scanning = False
 
-        self.ui.progressBar.setMinimum(0)
-        self.ui.progressBar.setMaximum(1)
-        self.ui.progressBar.setValue(0)
-
         self.scan_status_timer = QTimer()
         self.scan_status_timer.timeout.connect(self.update_elapse)
         self.scan_status_timer.start(500)
 
         self.populate_plan_combo()
-        self.mnc.subs["scan"].append(self.scan_status_update)
+        self.mnc.subscribe("scan", self.scan_status_update)
 
     def create_new_plan_clicked(self):
         name, ok = QInputDialog.getText(self, "Create new plan", "Plan name:")
@@ -283,7 +278,6 @@ class ScanMechanismWidget(QWidget):
                 name_to_delete = self.ui.motorTableWidget.item(
                     row, MOTOR_NAME_COL).text()
                 del self.scanned_motors[name_to_delete]
-                del self.scan_data_options[name_to_delete]
                 self.ui.motorTableWidget.removeRow(row)
                 self.plan_changed()
         elif col == MOTOR_SETUP_COL:
@@ -309,7 +303,6 @@ class ScanMechanismWidget(QWidget):
                 name_to_delete = self.ui.detectorTableWidget.item(
                     row, DETECTOR_NAME_COL).text()
                 self.scanned_detectors.remove(name_to_delete)
-                del self.scan_data_options[name_to_delete]
                 self.ui.detectorTableWidget.removeRow(row)
                 self.plan_changed()
         elif col == DETECTOR_SETUP_COL:
@@ -362,7 +355,6 @@ class ScanMechanismWidget(QWidget):
         else:
             if not motor_id:
                 return
-            self.scan_data_options[motor_id] = self.prepare_scan_data_option(motor_id)
             self.scanned_motors[motor_id] = MotorScanInstruction(
                 name=motor_id,
                 start=start,
@@ -410,7 +402,6 @@ class ScanMechanismWidget(QWidget):
             if not detector_id or detector_id in self.scanned_detectors:
                 return
             self.scanned_detectors.append(detector_id)
-            self.scan_data_options[detector_id] = self.prepare_scan_data_option(detector_id)
             detector_item = self._get_table_uneditable_item()
             detector_item.setText(detector_id)
             self.ui.detectorTableWidget.setItem(row, DETECTOR_NAME_COL, detector_item)
@@ -437,7 +428,6 @@ class ScanMechanismWidget(QWidget):
 
         self.ui.detectorTableWidget.blockSignals(True)
         self.scanned_detectors = []
-        self.scan_data_options = {}
         for row in reversed(range(self.ui.detectorTableWidget.rowCount())):
             self.ui.detectorTableWidget.removeRow(row)
         self.add_detector()
@@ -480,20 +470,8 @@ class ScanMechanismWidget(QWidget):
         self.editing_new_plan = False
         return True
 
-    def prepare_scan_data_option(self, detector_id):
-        return [{
-            "dev": detector_id, "name": k,
-            "type": v["dtype"], "save": True, "single": False
-        } for k, v in sorted(self.mrc.do_dev("describe", detector_id).items())]
-
-    def display_scan_data_options_dialog(self):
-        dialog = ScanFileOptionDialog()
-        scan_data_options = dialog.display(self.scan_data_options)
-
-        for sdo in scan_data_options:
-            for dev_sdo in self.scan_data_options[sdo['dev']]:
-                if dev_sdo['name'] == sdo['name']:
-                    dev_sdo.update(sdo)
+    def display_mdg_dialog(self):
+        MetadataGenerator(self.mrc, self).exec_()
 
     def scan_status_update(self, msg):
         name = msg["typ"][1]
@@ -502,7 +480,6 @@ class ScanMechanismWidget(QWidget):
             self.scan_paused = False
             self.ui.statusLabel.setText("RUNNING")
             self.ui.scanIDLabel.setText(str(msg["id"]))
-            self.ui.progressBar.setMaximum(1)
             self.scan_start_at = datetime.now()
             self.ui.frameLabel.setText(f"-/-")
             self.ui.runButton.setEnabled(False)

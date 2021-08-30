@@ -42,8 +42,8 @@ class PlotWidget(QWidget):
         self.lines = {}
         self.scanning = False
 
-        self.mnc.subs["scan"].append(self.update_scan)
-        self.mnc.subs["doc"].append(self.update_doc)
+        self.mnc.subscribe("scan", self.update_scan)
+        self.mnc.subscribe("doc", self.update_doc)
 
     @staticmethod
     def _icon(path):
@@ -81,6 +81,8 @@ class PlotWidget(QWidget):
         if msg["typ"][1] == "event":
             data, ts = msg["doc"]["data"], msg["doc"]["timestamps"]
             for name in self.data_sets:
+                if name not in data:
+                    continue
                 self.data_sets[name]["data"].append(data[name])
                 self.data_sets[name]["timestamp"].append\
                     (datetime.fromtimestamp(ts[name]))

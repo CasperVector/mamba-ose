@@ -36,7 +36,7 @@ class Plot2DWidget(QWidget):
         self.layout.addWidget(self.image_view)
 
         self.subscribed_data_name = ""
-        self.mnc.subs["doc"].append(self.update_doc)
+        self.mnc.subscribe("doc", self.update_doc)
 
     def show_data_select_dialog(self):
         name, ok = QInputDialog.getText(self, "Data source selection",

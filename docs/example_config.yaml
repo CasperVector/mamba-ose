@@ -3,6 +3,10 @@ backend:
     lport: 5678
     init: "~/.mamba/init.py"
 
+auth_md:
+    authserver: "ldap://202.122.39.69:389"
+    proposalserver: "http://hepsweb.ihep.ac.cn/a/beamtime"
+
 scan:
     plans: "~/.mamba/plans"
 

@@ -1,8 +1,6 @@
-from PyQt5.QtWidgets import (QAction, QDialog, QGridLayout, QHBoxLayout,
-                             QLabel, QPushButton, QListWidget, QListWidgetItem,
-                             QTableWidget, QTableWidgetItem, QSizePolicy,
-                             QSpacerItem)
-from PyQt5.QtCore import QSize, QEventLoop, Qt
+from PyQt5.QtWidgets import (QDialog, QGridLayout, QHBoxLayout,
+                             QPushButton, QSizePolicy, QSpacerItem)
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 
 from ..widgets.device_select import DeviceSelectWidget
@@ -65,13 +63,4 @@ class DeviceListConfigDialog(QDialog):
     def submit(self):
         self.config_widget.submit()
         self.close()
-
-    @classmethod
-    def get_action(cls, mrc, parent=None):
-        device_config_action = QAction("Device Config", parent)
-        def show_dialog():
-            dialog = cls(mrc, parent)
-            dialog.show()
-        device_config_action.triggered.connect(show_dialog)
-        return device_config_action
 

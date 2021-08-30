@@ -53,7 +53,7 @@ class MotorWidget(QWidget):
 
     def move_btn_clicked(self):
         self._update()
-        self.mrc.do_cmd("%s.set(%g).wait()\n" %
+        self.mrc.do_cmd("%s.set(%g) and None\n" %
             (self.motor_id, float(self.ui.targetAbsEdit.text())))
 
     def _update(self):

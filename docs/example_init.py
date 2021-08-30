@@ -25,7 +25,7 @@ D = AttrDict(
 )
 
 RE = RunEngine({})
-mzs = server_start(M, D, RE)
+U = server_start(M, D, RE)
 
 print("Beamline init script loaded.")
 

@@ -1,11 +1,14 @@
 import json
+import queue
 import threading
 import zmq
+
+class ZError(Exception): pass
 
 class ZServer(object):
     handles = ["cmd"]
 
-    def __init__(self, lport, state, ctx = None):
+    def __init__(self, lport, state, ctx = None, ipy = None):
         if not ctx:
             ctx = zmq.Context()
         self.lsock = ctx.socket(zmq.REQ)
@@ -16,6 +19,14 @@ class ZServer(object):
         self.nsock = ctx.socket(zmq.PUB)
         self.nsock.bind("tcp://127.0.0.1:%d" % (lport + 2))
         self.state = state
+        self.q = None
+        if ipy:
+            ipy.events.register("post_run_cell", self.putter)
+
+    def putter(self, result):
+        if self.q:
+            self.q.put({"ret": result.result,
+                "err": result.error_before_exec or result.error_in_exec})
 
     def notify(self, msg):
         with self.nlock:
@@ -35,13 +46,22 @@ class ZServer(object):
                 typ = None
             try:
                 hdl = self.handles.get(typ)
-                rep = hdl(req) if hdl else {"err": "syntax"}
-            except:
-                rep = {"err": "handle"}
+                rep = hdl(req) if hdl else \
+                    {"err": "syntax", "desc": "invalid ZServer RPC"}
+            except Exception as e:
+                if isinstance(e, ZError):
+                    rep = {"err": e.args[0]}
+                    if len(e.args) > 1:
+                        rep["desc"] = e.args[1]
+                else:
+                    name, desc = type(e).__name__, str(e)
+                    rep = {"err": "exc",
+                        "desc": name + ": " + desc if desc else name}
             try:
                 rep = json.dumps(rep).encode("UTF-8")
             except:
-                rep = {"err": "json"}
+                rep = b'{"err": "json", ' + \
+                    b'"desc": "error encoding ZServer response"}'
             try:
                 self.rsock.send(rep)
             except: pass
@@ -49,11 +69,23 @@ class ZServer(object):
     def do_cmd(self, req):
         try:
             cmd = req["cmd"].encode("UTF-8")
+            wait = req.get("wait", True)
+            assert isinstance(wait, bool)
         except:
-            return {"err": "syntax"}
+            raise ZError("syntax", "invalid `cmd' RPC")
+        if wait:
+            self.q = queue.Queue()
         self.lsock.send(cmd)
         assert not self.lsock.recv()
-        return {"err": ""}
+        if wait:
+            ret = self.q.get()
+            self.q = None
+            if ret["err"]:
+                raise(ret["err"])
+            ret = {"err": "", "ret": ret["ret"]}
+        else:
+            ret = {"err": ""}
+        return ret
 
 class ZrClient(object):
     def __init__(self, lport, ctx = None):
@@ -70,10 +102,13 @@ class ZrClient(object):
 
     def req_rep_chk(self, typ, op = None, **kwargs):
         rep = self.req_rep(typ, op, **kwargs)
-        assert rep["err"] == "", rep["err"]
+        if rep["err"]:
+            name, desc = rep["err"], rep.get("desc", "")
+            raise ZError("[%s]" % name + (desc and (" %s" % desc)))
         return rep
 
-    do_cmd = lambda self, cmd: self.req_rep_chk("cmd", cmd = cmd) and None
+    do_cmd = lambda self, cmd, **kwargs: \
+        self.req_rep_chk("cmd", cmd = cmd, **kwargs)
 
 class ZnClient(object):
     handles = []

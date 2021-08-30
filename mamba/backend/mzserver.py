@@ -1,9 +1,14 @@
 import base64
 import pickle
-from .zserver import ZServer, ZrClient, ZnClient
+from traceback import print_exc
+from .auth_md import MambaAuth, MambaMdGen
+from .zserver import ZError, ZServer, ZrClient, ZnClient
+
+def raise_syntax(typ):
+    raise ZError("syntax", "invalid `%s' RPC" % typ)
 
 class MzServer(ZServer):
-    handles = ZServer.handles + ["dev", "scan"]
+    handles = ZServer.handles + ["dev", "scan", "auth", "md"]
 
     def do_dev(self, req):
         try:
@@ -16,29 +21,26 @@ class MzServer(ZServer):
                     "describe_configuration", "read_configuration"]
             assert path[0] in ["M", "D"]
         except:
-            return {"err": "syntax"}
+            raise_syntax("dev")
         try:
             obj, p = self.state, path
             while p:
                 obj, p = getattr(obj, p[0]), p[1:]
-        except:
-            return {"err": "key"}
-        try:
             f = getattr(obj, op)
-            if op == "keys":
-                prefix = path[0] + "."
-                ret = [prefix + k for k in f()]
-            else:
-                ret = f(dot = True)
         except:
-            return {"err": "call"}
+            raise ZError("key", "improper device")
+        if op == "keys":
+            prefix = path[0] + "."
+            ret = [prefix + k for k in f()]
+        else:
+            ret = f(dot = True)
         return {"err": "", "ret": ret}
 
     def do_scan(self, req):
         try:
             op, = req["typ"][1:]
         except:
-            return {"err": "syntax"}
+            raise_syntax("scan")
         RE = self.state.RE
         if op == "pause":
             RE.request_pause()
@@ -49,20 +51,68 @@ class MzServer(ZServer):
         elif op == "abort":
             RE.abort()
         else:
-            return {"err": "syntax"}
+            raise_syntax("scan")
         return {"err": ""}
+
+    def do_auth(self, req):
+        try:
+            op, = req["typ"][1:]
+        except:
+            raise_syntax("auth")
+        auth = self.state.auth
+        if op == "pw":
+            try:
+                auth.pw = req["pw"]
+                return {"err": ""}
+            except:
+                raise_syntax("auth")
+        raise_syntax("auth")
+
+    def do_md(self, req):
+        try:
+            op, = req["typ"][1:]
+        except:
+            raise_syntax("md")
+        mdg = self.state.mdg
+        if not mdg.mds[-1]["beamtimeId"]:
+            raise ZError("deny", "not logged in")
+        if op == "read":
+            return {"err": "", "ret": mdg.read()}
+        elif op == "read_private":
+            return {"err": "", "ret": mdg.read_private()}
+        raise_syntax("md")
 
 class MrClient(ZrClient):
     do_dev = lambda self, op, path: \
         self.req_rep_chk("dev", op, path = path)["ret"]
     do_scan = lambda self, op: self.req_rep_chk("scan", op) and None
+    do_auth = lambda self, op, **kwargs: self.req_rep_chk("auth", op, **kwargs)
+    do_md = lambda self, op, **kwargs: self.req_rep_chk("md", op, **kwargs)
+
+def non_fatal(f):
+    def g(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except:
+            print_exc()
+    return g
 
 class MnClient(ZnClient):
     handles = ZnClient.handles + ["doc", "scan"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.subs = {typ: [] for typ in self.handles}
+        self.subs = {typ: {} for typ in self.handles}
+        self.ids = {typ: -1 for typ in self.handles}
+
+    def subscribe(self, typ, f):
+        ids = self.ids
+        ids[typ] += 1
+        self.subs[typ][ids[typ]] = non_fatal(f)
+        return ids[typ]
+
+    def unsubscribe(self, typ, i):
+        self.subs[typ].pop(i)
 
     def do_doc(self, msg):
         msg["doc"] = pickle.loads(base64.b64decode(msg["doc"].encode("UTF-8")))
@@ -89,10 +139,13 @@ def server_start(M, D, RE, config = ""):
     if not config:
         config = os.path.expanduser("~/.mamba/config.yaml")
     with open(config, "r") as f:
-        lport = int(yaml.safe_load(f)["backend"]["lport"])
-    state = type("MzState", (object,), {"M": M, "D": D, "RE": RE})()
-    mzs = MzServer(lport, state)
-    RE.subscribe(mzserver_callback(mzs))
-    mzs.start()
-    return mzs
+        config = yaml.safe_load(f)
+    lport = int(config["backend"]["lport"])
+    U = type("MzState", (object,), {"M": M, "D": D, "RE": RE})()
+    U.mdg = MambaMdGen()
+    U.auth = MambaAuth(config["auth_md"], U.mdg)
+    U.mzs = MzServer(lport, U, ipy = get_ipython())
+    RE.subscribe(mzserver_callback(U.mzs))
+    U.mzs.start()
+    return U
 
