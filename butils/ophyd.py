@@ -1,9 +1,9 @@
+import math
 import threading
 import time
-from ophyd import Device, Component, EpicsSignal, EpicsSignalRO, EpicsMotor, \
-	BlueskyInterface, PVPositionerPC, PseudoPositioner, PseudoSingle
-from ophyd.device import create_device_from_components
-from ophyd.pseudopos import pseudo_position_argument, real_position_argument
+from ophyd import Device, Component, \
+	EpicsSignal, EpicsSignalRO, EpicsMotor, PVPositionerPC
+from ophyd.signal import AttributeSignal
 from ophyd.status import Status
 from .common import masked_attr
 
@@ -15,9 +15,9 @@ class SimpleDet(Device):
 	value = Component(EpicsSignalRO, "")
 
 class EpicsMotorRO(EpicsMotor):
-	user_setpoint = Component(EpicsSignalRO, ".VAL")
-	user_offset = Component(EpicsSignalRO, ".OFF", kind = "config")
-	user_offset_dir = Component(EpicsSignalRO, ".DIR", kind = "config")
+	setpoint = Component(EpicsSignalRO, ".VAL")
+	offset = Component(EpicsSignalRO, ".OFF", kind = "config")
+	offset_dir = Component(EpicsSignalRO, ".DIR", kind = "config")
 	offset_freeze_switch = Component(EpicsSignalRO, ".FOFF", kind = "omitted")
 	set_use_switch = Component(EpicsSignalRO, ".SET", kind = "omitted")
 	velocity = Component(EpicsSignalRO, ".VELO", kind = "config")
@@ -36,7 +36,6 @@ class EpicsMotorRO(EpicsMotor):
 	stop = move = set_current_position = home = set_lim = masked_attr
 
 class MonoEnergy(PVPositionerPC):
-
 	setpoint = Component(EpicsSignal, "EAO")
 	readback = Component(EpicsSignalRO, "ERdbkAO",
 		kind = "hinted", auto_monitor = True)

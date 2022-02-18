@@ -1,12 +1,13 @@
+import h5py
+import numpy
+import pyqtgraph
 import bluesky.callbacks.mpl_plotting as mpl_cb
 from databroker.v0 import Broker
-from bluesky.callbacks.broker import LiveImage
-from bluesky.callbacks.stream import LiveDispatcher
+from bluesky.callbacks.core import CallbackBase
 
-def roi_sum(roi, arr):
-	(a, b), roi = roi[0], roi[1:]
-	return sum(roi_sum(roi, arr1) for arr1 in arr[a : b]) \
-		if roi else sum(arr[a : b])
+def roi_sum(roi, img):
+	img = numpy.array(img)
+	return img[roi[2] : roi[3], roi[0] : roi[1]].sum()
 
 def my_broker(d):
 	return Broker.from_config({
@@ -25,26 +26,64 @@ def my_broker(d):
 		}
 	})
 
-class MyLiveDispatcher(LiveDispatcher):
-	def start(self, doc):
-		super().start(doc)
-		self.my_uid = self._stream_start_uid
+def func_sub(fdic):
+	def cb(name, doc):
+		if name == "event":
+			for k1 in fdic:
+				if k1 in doc["data"]:
+					x = doc["data"].pop(k1)
+					for k2, f in fdic[k1]:
+						doc["data"][k2] = f(x)
+	return cb
 
-class FuncDispatcher(MyLiveDispatcher):
-	def __init__(self, fdic):
-		self.fdic = fdic
+class ImageFiller(CallbackBase):
+	def __init__(self):
 		super().__init__()
+		self.fields = []
+		self.datasets = {}
+		self.cache = {}
+
+	def descriptor(self, doc):
+		for k, v in doc["data_keys"].items():
+			if v.get("external") == "FILESTORE:":
+				self.fields.append(k)
+
+	def resource(self, doc):
+		if doc["spec"] == "AD_HDF5_SWMR" and \
+			doc["resource_kwargs"].get("frame_per_point") == 1:
+			f = h5py.File(doc["root"] + doc["resource_path"], "r", swmr = True)
+			self.datasets[doc["uid"]] = f["entry/data/data"]
+
+	def datum(self, doc):
+		d = self.datasets.get(doc["resource"])
+		if d:
+			self.cache[doc["datum_id"]] = d, doc["datum_kwargs"]["point_number"]
 
 	def event(self, doc):
-		for k1 in self.fdic:
-			if k1 in doc["data"]:
-				x = doc["data"].pop(k1)
-				for k2, f in self.fdic[k1]:
-					doc["data"][k2] = f(x)
-		return super().event(doc)
+		for k in self.fields:
+			if k in doc["data"]:
+				d, i = self.cache.pop(doc["data"][k])
+				d.refresh()
+				doc["data"][k] = d[i]
 
-class MyLiveImage(LiveImage):
-	update = lambda self, data: super().update(data[0])
+	def stop(self, doc):
+		for d in self.datasets.values():
+			d.file.close()
+		for obj in [self.fields, self.datasets, self.cache]:
+			obj.clear()
+
+class MyLiveImage(CallbackBase):
+	def __init__(self, field):
+		super().__init__()
+		pyqtgraph.setConfigOptions(imageAxisOrder = "row-major")
+		pyqtgraph.mkQApp()
+		self.field = field
+		self.iv = pyqtgraph.ImageView()
+		self.iv.show()
+
+	def event(self, doc):
+		super().event(doc)
+		self.iv.setImage(numpy.array(doc["data"][self.field]))
 
 @mpl_cb.make_class_safe(logger = mpl_cb.logger)
 class LivePlotX(mpl_cb.QtAwareCallback):

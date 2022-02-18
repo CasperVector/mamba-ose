@@ -1,14 +1,15 @@
 import time
+import numpy
 from ophyd import select_version, Component, \
 	AreaDetector, HDF5Plugin, SingleTrigger
 from ophyd.areadetector.cam import AreaDetectorCam
 from ophyd.areadetector.filestore_mixins import \
 	FileStoreHDF5, FileStoreIterativeWrite
+from ophyd.utils.errors import UnprimedPlugin
 
 MyHDF5Plugin = select_version(HDF5Plugin, (3, 15))
 
 class CptHDF5(MyHDF5Plugin, FileStoreHDF5, FileStoreIterativeWrite):
-
 	get_frames_per_point = lambda self: self.parent.cam.num_images.get()
 
 	def __init__(self, *args, **kwargs):
@@ -44,4 +45,6 @@ class MyAreaDetector(SingleTrigger, AreaDetector):
 	def warmup(self):
 		self.hdf1.warmup()
 		self.cam.warmup()
+		if not sum(self.hdf1.array_size.get()):
+			raise UnprimedPlugin("%s failed to warm up" % self.hdf1.vname())
 
