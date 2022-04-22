@@ -15,24 +15,18 @@ class SimpleDet(Device):
 	value = Component(EpicsSignalRO, "")
 
 class EpicsMotorRO(EpicsMotor):
-	setpoint = Component(EpicsSignalRO, ".VAL")
-	offset = Component(EpicsSignalRO, ".OFF", kind = "config")
-	offset_dir = Component(EpicsSignalRO, ".DIR", kind = "config")
-	offset_freeze_switch = Component(EpicsSignalRO, ".FOFF", kind = "omitted")
-	set_use_switch = Component(EpicsSignalRO, ".SET", kind = "omitted")
-	velocity = Component(EpicsSignalRO, ".VELO", kind = "config")
-	acceleration = Component(EpicsSignalRO, ".ACCL", kind = "config")
-	motor_egu = Component(EpicsSignalRO, ".EGU", kind = "config")
-	high_limit_switch = Component(EpicsSignalRO, ".HLS", kind = "omitted")
-	low_limit_switch = Component(EpicsSignalRO, ".LLS", kind = "omitted")
-	high_limit_travel = \
-		Component(EpicsSignalRO, ".HLM", kind = "omitted", auto_monitor = True)
-	low_limit_travel = \
-		Component(EpicsSignalRO, ".LLM", kind = "omitted", auto_monitor = True)
-	direction_of_travel = Component(EpicsSignalRO, ".TDIR", kind = "omitted")
-	motor_stop = Component(EpicsSignalRO, ".STOP", kind = "omitted")
-	home_forward = Component(EpicsSignalRO, ".HOMF", kind = "omitted")
-	home_reverse = Component(EpicsSignalRO, ".HOMR", kind = "omitted")
+	setpoint = Component(EpicsSignalRO,
+		".VAL", limits = True, auto_monitor = True)
+	offset, offset_dir, velocity, acceleration, motor_egu, motor_eres = \
+		[Component(EpicsSignalRO, suffix, kind = "config", auto_monitor = True)
+			for suffix in [".OFF", ".DIR", ".VELO", ".ACCL", ".EGU", ".ERES"]]
+	offset_freeze_switch, set_use_switch, \
+		high_limit_travel, low_limit_travel, direction_of_travel = \
+		[Component(EpicsSignalRO, suffix, kind = "omitted", auto_monitor = True)
+			for suffix in [".FOFF", ".SET", ".HLM", ".LLM", ".TDIR"]]
+	motor_stop, home_forward, home_reverse = \
+		[Component(EpicsSignalRO, suffix, kind = "omitted")
+			for suffix in [".STOP", ".HOMF", ".HOMR"]]
 	stop = move = set_current_position = home = set_lim = masked_attr
 
 class MonoEnergy(PVPositionerPC):
