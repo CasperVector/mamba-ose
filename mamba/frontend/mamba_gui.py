@@ -1,15 +1,11 @@
 #!/usr/bin/python3
 
-import os
 import sys
-import yaml
-import zmq
-
+from ..backend.mzserver import config_read, client_build
 from PyQt5.QtWidgets import QApplication, QAction
 from PyQt5.QtCore import Qt, QCoreApplication
-from ..backend.mzserver import MrClient, MnClient
 
-from .widgets.ui import rc_icons
+from ..icons import rc_icons
 from .main_window import MainWindow
 from .widgets.plot import PlotWidget
 from .widgets.plot_2d import Plot2DWidget
@@ -24,18 +20,11 @@ def action_button(parent, txt, f):
     return button
 
 def main():
-    config = sys.argv[1] if len(sys.argv) > 1 \
-        else os.path.expanduser("~/.mamba/config.yaml")
-    with open(config, "r") as f:
-        config = yaml.safe_load(f)
-
+    config = config_read(sys.argv[1] if len(sys.argv) > 1 else "")
+    mrc, mnc = client_build(config)
     QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
     app = QApplication([])
     mw = MainWindow()
-    ctx = zmq.Context()
-    lport = int(config["backend"]["lport"])
-    mrc = MrClient(lport, ctx = ctx)
-    mnc = MnClient(lport, ctx = ctx)
 
     mw.add_menu_item("Device", action_button(mw, "Device Config",
         lambda: DeviceListConfigDialog(mrc, mw).show()))

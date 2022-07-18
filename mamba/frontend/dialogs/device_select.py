@@ -26,7 +26,7 @@ class DeviceSelectDialog(QDialog):
         self.button_layout.addItem(button_spacer)
 
         self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.setIcon(QIcon(":/icons/delete.png"))
+        self.cancel_button.setIcon(QIcon(":/delete.png"))
         self.cancel_button.setSizePolicy(QSizePolicy(QSizePolicy.Fixed,
                                                      QSizePolicy.Fixed))
         self.cancel_button.setFocusPolicy(Qt.NoFocus)
@@ -34,7 +34,7 @@ class DeviceSelectDialog(QDialog):
         self.button_layout.addWidget(self.cancel_button, Qt.AlignRight)
 
         self.submit_button = QPushButton("Select")
-        self.submit_button.setIcon(QIcon(":/icons/checkmark.png"))
+        self.submit_button.setIcon(QIcon(":/checkmark.png"))
         self.submit_button.setSizePolicy(QSizePolicy(QSizePolicy.Fixed,
                                                      QSizePolicy.Fixed))
         self.submit_button.setFocusPolicy(Qt.NoFocus)

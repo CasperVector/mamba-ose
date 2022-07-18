@@ -24,7 +24,7 @@ class PlotWidget(QWidget):
         self.navbar = NavigationToolbar(self.canvas, self)
         self.navbar.setIconSize(QSize(15, 15))
 
-        a = self.navbar.addAction(self._icon(':/icons/link.png'),
+        a = self.navbar.addAction(self._icon(':/link.png'),
                                   "Select Data Source",
                                   self.show_data_source_dialog)
 
@@ -205,9 +205,9 @@ class PlotDataSelectDialog(QDialog):
         self.setLayout(self.layout)
 
         for btn, (pix, size) in [
-            (self.ok_btn, (QPixmap(":/icons/checkmark.png"), 0)),
-            (self.delete_btn, (QPixmap(":/icons/delete.png"), 0)),
-            (self.add_btn, (QPixmap(":/icons/list-add.png"), 0))
+            (self.ok_btn, (QPixmap(":/checkmark.png"), 0)),
+            (self.delete_btn, (QPixmap(":/delete.png"), 0)),
+            (self.add_btn, (QPixmap(":/list-add.png"), 0))
         ]:
             icon = QIcon(pix)
             btn.setIcon(icon)

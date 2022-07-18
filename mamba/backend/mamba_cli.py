@@ -2,13 +2,10 @@
 
 import os
 import sys
-import yaml
+from .mzserver import config_read
 
 def main():
-    config = sys.argv[1] if len(sys.argv) > 1 \
-        else os.path.expanduser("~/.mamba/config.yaml")
-    with open(config, "r") as f:
-        config = yaml.safe_load(f)["backend"]
+    config = config_read(sys.argv[1] if len(sys.argv) > 1 else "")["backend"]
     os.execlp("python3", "python3", "-m",
         "mamba.backend.zspawn", str(config["lport"]),
         "ipython3", "--InteractiveShellApp.exec_files=%r" %

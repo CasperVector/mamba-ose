@@ -34,7 +34,8 @@ class DeviceConfigWidget(QWidget):
         self.config_widget.blockSignals(True)
         self.device_config_items = []  # Remove all items
         # self.changed_config_rows = []
-        config_list = self.mrc.do_dev("read_configuration", device)
+        config_list = self.mrc.req_rep\
+            ("dev/read_configuration", path = device)["ret"]
         config_list = sorted(config_list.items())
         self.old_config_list = config_list
         self.config_widget.setRowCount(len(config_list))

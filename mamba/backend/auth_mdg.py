@@ -64,8 +64,9 @@ class MambaMdGen(object):
         self.reset()
 
     def reset(self):
-        self.mds = [{}, {}]
-        self.private = {"scan": -1, "beamtimes": None}
+        self.mds = [{}, {"instruments": {}}]
+        self.private = \
+            {"scan": -1, "beamtimes": None, "instruments": {}, "mdTrig": []}
         self.advance()
 
     def advance(self):
@@ -78,12 +79,17 @@ class MambaMdGen(object):
             beamtimeId = input("Beamtime ID: ")
         data, = [d for d in self.private["beamtimes"]
             if d["beamtimeId"] == beamtimeId]
+        data = data.copy()
         data.update(data.pop("proposal"))
         self.mds[-1].update({k: data.pop(k) for k in ["proposalcode",
             "proposalname", "beamtimeId", "startDate", "endDate"]})
         self.private.update(data)
 
     def read(self):
+        status = [v.trigger() for v in self.private["mdTrig"]]
+        [st.wait() for st in status]
+        for k, v in self.private["instruments"].items():
+            self.mds[-1]["instruments"][k] = v.get()
         ret = {}
         for d in self.mds:
             ret.update(d)
@@ -95,7 +101,11 @@ class MambaMdGen(object):
         return ret
 
     def read_private(self):
-        return self.private
+        ret = self.private.copy()
+        ret["instruments"] = \
+            {k: v.vname(True) for k, v in ret["instruments"].items()}
+        ret["mdTrig"] = [v.vname(True) for v in ret["mdTrig"]]
+        return ret
 
     def set(self, delta):
         for k, v in delta.items():

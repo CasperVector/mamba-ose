@@ -1,0 +1,15 @@
+<RCC>
+    <qresource prefix="/">
+        <file>list-add.png</file>
+        <file>list-remove.png</file>
+        <file>playback-stop.png</file>
+        <file>playback-pause.png</file>
+        <file>playback-play.png</file>
+        <file>settings.png</file>
+        <file>checkmark.png</file>
+        <file>delete.png</file>
+        <file>new-document.png</file>
+        <file>save.png</file>
+        <file>link.png</file>
+    </qresource>
+</RCC>

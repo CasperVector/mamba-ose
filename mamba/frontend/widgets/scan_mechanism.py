@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt, QSize, QTimer, QMutex, pyqtSignal
 from ..dialogs.device_select import DeviceSelectDialog
 from ..dialogs.device_config import DeviceConfigDialog
 from ..dialogs.metadata_generator import MetadataGenerator
-from .ui.ui_scanmechanismwidget import Ui_ScanMechanicsWidget
+from .ui_scanmechanismwidget import Ui_ScanMechanicsWidget
 
 MOTOR_ADD_COL = 0
 MOTOR_NAME_COL = 1
@@ -77,31 +77,19 @@ class ScanManager(object):
 
     @staticmethod
     def generate_scan_command(plan):
-        commands = []
         dets = [f'{name}' for name in plan.detectors]
         det_str = str(dets).replace("'", "")
-        command = ""
-        if len(plan.motors) > 1:
-            commands.append("from bluesky.plans import grid_scan\n")
-            command += f"RE(grid_scan({det_str},\n"
-        else:
-            commands.append("from bluesky.plans import scan\n")
-            command += f"RE(scan({det_str},\n"
-
+        command = f"RE(grid_scan({det_str},\x11\n"
         for motor in plan.motors:
             command += f"{motor.name}, {float(motor.start)}, " \
-                       f"{float(motor.stop)}, {int(motor.point_num)},\n"
-
-        command = command[:-2]
-        command += "), md = U.mdg.read_advance())\n"
-
-        commands.append(command)
-
-        return commands
+                       f"{float(motor.stop)}, {int(motor.point_num)},\x11\n"
+        command = command[:-2] + " progress = U.progress"
+        command += "),\x11\nmd = U.mdg.read_advance())\n"
+        return command
 
     def run_scan_plan(self, plan):
-        for cmd in self.generate_scan_command(plan):
-            self.mrc.do_cmd(cmd, wait = False)
+        self.mrc.req_rep_base("cmd", go = "",
+            cmd = self.generate_scan_command(plan))
 
     def getScanPlan(self, name):
         if name in self.plans:
@@ -118,13 +106,13 @@ class ScanManager(object):
         self.run_scan_plan(self.plans[name])
 
     def pauseScan(self):
-        self.mrc.do_scan("pause")
+        self.mrc.req_rep("scan/pause")
 
     def resumeScan(self):
-        self.mrc.do_scan("resume")
+        self.mrc.req_rep("scan/resume")
 
     def terminateScan(self):
-        self.mrc.do_scan("abort")
+        self.mrc.req_rep("scan/abort")
 
 class ScanMechanismWidget(QWidget):
     def __init__(self, mrc, mnc, config):
@@ -141,20 +129,20 @@ class ScanMechanismWidget(QWidget):
         self.ui.setupUi(self)
 
         for btn, (pix, size) in [
-            (self.ui.runButton, (QPixmap(":/icons/playback-play.png"), 32)),
-            (self.ui.pauseButton, (QPixmap(":/icons/playback-pause.png"), 32)),
-            (self.ui.stopButton, (QPixmap(":/icons/playback-stop.png"), 32)),
-            (self.ui.addPlanButton, (QPixmap(":/icons/new-document.png"), 0)),
-            (self.ui.savePlanButton, (QPixmap(":/icons/save.png"), 32))
+            (self.ui.runButton, (QPixmap(":/playback-play.png"), 32)),
+            (self.ui.pauseButton, (QPixmap(":/playback-pause.png"), 32)),
+            (self.ui.stopButton, (QPixmap(":/playback-stop.png"), 32)),
+            (self.ui.addPlanButton, (QPixmap(":/new-document.png"), 0)),
+            (self.ui.savePlanButton, (QPixmap(":/save.png"), 32))
         ]:
             icon = QIcon(pix)
             btn.setIcon(icon)
             if size > 0:
                 btn.setIconSize(QSize(size, size))
 
-        self.setting_icon = QIcon(":/icons/settings.png")
-        self.add_icon = QIcon(":/icons/list-add.png")
-        self.remove_icon = QIcon(":/icons/list-remove.png")
+        self.setting_icon = QIcon(":/settings.png")
+        self.add_icon = QIcon(":/list-add.png")
+        self.remove_icon = QIcon(":/list-remove.png")
 
         self.ui.motorTableWidget.itemClicked.connect(self.motor_table_clicked)
         self.ui.motorTableWidget.itemChanged.connect(self.motor_table_changed)
@@ -175,6 +163,7 @@ class ScanMechanismWidget(QWidget):
         self.current_plan_index = 0
 
         self.scan_start_at = datetime.now()
+        self.scan_eta = None
         self.scan_paused = False
         self.scanning = False
 
@@ -481,7 +470,7 @@ class ScanMechanismWidget(QWidget):
             self.ui.statusLabel.setText("RUNNING")
             self.ui.scanIDLabel.setText(str(msg["id"]))
             self.scan_start_at = datetime.now()
-            self.ui.frameLabel.setText(f"-/-")
+            self.ui.progress.setText("0%")
             self.ui.runButton.setEnabled(False)
             self.ui.stopButton.setEnabled(True)
             self.ui.pauseButton.setEnabled(True)
@@ -502,14 +491,24 @@ class ScanMechanismWidget(QWidget):
             self.ui.runButton.setEnabled(False)
             self.ui.pauseButton.setEnabled(True)
             self.ui.statusLabel.setText("RUNNING")
+        elif name == "progress":
+            self.ui.progress.setText("%d%%" % round(100 * msg["progress"]))
+            if msg["eta"] is not None:
+                self.scan_eta = datetime.fromtimestamp(msg["eta"])
 
     def update_elapse(self):
         if self.scanning and not self.scan_paused:
             elapsed = datetime.now() - self.scan_start_at
             self.ui.elapsedLabel.setText(self.convert_to_time(elapsed))
-            self.ui.etaLabel.setText("inf")
+            if self.scan_eta is None:
+                self.ui.etaLabel.setText("N/A")
+            else:
+                eta = self.scan_eta - datetime.now()
+                self.ui.etaLabel.setText(self.convert_to_time(eta))
         else:
+            self.ui.progress.setText("0%")
             self.ui.elapsedLabel.setText("0:00:00")
+            self.ui.etaLabel.setText("N/A")
 
     def pause_scan(self):
         self.scan_manager.pauseScan()

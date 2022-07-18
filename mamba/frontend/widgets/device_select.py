@@ -31,7 +31,8 @@ class DeviceSelectWidget(QWidget):
     def prepare_device_list(self):
         device_list = []
         for typ in self.typ:
-            device_list.extend(sorted(self.mrc.do_dev("keys", typ)))
+            device_list.extend(sorted(
+                self.mrc.req_rep("dev/keys", path = typ)["ret"]))
         for i, device in enumerate(device_list):
             if device in self.name_exclude:
                 continue

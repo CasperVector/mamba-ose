@@ -47,7 +47,7 @@ class MetadataGenerator(QDialog):
 
     def read(self):
         try:
-            ret = self.mrc.do_md("read")["ret"]
+            ret = self.mrc.req_rep("mdg/read")["ret"]
         except ZError as e:
             return QMessageBox.warning(self, "Error", str(e))
         for k, v in ret.items():

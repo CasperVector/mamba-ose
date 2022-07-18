@@ -7,6 +7,7 @@ pexpect
 PyQt5
 pyqtgraph
 python-ldap
+PyYAML
 pyzmq
 setuptools
 

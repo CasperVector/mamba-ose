@@ -25,7 +25,7 @@ class LoginDialog(QDialog):
         self.setLayout(layout)
 
     def check_login(self):
-        self.mrc.do_auth("pw", pw = self.login_pwd.text())
+        self.mrc.req_rep("auth/pw", pw = self.login_pwd.text())
         try:
             self.mrc.do_cmd("U.auth.login(%r)\n" % self.login_username.text())
         except ZError as e:

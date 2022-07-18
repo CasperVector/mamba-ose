@@ -17,7 +17,7 @@ class Plot2DWidget(QWidget):
 
         self.navbar = QToolBar()
         self.navbar.setIconSize(QSize(15, 15))
-        a = self.navbar.addAction(self._icon(':/icons/link.png'),
+        a = self.navbar.addAction(self._icon(':/link.png'),
                                   "Select Data Source",
                                   self.show_data_select_dialog)
         self.layout.addWidget(self.navbar)

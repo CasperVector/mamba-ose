@@ -3,7 +3,7 @@ from PyQt5.QtGui import QIcon, QPixmap, QPalette
 from PyQt5.QtCore import Qt, pyqtSignal, QTimer
 
 from ..dialogs.device_select import DeviceSelectDialog
-from .ui.ui_motorwidget import Ui_MotorWidget
+from .ui_motorwidget import Ui_MotorWidget
 
 class MotorWidget(QWidget):
     update = pyqtSignal()
@@ -22,7 +22,7 @@ class MotorWidget(QWidget):
 
         self.ui = Ui_MotorWidget()
         self.ui.setupUi(self)
-        self.ui.moveBtn.setIcon(QIcon(QPixmap(":/icons/playback-play.png")))
+        self.ui.moveBtn.setIcon(QIcon(QPixmap(":/playback-play.png")))
         self.ui.moveBtn.setEnabled(False)
         self.ui.moveBtn.clicked.connect(self.move_btn_clicked)
         self.ui.motorSelectBtn.clicked.connect(self.select_motor_clicked)
@@ -58,8 +58,9 @@ class MotorWidget(QWidget):
 
     def _update(self):
         if self.motor_id:
-            self.cur_pos = self.mrc.do_dev("read", self.motor_id)\
-                [self.motor_id + ".setpoint"]["value"]
+            self.cur_pos = self.mrc.req_rep(
+                "dev/read", path = self.motor_id
+            )["ret"][self.motor_id + ".setpoint"]["value"]
             self.ui.motorNameLabel.setText(self.motor_id)
             self.ui.curPosLabel.setText("{:.2f}".format(self.cur_pos))
             self.sync_abs_rel_edit()

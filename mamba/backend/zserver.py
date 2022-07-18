@@ -1,14 +1,52 @@
 import json
 import queue
+import re
 import threading
+import traceback
+import uuid
 import zmq
 
 class ZError(Exception): pass
 
+def non_fatal(f):
+    def g(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except:
+            traceback.print_exc()
+    return g
+
+def raise_syntax(req):
+    raise ZError("syntax", "invalid `%s' RPC" % req["typ"][0])
+
+def unary_op(req):
+    try:
+        op, = req["typ"][1:]
+        return op
+    except:
+        raise_syntax(req)
+
+def zsv_err_fmt(e):
+    if isinstance(e, ZError):
+        rep = {"err": e.args[0]}
+        if len(e.args) > 1:
+            rep["desc"] = e.args[1]
+    else:
+        name, desc = type(e).__name__, str(e)
+        rep = {"err": "exc", "desc":
+            name + ": " + desc if desc else name}
+    return rep
+
+def zsv_rep_chk(rep):
+    if rep["err"]:
+        name, desc = rep["err"], rep.get("desc", "")
+        raise ZError("[%s]" % name + (desc and (" %s" % desc)))
+    return rep
+
 class ZServer(object):
     handles = ["cmd"]
 
-    def __init__(self, lport, state, ctx = None, ipy = None):
+    def __init__(self, lport, state, globals, ctx = None):
         if not ctx:
             ctx = zmq.Context()
         self.lsock = ctx.socket(zmq.REQ)
@@ -18,15 +56,35 @@ class ZServer(object):
         self.nlock = threading.Lock()
         self.nsock = ctx.socket(zmq.PUB)
         self.nsock.bind("tcp://127.0.0.1:%d" % (lport + 2))
-        self.state = state
-        self.q = None
-        if ipy:
-            ipy.events.register("post_run_cell", self.putter)
+        self.state, self.ipy = state, False
+        self.q = self.uid = None
 
-    def putter(self, result):
-        if self.q:
-            self.q.put({"ret": result.result,
-                "err": result.error_before_exec or result.error_in_exec})
+        if "get_ipython" in globals:
+            self.ipy = True
+            def putter(result):
+                if self.q:
+                    self.q.put({"ret": result.result, "err":
+                        result.error_before_exec or result.error_in_exec})
+            globals["get_ipython"]().events.register("post_run_cell", putter)
+            from IPython.core.magic import register_line_cell_magic
+            @register_line_cell_magic
+            def go(line, cell = None):
+                if cell:
+                    line += "\n" + cell
+                uid, note = (uuid.uuid4(), False) \
+                    if self.uid is None else (self.uid, True)
+                self.uid = None
+                def inner():
+                    try:
+                        rep = {"err": "", "ret": eval(line, globals)}
+                        print("%s: %s" % (uid, rep["ret"]))
+                    except Exception as e:
+                        rep = zsv_err_fmt(e)
+                        print("%s %s" % (uid, traceback.format_exc()), end = "")
+                    if note:
+                        self.notify({"typ": "go", "uid": str(uid), "rep": rep})
+                threading.Thread(target = inner, daemon = True).start()
+                return uid
 
     def notify(self, msg):
         with self.nlock:
@@ -48,15 +106,8 @@ class ZServer(object):
                 hdl = self.handles.get(typ)
                 rep = hdl(req) if hdl else \
                     {"err": "syntax", "desc": "invalid ZServer RPC"}
-            except Exception as e:
-                if isinstance(e, ZError):
-                    rep = {"err": e.args[0]}
-                    if len(e.args) > 1:
-                        rep["desc"] = e.args[1]
-                else:
-                    name, desc = type(e).__name__, str(e)
-                    rep = {"err": "exc",
-                        "desc": name + ": " + desc if desc else name}
+            except (Exception, KeyboardInterrupt) as e:
+                rep = zsv_err_fmt(e)
             try:
                 rep = json.dumps(rep).encode("UTF-8")
             except:
@@ -66,52 +117,41 @@ class ZServer(object):
                 self.rsock.send(rep)
             except: pass
 
+    def get_state(self, req):
+        return getattr(self.state, req["typ"][0])
+
     def do_cmd(self, req):
         try:
             cmd = req["cmd"].encode("UTF-8")
-            wait = req.get("wait", True)
-            assert isinstance(wait, bool)
+            uid = req.get("go", None)
+            if uid is not None and uid != "":
+                assert self.ipy
+                self.uid = uid = uuid.UUID(uid)
         except:
-            raise ZError("syntax", "invalid `cmd' RPC")
-        if wait:
+            raise_syntax(req)
+        if uid is None:
             self.q = queue.Queue()
         self.lsock.send(cmd)
         assert not self.lsock.recv()
-        if wait:
+        if uid is None:
             ret = self.q.get()
             self.q = None
             if ret["err"]:
                 raise(ret["err"])
             ret = {"err": "", "ret": ret["ret"]}
         else:
+            if not cmd:
+                self.uid = None
+                self.notify({"typ": "go", "uid": str(uid),
+                    "rep": {"err": "", "ret": None}})
             ret = {"err": ""}
         return ret
 
-class ZrClient(object):
-    def __init__(self, lport, ctx = None):
-        if not ctx:
-            ctx = zmq.Context()
-        self.rsock = ctx.socket(zmq.REQ)
-        self.rsock.connect("tcp://127.0.0.1:%d" % (lport + 1))
-
-    def req_rep(self, typ, op = None, **kwargs):
-        req = {"typ": typ + "/" + op if op else typ}
-        req.update(kwargs)
-        self.rsock.send_json(req)
-        return self.rsock.recv_json()
-
-    def req_rep_chk(self, typ, op = None, **kwargs):
-        rep = self.req_rep(typ, op, **kwargs)
-        if rep["err"]:
-            name, desc = rep["err"], rep.get("desc", "")
-            raise ZError("[%s]" % name + (desc and (" %s" % desc)))
-        return rep
-
-    do_cmd = lambda self, cmd, **kwargs: \
-        self.req_rep_chk("cmd", cmd = cmd, **kwargs)
+def znc_handle_gen(typ):
+    return lambda self, msg: [sub(msg) for sub in self.subs[typ].values()]
 
 class ZnClient(object):
-    handles = []
+    handles = ["go"]
 
     def __init__(self, lport, ctx = None):
         if not ctx:
@@ -119,6 +159,9 @@ class ZnClient(object):
         self.nsock = ctx.socket(zmq.SUB)
         self.nsock.subscribe("")
         self.nsock.connect("tcp://127.0.0.1:%d" % (lport + 2))
+        # Insertion order preserved by dict() since Python 3.6.
+        self.subs = {typ: {} for typ in self.handles}
+        self.ids = {typ: -1 for typ in self.handles}
 
     def start(self):
         self.handles = {typ: getattr(self, "do_" + typ) for typ in self.handles}
@@ -135,4 +178,84 @@ class ZnClient(object):
             hdl = self.handles.get(typ)
             if hdl:
                 hdl(msg)
+
+    def subscribe(self, typ, f):
+        ids = self.ids
+        ids[typ] += 1
+        self.subs[typ][ids[typ]] = non_fatal(f)
+        return ids[typ]
+
+    def unsubscribe(self, typ, i):
+        self.subs[typ].pop(i)
+
+    do_go = znc_handle_gen("go")
+
+class ZStatus(object):
+    def __init__(self, zrc, uid):
+        self.zrc, self.uid, self.q = zrc, uid, queue.Queue()
+        self.cb = self.rep = None
+        with self.zrc.slock:
+            self.zrc.status[uid] = self
+
+    def done(self, rep):
+        with self.zrc.slock:
+            self.zrc.status.pop(self.uid)
+            self.rep = rep
+        if self.cb:
+            self.cb(rep)
+        self.q.put(None)
+
+    def subscribe(self, cb):
+        with self.zrc.slock:
+            if not self.rep:
+                self.cb = cb
+            return
+        cb(self.rep)
+
+    def wait(self, timeout = None):
+        self.q.get(timeout = timeout)
+        return zsv_rep_chk(self.rep)
+
+class ZrClient(object):
+    def __init__(self, lport, znc = None, ctx = None):
+        if znc:
+            self.status, self.znc = {}, znc
+            self.slock = threading.Lock()
+            def sub(msg):
+                st = self.status.get(uuid.UUID(msg["uid"]))
+                if st:
+                    st.done(msg["rep"])
+            znc.subscribe("go", sub)
+        if not ctx:
+            ctx = zmq.Context()
+        self.rlock = threading.Lock()
+        self.rsock = ctx.socket(zmq.REQ)
+        self.rsock.connect("tcp://127.0.0.1:%d" % (lport + 1))
+
+    def req_rep_base(self, typ, **kwargs):
+        req = {"typ": typ}
+        req.update(kwargs)
+        with self.rlock:
+            self.rsock.send_json(req)
+            return self.rsock.recv_json()
+
+    def req_rep(self, typ, **kwargs):
+        return zsv_rep_chk(self.req_rep_base(typ, **kwargs))
+
+    def do_cmd(self, cmd):
+        if not re.match(r"%%?go\b", cmd):
+            return self.req_rep("cmd", cmd = cmd)
+        assert isinstance(self.znc.handles, dict)
+        uid = uuid.uuid4()
+        status = ZStatus(self, uid)
+        self.req_rep("cmd", cmd = "" if cmd == "%go\n" else cmd, go = str(uid))
+        return status
+
+def zcompose(name, parent, addon):
+    if hasattr(parent, "handles"):
+        handles = parent.handles + list(addon.keys())
+    addon = {"do_" + k: v for k, v in addon.items()}
+    if hasattr(parent, "handles"):
+        addon["handles"] = handles
+    return type(name, (parent,), addon)
 
