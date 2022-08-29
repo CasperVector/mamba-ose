@@ -1,53 +1,31 @@
 #!/usr/bin/python3
 
-import sys
-from ..backend.mzserver import config_read, client_build
-from PyQt5.QtWidgets import QApplication, QAction
-from PyQt5.QtCore import Qt, QCoreApplication
+import importlib
+import re
+from ..backend.mzserver import config_read
 
-from ..icons import rc_icons
-from .main_window import MainWindow
-from .widgets.plot import PlotWidget
-from .widgets.plot_2d import Plot2DWidget
-from .widgets.scan_mechanism import ScanMechanismWidget
-from .widgets.motor import MotorWidget
-from .dialogs.device_list_config import DeviceListConfigDialog
-from .dialogs.auth_dialog import LoginDialog, LogoutDialog
+def guis_find(paths):
+    ret = []
+    for mod, farg, desc in [path.split(":") for path in paths]:
+        f, arg = re.match(r"([^()]+)\(([^()]*)\)$", farg).groups()
+        ret.append((mod, f, arg, desc))
+    return ret
 
-def action_button(parent, txt, f):
-    button = QAction(txt, parent)
-    button.triggered.connect(f)
-    return button
+def gui_exec(mod, f, arg):
+    getattr(importlib.import_module(mod), f)(arg)
 
 def main():
-    config = config_read(sys.argv[1] if len(sys.argv) > 1 else "")
-    mrc, mnc = client_build(config)
-    QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
-    app = QApplication([])
-    mw = MainWindow()
-
-    mw.add_menu_item("Device", action_button(mw, "Device Config",
-        lambda: DeviceListConfigDialog(mrc, mw).show()))
-    mw.add_menu_item("Auth", action_button(mw, "Login",
-        lambda: LoginDialog(mrc, mw).show()))
-    mw.add_menu_item("Auth", action_button(mw, "Logout",
-        lambda: LogoutDialog(mrc, mw).show()))
-
-    mw.add_widget("Motor", lambda: MotorWidget(mrc))
-    mw.add_widget("Scan Mechanism",
-        lambda: ScanMechanismWidget(mrc, mnc, config))
-    mw.add_widget("Plot1D", lambda: PlotWidget(mnc))
-    mw.add_widget("Plot2D", lambda: Plot2DWidget(mnc))
-    mw.set_layout({
-        ("left", "Motor"),
-        ("left", "Scan Mechanism"),
-        ("right", "Plot1D"),
-        ("right", "Plot2D")
-    })
-
-    mnc.start()
-    mw.show()
-    app.exec_()
+    guis = guis_find(config_read()["frontend"]["guis"])
+    if not guis:
+        raise ValueError("No GUI listed in Mamba config file")
+    if len(guis) == 1:
+        i = 0
+    else:
+        for i, (mod, f, arg, desc) in enumerate(guis):
+            print("%d: %s" % (i, desc))
+        i = int(input("GUI to run [0]: ") or "0")
+    mod, f, arg, desc = guis[i]
+    gui_exec(mod, f, arg)
 
 if __name__ == "__main__":
     main()

@@ -1,13 +1,15 @@
 import importlib
 import os
 import re
+import sys
 import yaml
 import zmq
 from .zserver import ZServer, ZrClient, ZnClient, zcompose
 
-def config_read(config = ""):
-    if not config:
-        config = os.path.expanduser("~/.mamba/config.yaml")
+def config_read(config = None):
+    if config is None:
+        config = sys.argv[1] if len(sys.argv) > 1 else \
+            os.path.expanduser("~/.mamba/config.yaml")
     with open(config, "r") as f:
         return yaml.safe_load(f)
 

@@ -1,5 +1,5 @@
-# Usage: python3 -m mamba.backend.zspawn 5678 ipython3 \
-#            --InteractiveShellApp.exec_files='["docs/example_init.py"]'
+# Usage: python3 -m mamba.backend.zspawn 5678 \
+#            ipython3 -i docs/example_init.py docs/example_config.yaml
 
 print("Example beamline init script loading...")
 

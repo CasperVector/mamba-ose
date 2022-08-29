@@ -5,11 +5,11 @@ import sys
 from .mzserver import config_read
 
 def main():
-    config = config_read(sys.argv[1] if len(sys.argv) > 1 else "")["backend"]
+    config = config_read()["backend"]
+    args = ["--"] + sys.argv[1:] if len(sys.argv) > 1 else []
     os.execlp("python3", "python3", "-m",
         "mamba.backend.zspawn", str(config["lport"]),
-        "ipython3", "--InteractiveShellApp.exec_files=%r" %
-            [os.path.expanduser(config["init"])])
+        "ipython3", "-i", os.path.expanduser(config["init"]), *args)
 
 if __name__ == "__main__":
     main()
