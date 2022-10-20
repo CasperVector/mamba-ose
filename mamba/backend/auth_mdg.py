@@ -4,7 +4,7 @@ import re
 from getpass import getpass
 from urllib.parse import quote
 from urllib.request import urlopen
-from .zserver import ZError
+from .zserver import ZError, raise_syntax, unary_op
 
 class MambaAuth(object):
     def __init__(self, config, mdg):
@@ -116,4 +116,32 @@ class MambaMdGen(object):
             if k == "sampleName":
                 assert re.match("[A-Za-z0-9_]+$", delta["sampleName"])
             self.mds[0][k] = v
+
+def mzs_auth(self, req):
+    op, state = unary_op(req), self.get_state(req)
+    if op == "pw":
+        try:
+            state.pw = req["pw"]
+            return {"err": ""}
+        except:
+            raise_syntax(req)
+    raise_syntax(req)
+
+def mzs_mdg(self, req):
+    op, state = unary_op(req), self.get_state(req)
+    if "beamtimeId" not in state.mds[-1]:
+        raise ZError("deny", "beamtime ID not selected")
+    if op == "read":
+        return {"err": "", "ret": state.read()}
+    elif op == "read_private":
+        return {"err": "", "ret": state.read_private()}
+    raise_syntax(req)
+
+addonMzs = {"auth": mzs_auth, "mdg": mzs_mdg}
+
+def state_build(U, config):
+    U.mdg = MambaMdGen()
+    U.auth = MambaAuth(config["auth_mdg"], U.mdg)
+
+saddon_authmdg = lambda arg: {"mzs": addonMzs, "state": state_build}
 

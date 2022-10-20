@@ -26,7 +26,7 @@ def unary_op(req):
     except:
         raise_syntax(req)
 
-def zsv_err_fmt(e):
+def zsv_err_rep(e):
     if isinstance(e, ZError):
         rep = {"err": e.args[0]}
         if len(e.args) > 1:
@@ -39,9 +39,11 @@ def zsv_err_fmt(e):
 
 def zsv_rep_chk(rep):
     if rep["err"]:
-        name, desc = rep["err"], rep.get("desc", "")
-        raise ZError("[%s]" % name + (desc and (" %s" % desc)))
+        raise ZError(rep["err"], rep.get("desc", ""))
     return rep
+
+def zsv_err_fmt(e):
+    return "[%s]" % e.args[0] + (e.args[1] and (" %s" % e.args[1]))
 
 class ZServer(object):
     handles = ["cmd"]
@@ -79,7 +81,7 @@ class ZServer(object):
                         rep = {"err": "", "ret": eval(line, globals)}
                         print("%s: %s" % (uid, rep["ret"]))
                     except Exception as e:
-                        rep = zsv_err_fmt(e)
+                        rep = zsv_err_rep(e)
                         print("%s %s" % (uid, traceback.format_exc()), end = "")
                     if note:
                         self.notify({"typ": "go", "uid": str(uid), "rep": rep})
@@ -107,7 +109,7 @@ class ZServer(object):
                 rep = hdl(req) if hdl else \
                     {"err": "syntax", "desc": "invalid ZServer RPC"}
             except (Exception, KeyboardInterrupt) as e:
-                rep = zsv_err_fmt(e)
+                rep = zsv_err_rep(e)
             try:
                 rep = json.dumps(rep).encode("UTF-8")
             except:

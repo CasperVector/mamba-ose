@@ -1,65 +1,68 @@
+import pyqtgraph
 import sys
-import pyqtgraph as pg
-from mamba.backend.zserver import zsv_rep_chk
+from PyQt5 import QtCore, QtGui, QtWidgets
 from mamba.backend.mzserver import config_read, client_build
-from mamba.frontend.utils import slot_gen, model_connect
-from PyQt5.QtCore import QObject, pyqtSignal
-from PyQt5.QtGui import QDoubleValidator
-from PyQt5.QtWidgets import QHBoxLayout, QVBoxLayout, QApplication, \
-    QMainWindow, QWidget, QLabel, QLineEdit, QPushButton
+from mamba.frontend.utils import MambaZModel, MambaView
+from mamba.frontend.pgitems import MyImageItem, MyROI, TargetPlot, MyImageView
 
-class ImageOrigin(QWidget):
-    def __init__(self, model, parent = None, typs = None):
+class XesImage(MambaView, pyqtgraph.GraphicsView):
+    def __init__(self, model, parent = None, mtyps = ({}, {})):
         super().__init__(parent)
-        self.first = True
-        self.iv = pg.ImageView()
-        self.vl = pg.InfiniteLine(angle = 90, movable = False)
-        self.hl = pg.InfiniteLine(angle = 0, movable = False)
-        self.iv.addItem(self.vl)
-        self.iv.addItem(self.hl)
-        layout = QHBoxLayout()
-        layout.addWidget(self.iv)
-        self.setLayout(layout)
-        model_connect(self, model, typs, ["img", "origin"])
+        ci = MyImageView(view = TargetPlot())
+        self.target = ci.view.target
+        self.target.setZValue(20)
+        ci.view.vl.setZValue(10)
+        ci.view.hl.setZValue(10)
+        self.roi = MyROI((0, 0))
+        self.roi.setZValue(10)
+        ci.view.addItem(self.roi)
+        self.setCentralItem(ci)
+        self.on_img = ci.setImage
+        self.on_roi = self.roi.setXywh
+        self.on_origin = self.target.setPos
+        self.roi.sigRegionChangeFinished.connect\
+            (lambda: self.submit("roi", self.roi.getXywh()))
+        self.target.sigPositionChangeFinished.connect\
+            (lambda: self.submit("origin", tuple(self.target.pos())))
+        self.sbind(model, mtyps, ["roi", "origin"])
+        self.nbind(mtyps, ["mode", "img", "roi", "origin"])
 
-    def on_img(self, img):
-        self.iv.setImage(img, autoLevels = self.first)
-        self.first = False
+    def on_mode(self, mode):
+        self.roi.setVisible(mode != "unstaged")
+        self.target.setVisible(mode != "unstaged")
 
-    def on_origin(self, origin):
-        self.vl.setValue(origin[0])
-        self.hl.setValue(origin[1])
-
-class XesView(QMainWindow):
+class XesView(MambaView, QtWidgets.QMainWindow):
     def __init__(self, model, parent = None):
         super().__init__(parent)
         self.setWindowTitle("Attitude tuning for XES spectrometer")
-        layout0, layout1 = QVBoxLayout(), QHBoxLayout()
-        layout1.addWidget(QLabel("Motors:", parent))
-        self.mx, self.my = QLineEdit(parent), QLineEdit(parent)
+        layout0, layout1 = QtWidgets.QVBoxLayout(), QtWidgets.QHBoxLayout()
+        layout1.addWidget(QtWidgets.QLabel("Motors:", parent))
+        self.mx = QtWidgets.QLineEdit(parent)
+        self.my = QtWidgets.QLineEdit(parent)
         for widget in [self.mx, self.my]:
             widget.setMinimumWidth(6 * 8)
-            widget.setValidator(QDoubleValidator(parent))
+            widget.setValidator(QtGui.QDoubleValidator(parent))
             layout1.addWidget(widget, stretch = 1)
-        self.update = QPushButton("Update", parent)
+        self.update = QtWidgets.QPushButton("Update", parent)
         layout1.addWidget(self.update)
-        layout1.addWidget(QLabel("Evaluation:", parent))
-        self.ev = QLineEdit(parent)
+        layout1.addWidget(QtWidgets.QLabel("Evaluation:", parent))
+        self.ev = QtWidgets.QLineEdit(parent)
         self.ev.setMinimumWidth(24 * 8)
         layout1.addWidget(self.ev, stretch = 3)
-        self.tune = QPushButton("Auto tune", parent)
+        self.tune = QtWidgets.QPushButton("Auto tune", parent)
         layout1.addWidget(self.tune)
         layout0.addLayout(layout1)
-        widget = ImageOrigin(model)
+        widget = XesImage(model)
         widget.setMinimumHeight(512)
         layout0.addWidget(widget)
-        widget = QWidget(self)
+        widget = QtWidgets.QWidget(self)
         widget.setLayout(layout0)
         self.setCentralWidget(widget)
         self.ev.setEnabled(False)
-        self.update.clicked.connect(self.emit_update)
-        self.tune.clicked.connect(lambda: self.model.emit("begin_tune"))
-        model_connect(self, model, None, ["mode", "motors", "eval"])
+        self.sbind(model, ({}, {}), ["update", "begin_tune"])
+        self.update.clicked.connect(self.submit_update)
+        self.tune.clicked.connect(lambda: self.submit("begin_tune"))
+        self.nbind(({}, {}), ["mode", "motors", "eval"])
 
     def on_mode(self, mode):
         self.update.setEnabled(mode != "tuning")
@@ -73,26 +76,21 @@ class XesView(QMainWindow):
     def on_eval(self, ev):
         self.ev.setText(", ".join("%.7g" % x for x in ev))
 
-    def emit_update(self):
-        self.model.emit("update",
+    def submit_update(self):
+        self.submit("update",
             float(self.mx.text()) if self.mx.hasAcceptableInput() else None,
             float(self.my.text()) if self.my.hasAcceptableInput() else None)
 
-class XesModel(QObject):
-    sigEmit, sigNote = pyqtSignal(tuple), pyqtSignal(tuple)
-    emit = lambda self, *args: self.sigEmit.emit(args)
-    note = lambda self, *args: self.sigNote.emit(args)
-
+class XesModel(MambaZModel, QtCore.QObject):
     def __init__(self, name):
         super().__init__()
-        pg.setConfigOptions(imageAxisOrder = "row-major")
         self.name, (self.mrc, self.mnc) = name, client_build(config_read())
-        self.app, self.view = QApplication([]), XesView(self)
+        self.app, self.view = QtWidgets.QApplication([]), XesView(self)
         self.ad = self.motors = None
-        self.app.aboutToQuit.connect(lambda: self.emit("quit"))
-        self.sigEmit.connect(slot_gen(self, None,
-            ["doc", "quit", "update", "begin_tune", "end_tune"]))
+        self.app.aboutToQuit.connect(lambda: self.submit("exit"))
         self.mnc.subscribe("doc", self.zcb_mk("doc"))
+        self.sbind(["doc", "exit", "update",
+            "roi", "origin", "begin_tune", "end_tune"])
         self.do_mode("unstaged")
 
     def run(self):
@@ -100,52 +98,69 @@ class XesModel(QObject):
         self.view.show()
         return self.app.exec_()
 
-    def zcb_mk(self, typ):
-        return lambda msg: self.emit(typ, msg)
-
     def do_mode(self, mode):
         self.mode = mode
-        self.note("mode", mode)
+        self.notify("mode", mode)
 
     def on_doc(self, msg):
         if msg["typ"][1] != "event" or self.mode == "unstaged":
             return
         data = msg["doc"]["data"]
         try:
-            self.note("img", data[self.ad])
-            self.note("motors", [data[m] for m in self.motors])
-            self.note("origin", data["origin"])
-            self.note("eval", data["eval"])
+            self.notify("img", data[self.ad])
+            self.notify("motors", [data[m] for m in self.motors])
+            self.notify("eval", data["eval"])
         except KeyError:
             return
 
     def do_stage(self):
-        self.mrc.do_cmd("U.%s.stage()\n" % self.name)
-        ret = self.mrc.req_rep("%s/names" % self.name)["ret"]
+        self.mrc_cmd("U.%s.stage()\n" % self.name)
+        ret = self.mrc_req("%s/names" % self.name)["ret"]
         self.ad, self.motors = ret[0], ret[1:]
         self.do_mode("staged")
 
-    def on_quit(self):
+    def on_exit(self):
         if self.mode != "unstaged":
-            self.mrc.do_cmd("U.%s.unstage()\n" % self.name)
+            self.mrc_cmd("U.%s.unstage()\n" % self.name)
 
     def on_update(self, mx, my):
         if self.mode == "staged":
-            self.mrc.do_cmd("U.%s.move([%f, %f])\n" % (self.name, mx, my))
+            self.mrc_cmd("U.%s.move([%f, %f])\n" % (self.name, mx, my))
+            self.mrc_cmd("U.%s.refresh()\n" % self.name)
         elif self.mode == "unstaged":
             self.do_stage()
+            self.mrc_cmd("U.%s.refresh(origin = True)\n" % self.name)
         else:
             return
-        self.mrc.do_cmd("U.%s.refresh()\n" % self.name)
+        xywh, origin = self.mrc_req("%s/roi_origin" % self.name)["ret"]
+        self.notify("roi", xywh)
+        self.notify("origin", origin)
+
+    def on_roi(self, xywh):
+        if self.mode == "tuning":
+            self.notify("roi", self.mrc_req\
+                ("%s/roi_origin" % self.name)["ret"][0])
+            return
+        self.notify("roi", self.mrc_cmd\
+            ("U.%s.set_roi(%r)\n" % (self.name, xywh))["ret"])
+        self.mrc_cmd("U.%s.refresh(acquire = False)\n" % self.name)
+
+    def on_origin(self, origin):
+        if self.mode == "tuning":
+            self.notify("origin", self.mrc_req\
+                ("%s/roi_origin" % self.name)["ret"][1])
+            return
+        self.notify("origin", self.mrc_cmd\
+            ("U.%s.set_origin(%r)\n" % (self.name, origin))["ret"])
+        self.mrc_cmd("U.%s.refresh(acquire = False)\n" % self.name)
 
     def on_begin_tune(self):
         self.do_mode("tuning")
-        self.mrc.do_cmd("%%go U.%s.auto_tune()\n" % self.name).\
-            subscribe(self.zcb_mk("end_tune"))
+        self.mrc_go("end_tune", "%%go U.%s.auto_tune()\n" % self.name)
 
     def on_end_tune(self, rep):
         self.do_mode("staged")
-        zsv_rep_chk(rep)
+        self.rep_chk(rep)
 
 def main(arg = ""):
     name = arg or "atti_xes"

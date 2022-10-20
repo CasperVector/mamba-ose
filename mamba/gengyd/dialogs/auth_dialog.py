@@ -1,5 +1,5 @@
 import ldap
-from mamba.backend.zserver import ZError
+from mamba.backend.zserver import ZError, zsv_err_fmt
 from PyQt5.QtWidgets import (QDialog, QFormLayout, QLabel,
     QLineEdit, QMessageBox, QPushButton, QSpacerItem)
 
@@ -29,7 +29,7 @@ class LoginDialog(QDialog):
         try:
             self.mrc.do_cmd("U.auth.login(%r)\n" % self.login_username.text())
         except ZError as e:
-            return QMessageBox.warning(self, "Error", str(e))
+            return QMessageBox.warning(self, "Error", zsv_err_fmt(e))
         return QMessageBox.about(self, "Success", "Logged in.")
 
 class LogoutDialog(QDialog):
@@ -52,6 +52,6 @@ class LogoutDialog(QDialog):
         try:
             self.mrc.do_cmd("U.auth.logout()\n")
         except ZError as e:
-            return QMessageBox.warning(self, "Error", str(e))
+            return QMessageBox.warning(self, "Error", zsv_err_fmt(e))
         return QMessageBox.about(self, "Success", "Logged out.")
 

@@ -1,4 +1,4 @@
-from mamba.backend.zserver import ZError
+from mamba.backend.zserver import ZError, zsv_err_fmt
 from PyQt5.QtWidgets import (QDialog, QWidget, QFormLayout, QVBoxLayout,
     QLineEdit, QMessageBox, QPushButton, QTabWidget, QTableWidgetItem)
 
@@ -49,7 +49,7 @@ class MetadataGenerator(QDialog):
         try:
             ret = self.mrc.req_rep("mdg/read")["ret"]
         except ZError as e:
-            return QMessageBox.warning(self, "Error", str(e))
+            return QMessageBox.warning(self, "Error", zsv_err_fmt(e))
         for k, v in ret.items():
             w = self.widgets.get(k)
             if w:
@@ -60,5 +60,5 @@ class MetadataGenerator(QDialog):
             self.mrc.do_cmd("U.mdg.set(%r)\n" %
                 {k: v.text() for k, v in self.widgets.items()})
         except ZError as e:
-            return QMessageBox.warning(self, "Error", str(e))
+            return QMessageBox.warning(self, "Error", zsv_err_fmt(e))
 

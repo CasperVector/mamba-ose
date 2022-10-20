@@ -2,7 +2,8 @@
 backend:
     lport: 5678
     init: "~/.mamba/init.py"
-    saddons: ["mamba.backend.addon_core:saddon_core()"]
+    saddons: ["mamba.backend.addon_core:saddon_core()",
+              "mamba.backend.auth_mdg:saddon_authmdg()"]
     caddons: ["mamba.backend.addon_core:caddon_core()"]
 
 frontend:

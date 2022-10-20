@@ -1,9 +1,17 @@
+import cv2
 import h5py
 import numpy
 import os
 
+def roi_slice(img, roi):
+    return img[roi[2] : roi[3], roi[0] : roi[1]]
+
 def norm_roi(roi, w, h):
-    return [min(max(x, 0), hi) for x, hi in zip(roi, [w, w, h, h])]
+    x0, x1, y0, y1 = map(int, numpy.clip(roi, 0, (w, w, h, h)))
+    return (x0, x1, y0, y1) if x0 < x1 and y0 < y1 else (0, w, 0, h)
+
+def norm_origin(origin, w, h):
+    return tuple(map(int, numpy.clip(origin, 0, (w, h))))
 
 def roi2xywh(roi):
     x0, x1, y0, y1 = roi
@@ -12,6 +20,14 @@ def roi2xywh(roi):
 def xywh2roi(xywh):
     x, y, w, h = xywh
     return x, x + w, y, y + h
+
+def auto_contours(img, threshold):
+    img = cv2.GaussianBlur(img, (0, 0), cv2.BORDER_DEFAULT)
+    mask = (img >= threshold).astype("uint8")
+    ret = [xywh2roi(cv2.boundingRect(contour)) for contour in
+        cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0]]
+    ret = sorted((-roi_slice(img, roi).sum(), roi) for roi in ret)
+    return [roi for total, roi in ret]
 
 def img_phist(img, origin, nbins):
     h, w = img.shape

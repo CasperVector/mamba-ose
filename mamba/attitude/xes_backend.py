@@ -1,22 +1,25 @@
-import cv2
 import numpy
 from mamba.backend.zserver import raise_syntax, unary_op
-from .common import img_phist, AttiAdMixin
+from .common import roi_slice, norm_roi, norm_origin, \
+    roi2xywh, xywh2roi, auto_contours, img_phist, AttiAdMixin
 
 QUARTER_BINS = 90
 
-def img_origin(img, threshold):
-    img = cv2.GaussianBlur(img, (0, 0), cv2.BORDER_DEFAULT)
-    pixels = img > threshold
-    pixels = numpy.nonzero(pixels) + (img[pixels],)
-    total = pixels[2].sum()
-    return (pixels[1] * pixels[2]).sum() / total, \
-        (pixels[0] * pixels[2]).sum() / total
+def auto_roi(img, pad, threshold):
+    rois = auto_contours(img, threshold)
+    if not rois:
+        return 0, img.shape[1], 0, img.shape[0]
+    roi = rois[0]
+    pad = min([pad, roi[0], roi[2],
+        img.shape[1] - roi[1], img.shape[0] - roi[3]])
+    return roi[0] - pad, roi[1] + pad, roi[2] - pad, roi[3] + pad
 
-def img_eval(img, origin):
+def img_eval(img, roi, origin):
+    img = roi_slice(img, roi)
+    origin = origin[0] - roi[0], origin[1] - roi[2]
     if not img.any():
-        img = numpy.zeros((2, 2))
-        img[0, 0] = 1
+        img = numpy.array([(1, 0), (0, 0)])
+        roi = 0, 2, 0, 2
     hist = img_phist(img, origin, (0, 4 * QUARTER_BINS))[0]
     hist = hist.reshape((4, QUARTER_BINS)) * (4 * QUARTER_BINS / hist.sum())
     quad = hist.sum(1)
@@ -80,27 +83,45 @@ class GradOptim(object):
         return self.xs
 
 class AttiXes(AttiAdMixin):
-    def configure(self, ad, motors, threshold, ylimits, xlimits = None):
+    roi_steps = 10
+
+    def configure(self, ad, motors, roi_threshold, ylimits, xlimits = None):
         assert int(ad.hdf1.ndimensions.get()) == len(motors) == 2
         if not xlimits:
             xlimits = [(m.low_limit_travel.get(), m.high_limit_travel.get())
                 for m in motors]
             xlimits = [(0.9 * lo + 0.1 * hi, 0.1 * lo + 0.9 * hi)
                 for lo, hi in xlimits]
-        self.ad, self.motors, self.threshold = ad, motors, threshold
+        self.ad, self.motors, self.roi_threshold = ad, motors, roi_threshold
         self.devices = [self.ad] + self.motors
         self.optim = GradOptim(xlimits, ylimits)
+        self.roi = self.origin = self.cache = None
 
     def move(self, xs):
         [s.wait() for s in [m.set(x) for m, x in zip(self.motors, xs)]]
 
-    def refresh(self):
+    def refresh(self, acquire = True, origin = False):
         assert self.dataset, "need stage()"
-        doc, img = self.acquire()
-        doc["data"]["origin"] = img_origin(img, self.threshold)
-        doc["data"]["eval"] = img_eval(img, doc["data"]["origin"])
+        if acquire:
+            self.cache = self.acquire()
+        doc, img = self.cache
+        doc = doc.copy(); doc["data"] = doc["data"].copy()
+        if origin:
+            self.roi = auto_roi\
+                (img, min(img.shape) // self.roi_steps, self.roi_threshold)
+            self.origin = (self.roi[0] + self.roi[1]) // 2, \
+                (self.roi[2] + self.roi[3]) // 2
+        doc["data"]["eval"] = img_eval(img, self.roi, self.origin)
         self.send_event(doc)
-        return doc["data"]["eval"] + doc["data"]["origin"]
+        return doc["data"]["eval"]
+
+    def set_roi(self, xywh):
+        self.roi = norm_roi(xywh2roi(xywh), *self.cache[1].shape[::-1])
+        return roi2xywh(self.roi)
+
+    def set_origin(self, origin):
+        self.origin = norm_origin(origin, *self.cache[1].shape[::-1])
+        return self.origin
 
     def auto_tune(self):
         self.optim.start([m.position for m in self.motors])
@@ -117,6 +138,8 @@ def mzs_xes(self, req):
     if op == "names":
         return {"err": "", "ret": [state.ad.name + "_image"] +
             [m.name for m in state.motors]}
+    elif op == "roi_origin":
+        return {"err": "", "ret": (roi2xywh(state.roi), state.origin)}
     raise_syntax(req)
 
 def state_build(U, config, name):

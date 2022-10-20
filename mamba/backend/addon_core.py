@@ -1,6 +1,5 @@
 import base64
 import pickle
-from .auth_mdg import MambaAuth, MambaMdGen
 from .zserver import ZError, raise_syntax, unary_op, znc_handle_gen
 
 def mzs_dev(self, req):
@@ -44,27 +43,7 @@ def mzs_scan(self, req):
         raise_syntax(req)
     return {"err": ""}
 
-def mzs_auth(self, req):
-    op, state = unary_op(req), self.get_state(req)
-    if op == "pw":
-        try:
-            state.pw = req["pw"]
-            return {"err": ""}
-        except:
-            raise_syntax(req)
-    raise_syntax(req)
-
-def mzs_mdg(self, req):
-    op, state = unary_op(req), self.get_state(req)
-    if "beamtimeId" not in state.mds[-1]:
-        raise ZError("deny", "beamtime ID not selected")
-    if op == "read":
-        return {"err": "", "ret": state.read()}
-    elif op == "read_private":
-        return {"err": "", "ret": state.read_private()}
-    raise_syntax(req)
-
-addonMzs = {"dev": mzs_dev, "scan": mzs_scan, "auth": mzs_auth, "mdg": mzs_mdg}
+addonMzs = {"dev": mzs_dev, "scan": mzs_scan}
 
 def mnc_doc(self, msg):
     msg["doc"] = pickle.loads(base64.b64decode(msg["doc"].encode("UTF-8")))
@@ -86,8 +65,6 @@ def mzserver_callback(mzs):
 def state_build(U, config):
     U.mzcb = mzserver_callback(U.mzs)
     U.RE.subscribe(U.mzcb)
-    U.mdg = MambaMdGen()
-    U.auth = MambaAuth(config["auth_mdg"], U.mdg)
 
 saddon_core = lambda arg: {"mzs": addonMzs, "state": state_build}
 caddon_core = lambda arg: {"mnc": addonMnc}
