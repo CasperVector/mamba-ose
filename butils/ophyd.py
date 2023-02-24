@@ -3,6 +3,7 @@ import threading
 import time
 from ophyd import Device, Component, \
 	EpicsSignal, EpicsSignalRO, EpicsMotor, PVPositionerPC
+from ophyd.device import Staged
 from ophyd.signal import AttributeSignal
 from ophyd.status import Status
 from .common import masked_attr
@@ -15,8 +16,7 @@ class SimpleDet(Device):
 	value = Component(EpicsSignalRO, "")
 
 class EpicsMotorRO(EpicsMotor):
-	setpoint = Component(EpicsSignalRO,
-		".VAL", limits = True, auto_monitor = True)
+	setpoint = Component(EpicsSignalRO, ".VAL", auto_monitor = True)
 	offset, offset_dir, velocity, acceleration, motor_egu, motor_eres = \
 		[Component(EpicsSignalRO, suffix, kind = "config", auto_monitor = True)
 			for suffix in [".OFF", ".DIR", ".VELO", ".ACCL", ".EGU", ".ERES"]]

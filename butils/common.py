@@ -10,9 +10,18 @@ def masked_attr(obj):
 	raise AttributeError
 
 def fn_wait(fs):
-	ts = [threading.Thread(target = f, daemon = False) for f in fs]
+	ret = [None] * (len(fs) + 1)
+	def wrap(i, f):
+		try:
+			ret[i] = f()
+		except Exception as e:
+			ret[-1] = e
+			raise
+	ts = [threading.Thread(target = wrap, args = (i, f), daemon = True)
+		for i, f in enumerate(fs)]
 	[t.start() for t in ts]
-	return [t.join() for t in ts]
+	[t.join() for t in ts]
+	return None if ret[-1] else ret[:-1]
 
 def input_gen(argv):
 	if argv:

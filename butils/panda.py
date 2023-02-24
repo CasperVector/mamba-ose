@@ -73,7 +73,7 @@ pandaFields.update(((k, ext), attrs + pandaSubs[ext][1])
 	for k, exts, attrs in pandaExtFields for ext in exts)
 
 def panda_table_fmt(fields, data):
-	n, = list(set(len(l) for l in data))
+	n, = set(len(l) for l in data)
 	ret = numpy.zeros((max(f.bits_hi for f in fields) // 32 + 1,
 		n), dtype = "uint32")
 	for f, l in zip(fields, data):
@@ -81,7 +81,7 @@ def panda_table_fmt(fields, data):
 			l = [f.labels.index(x) for x in l if isinstance(x, str)]
 		l = numpy.array(l, dtype =
 			"int32" if f.signed else "uint32").view("uint32")
-		i, = list({f.bits_lo // 32, f.bits_hi // 32})
+		i, = {f.bits_lo // 32, f.bits_hi // 32}
 		ret[i] |= (l & (2 ** (f.bits_hi - f.bits_lo + 1) - 1)) \
 			<< (f.bits_lo % 32)
 	return list(ret.T.flatten())
@@ -97,7 +97,7 @@ def panda_table_unfmt(fields, data):
 	ret, m = [], max(f.bits_hi for f in fields) // 32 + 1
 	data = numpy.array(data, dtype = "uint32").reshape((len(data) // m, m)).T
 	for f in fields:
-		i, = list({f.bits_lo // 32, f.bits_hi // 32})
+		i, = {f.bits_lo // 32, f.bits_hi // 32}
 		l = (data[i] >> (f.bits_lo % 32)) & \
 			(2 ** (f.bits_hi - f.bits_lo + 1) - 1)
 		l = list(l.view("int32" if f.signed else "uint32"))
