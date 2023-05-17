@@ -1,7 +1,7 @@
 import numpy
 from mamba.backend.zserver import raise_syntax, unary_op
-from .common import roi_slice, norm_roi, norm_origin, \
-    roi2xywh, xywh2roi, auto_contours, img_phist, AttiAdMixin
+from .common import roi_slice, norm_roi, norm_origin, roi2xywh, \
+    auto_contours, img_phist, stage_wrap, AttiAdMixin
 
 QUARTER_BINS = 90
 
@@ -101,7 +101,6 @@ class AttiXes(AttiAdMixin):
         [s.wait() for s in [m.set(x) for m, x in zip(self.motors, xs)]]
 
     def refresh(self, acquire = True, origin = False):
-        assert self.dataset, "need stage()"
         if acquire:
             self.cache = self.acquire()
         doc, img = self.cache
@@ -115,14 +114,13 @@ class AttiXes(AttiAdMixin):
         self.send_event(doc)
         return doc["data"]["eval"]
 
-    def set_roi(self, xywh):
-        self.roi = norm_roi(xywh2roi(xywh), *self.cache[1].shape[::-1])
-        return roi2xywh(self.roi)
+    def set_roi(self, roi):
+        self.roi = norm_roi(roi, *self.cache[1].shape[::-1])
 
     def set_origin(self, origin):
         self.origin = norm_origin(origin, *self.cache[1].shape[::-1])
-        return self.origin
 
+    @stage_wrap
     def auto_tune(self):
         self.optim.start([m.position for m in self.motors])
         while True:

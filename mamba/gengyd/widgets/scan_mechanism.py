@@ -79,12 +79,11 @@ class ScanManager(object):
     def generate_scan_command(plan):
         dets = [f'{name}' for name in plan.detectors]
         det_str = str(dets).replace("'", "")
-        command = f"RE(grid_scan({det_str},\x11\n"
+        command = f"P.grid_scan({det_str},\x11\n"
         for motor in plan.motors:
             command += f"{motor.name}, {float(motor.start)}, " \
                        f"{float(motor.stop)}, {int(motor.point_num)},\x11\n"
-        command = command[:-2] + " progress = U.progress"
-        command += "),\x11\nmd = U.mdg.read_advance())\n"
+        command = command[:-3] + ")\n"
         return command
 
     def run_scan_plan(self, plan):
@@ -467,6 +466,7 @@ class ScanMechanismWidget(QWidget):
         if name == "start":
             self.scanning = True
             self.scan_paused = False
+            self.scan_eta = None
             self.ui.statusLabel.setText("RUNNING")
             self.ui.scanIDLabel.setText(str(msg["id"]))
             self.scan_start_at = datetime.now()
@@ -504,7 +504,10 @@ class ScanMechanismWidget(QWidget):
                 self.ui.etaLabel.setText("N/A")
             else:
                 eta = self.scan_eta - datetime.now()
-                self.ui.etaLabel.setText(self.convert_to_time(eta))
+                if eta.total_seconds() > 0:
+                    self.ui.etaLabel.setText(self.convert_to_time(eta))
+                else:
+                    self.ui.etaLabel.setText("Soon(ish)")
         else:
             self.ui.progress.setText("0%")
             self.ui.elapsedLabel.setText("0:00:00")

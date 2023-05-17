@@ -51,6 +51,15 @@ def img_phist(img, origin, nbins):
         ret = rads, thetas
     return ret
 
+def stage_wrap(f):
+    def g(obj, *args, **kwargs):
+        obj.stage()
+        try:
+            return f(obj, *args, **kwargs)
+        finally:
+            obj.unstage()
+    return g
+
 class AttiAdMixin(object):
     bad_threshold = 0
 
@@ -60,7 +69,6 @@ class AttiAdMixin(object):
             self.send_event = lambda doc: mzcb("event", doc)
 
     def stage(self):
-        assert self.ad, "need set_devices()"
         if self.dataset:
             return
         self.ad.stage()
@@ -68,7 +76,6 @@ class AttiAdMixin(object):
         self.dataset = f["entry/data/data"]
 
     def unstage(self, clean = True):
-        assert self.ad, "need set_devices()"
         if not self.dataset:
             return
         self.ad.unstage()
@@ -79,8 +86,13 @@ class AttiAdMixin(object):
             os.remove(f)
 
     def acquire(self):
+        staged = bool(self.dataset)
         key, data = self.ad.name + "_image", {}
+        if not staged:
+            self.stage()
         self.ad.trigger().wait()
+        if not staged:
+            self.unstage()
         [data.update(dev.read()) for dev in self.devices]
         data, timestamps = [{k: data[k][field] for k in data}
             for field in ["value", "timestamp"]]

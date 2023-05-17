@@ -1,5 +1,6 @@
 import base64
 import pickle
+import time
 from .zserver import ZError, raise_syntax, unary_op, znc_handle_gen
 
 def mzs_dev(self, req):
@@ -45,26 +46,52 @@ def mzs_scan(self, req):
 
 addonMzs = {"dev": mzs_dev, "scan": mzs_scan}
 
-def mnc_doc(self, msg):
-    msg["doc"] = pickle.loads(base64.b64decode(msg["doc"].encode("UTF-8")))
-    [sub(msg) for sub in self.subs["doc"].values()]
+def doc_handle_gen(typ):
+    def handler(self, msg):
+        msg["doc"] = pickle.loads(base64.b64decode(msg["doc"].encode("UTF-8")))
+        [sub(msg) for sub in self.subs[typ].values()]
+    return handler
 
-addonMnc = {"doc": mnc_doc, "scan": znc_handle_gen("scan")}
+addonMnc = {
+    "doc": doc_handle_gen("doc"),
+    "monitor": doc_handle_gen("monitor"),
+    "scan": znc_handle_gen("scan")
+}
 
-def mzserver_callback(mzs):
-    notify = mzs.notify
+def doc_notify(notify):
+    return lambda typ, doc: notify({"typ": typ, "doc":
+        base64.b64encode(pickle.dumps(doc)).decode("UTF-8")})
+
+def lossy_notify(periods, dnotify):
+    timestamps, caches = {}, {}
+    def lnotify(typ, doc):
+        caches.setdefault(typ, {})
+        for k, v in doc.items():
+            if isinstance(v, dict):
+                caches[typ].setdefault(k, {}).update(v)
+            else:
+                caches[typ][k] = v
+        timestamp = time.time()
+        if timestamp < timestamps.get(typ, 0.0) + periods.get(typ, 0.0):
+            return
+        timestamps[typ] = timestamp
+        doc, caches[typ] = caches[typ], {}
+        dnotify(typ, doc)
+    return lnotify
+
+def mzserver_callback(notify, dnotify):
     def cb(name, doc):
         if name == "start":
             notify({"typ": "scan/start", "id": doc["scan_id"]})
-        notify({"typ": "doc/" + name,
-            "doc": base64.b64encode(pickle.dumps(doc)).decode("UTF-8")})
+        dnotify("doc/" + name, doc)
         if name == "stop":
             notify({"typ": "scan/stop"})
     return cb
 
 def state_build(U, config):
-    U.mzcb = mzserver_callback(U.mzs)
-    U.RE.subscribe(U.mzcb)
+    U.dnotify, U.monitor_periods = doc_notify(U.mzs.notify), {}
+    U.lnotify = lossy_notify(U.monitor_periods, U.dnotify)
+    U.mzcb = mzserver_callback(U.mzs.notify, U.dnotify)
 
 saddon_core = lambda arg: {"mzs": addonMzs, "state": state_build}
 caddon_core = lambda arg: {"mnc": addonMnc}

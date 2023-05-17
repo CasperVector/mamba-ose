@@ -4,10 +4,9 @@
 print("Example beamline init script loading...")
 
 from bluesky import RunEngine
-from bluesky.plans import grid_scan
-from bluesky.progress import ProgressReporter
 from ophyd.sim import SynAxis, SynGauss, DirectImage, np
 from mamba.backend.mzserver import config_read, server_start
+from mamba.backend.planner import MambaPlanner
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
@@ -28,8 +27,8 @@ D = AttrDict(
 
 RE = RunEngine({})
 U = server_start(globals(), config_read())
-U.progress = ProgressReporter(U.mzs)
-RE.subscribe(U.progress)
+U.planner = MambaPlanner(U)
+P = U.planner.make_plans()
 
 print("Beamline init script loaded.")
 

@@ -1,9 +1,10 @@
 import pyqtgraph
 import sys
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtGui, QtWidgets
 from mamba.backend.mzserver import config_read, client_build
 from mamba.frontend.utils import MambaZModel, MambaView
 from mamba.frontend.pgitems import MyImageItem, MyROI, TargetPlot, MyImageView
+from .common import xywh2roi
 
 class XesImage(MambaView, pyqtgraph.GraphicsView):
     def __init__(self, model, parent = None, mtyps = ({}, {})):
@@ -70,8 +71,11 @@ class XesView(MambaView, QtWidgets.QMainWindow):
             widget.setEnabled(mode == "staged")
 
     def on_motors(self, mxy):
-        self.mx.setText("%.7g" % mxy[0])
-        self.my.setText("%.7g" % mxy[1])
+        mx, my = mxy
+        if mx is not None:
+            self.mx.setText("%.7g" % mx)
+        if my is not None:
+            self.my.setText("%.7g" % my)
 
     def on_eval(self, ev):
         self.ev.setText(", ".join("%.7g" % x for x in ev))
@@ -81,15 +85,15 @@ class XesView(MambaView, QtWidgets.QMainWindow):
             float(self.mx.text()) if self.mx.hasAcceptableInput() else None,
             float(self.my.text()) if self.my.hasAcceptableInput() else None)
 
-class XesModel(MambaZModel, QtCore.QObject):
+class XesModel(MambaZModel):
     def __init__(self, name):
         super().__init__()
         self.name, (self.mrc, self.mnc) = name, client_build(config_read())
         self.app, self.view = QtWidgets.QApplication([]), XesView(self)
         self.ad = self.motors = None
-        self.app.aboutToQuit.connect(lambda: self.submit("exit"))
         self.mnc.subscribe("doc", self.zcb_mk("doc"))
-        self.sbind(["doc", "exit", "update",
+        self.mnc.subscribe("monitor", self.zcb_mk("monitor"))
+        self.sbind(["monitor", "doc", "update",
             "roi", "origin", "begin_tune", "end_tune"])
         self.do_mode("unstaged")
 
@@ -101,6 +105,17 @@ class XesModel(MambaZModel, QtCore.QObject):
     def do_mode(self, mode):
         self.mode = mode
         self.notify("mode", mode)
+
+    def on_monitor(self, msg):
+        if self.mode == "unstaged":
+            return
+        if msg["typ"][1] == "position":
+            self.notify("motors",
+                [msg["doc"]["data"].get(m) for m in self.motors])
+        elif msg["typ"][1] == "image":
+            img = msg["doc"]["data"].get(self.ad)
+            if img is not None:
+                self.notify("img", img)
 
     def on_doc(self, msg):
         if msg["typ"][1] != "event" or self.mode == "unstaged":
@@ -119,10 +134,6 @@ class XesModel(MambaZModel, QtCore.QObject):
         self.ad, self.motors = ret[0], ret[1:]
         self.do_mode("staged")
 
-    def on_exit(self):
-        if self.mode != "unstaged":
-            self.mrc_cmd("U.%s.unstage()\n" % self.name)
-
     def on_update(self, mx, my):
         if self.mode == "staged":
             self.mrc_cmd("U.%s.move([%f, %f])\n" % (self.name, mx, my))
@@ -137,22 +148,20 @@ class XesModel(MambaZModel, QtCore.QObject):
         self.notify("origin", origin)
 
     def on_roi(self, xywh):
-        if self.mode == "tuning":
-            self.notify("roi", self.mrc_req\
-                ("%s/roi_origin" % self.name)["ret"][0])
-            return
-        self.notify("roi", self.mrc_cmd\
-            ("U.%s.set_roi(%r)\n" % (self.name, xywh))["ret"])
-        self.mrc_cmd("U.%s.refresh(acquire = False)\n" % self.name)
+        if self.mode != "tuning":
+            self.mrc_cmd("U.%s.set_roi(%r)\n" % (self.name, xywh2roi(xywh)))
+        self.notify("roi", self.mrc_req\
+            ("%s/roi_origin" % self.name)["ret"][0])
+        if self.mode != "tuning":
+            self.mrc_cmd("U.%s.refresh(acquire = False)\n" % self.name)
 
     def on_origin(self, origin):
-        if self.mode == "tuning":
-            self.notify("origin", self.mrc_req\
-                ("%s/roi_origin" % self.name)["ret"][1])
-            return
-        self.notify("origin", self.mrc_cmd\
-            ("U.%s.set_origin(%r)\n" % (self.name, origin))["ret"])
-        self.mrc_cmd("U.%s.refresh(acquire = False)\n" % self.name)
+        if self.mode != "tuning":
+            self.mrc_cmd("U.%s.set_origin(%r)\n" % (self.name, origin))
+        self.notify("origin", self.mrc_req\
+            ("%s/roi_origin" % self.name)["ret"][1])
+        if self.mode != "tuning":
+            self.mrc_cmd("U.%s.refresh(acquire = False)\n" % self.name)
 
     def on_begin_tune(self):
         self.do_mode("tuning")

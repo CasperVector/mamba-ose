@@ -8,7 +8,7 @@ def slot_gen(obj, typs0, typs1):
         hdl and hdl(*args[1:])
     return slot
 
-class MambaModel(object):
+class MambaModel(QtCore.QObject):
     sigSubmit, sigNotify = QtCore.pyqtSignal(tuple), QtCore.pyqtSignal(tuple)
     submit = lambda self, *args: self.sigSubmit.emit(args)
     notify = lambda self, *args: self.sigNotify.emit(args)
