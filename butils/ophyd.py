@@ -1,21 +1,38 @@
-import math
-import threading
 import time
 from ophyd import Device, Component, \
 	EpicsSignal, EpicsSignalRO, EpicsMotor, PVPositionerPC
-from ophyd.device import Staged
 from ophyd.signal import AttributeSignal
-from ophyd.status import Status
 from .common import masked_attr
 
 def cpt_to_dev(cpt, name):
 	return cpt.cls(name = name, **cpt.kwargs) if cpt.suffix is None \
 		else cpt.cls(cpt.suffix, name = name, **cpt.kwargs)
 
+class ThrottleMonitor(Device):
+	monitor_period, _monitor_period = Component(AttributeSignal,
+		attr = "_monitor_period", kind = "config"), 0.0
+
+	def maybe_monitor(self, _timestamp, timestamp):
+		if timestamp < _timestamp[0] + self._monitor_period:
+			return False
+		_timestamp[0] = timestamp
+		return True
+
 class SimpleDet(Device):
 	value = Component(EpicsSignalRO, "")
 
-class EpicsMotorRO(EpicsMotor):
+class MyEpicsMotor(ThrottleMonitor, EpicsMotor):
+	def monitor(self, dnotify):
+		_timestamp = [0.0]
+		def cb(*, value, timestamp, **kwargs):
+			if value is not None and self.maybe_monitor(_timestamp, timestamp):
+				dnotify("monitor/position", {
+					"data": {self.name: value},
+					"timestamps": {self.name: timestamp}
+				})
+		return self.subscribe(cb)
+
+class EpicsMotorRO(MyEpicsMotor):
 	setpoint = Component(EpicsSignalRO, ".VAL", auto_monitor = True)
 	offset, offset_dir, velocity, acceleration, motor_egu, motor_eres = \
 		[Component(EpicsSignalRO, suffix, kind = "config", auto_monitor = True)

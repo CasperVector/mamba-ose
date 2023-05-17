@@ -177,3 +177,42 @@ class LivePlotX(mpl_cb.QtAwareCallback):
 			l = ll[y]
 			l[0].set_data(l[1], [y / m for y in l[2]] if m else l[2])
 
+@mpl_cb.make_class_safe(logger = mpl_cb.logger)
+class LiveChans(mpl_cb.QtAwareCallback):
+	def __init__(self, field, *, columns = 2, use_teleporter = None):
+		super().__init__(use_teleporter = use_teleporter)
+		self.__setup_lock = mpl_cb.threading.Lock()
+		self.__setup_event = mpl_cb.threading.Event()
+		def setup():
+			# Run this code in start() so that it runs on the correct thread.
+			with self.__setup_lock:
+				if self.__setup_event.is_set():
+					return
+				self.__setup_event.set()
+			self.field = mpl_cb.get_obj_fields([field])[0]
+			self.columns, self.axes = columns, None
+		self.__setup = setup
+
+	def start(self, doc):
+		self.__setup()
+		super().start(doc)
+
+	def event(self, doc):
+		import matplotlib.pyplot as plt
+		data = doc["data"].get(self.field)
+		if data is None:
+			super().event(doc)
+			return
+		if self.axes is None:
+			rows = int(numpy.ceil(data.shape[0] / self.columns))
+			fig, self.axes = plt.subplots(rows, self.columns)
+			fig.tight_layout()
+			self.axes = self.axes.reshape((rows * self.columns,))[:data.shape[0]]
+			self.lines = [ax.plot([], [])[0] for ax in self.axes]
+		x = list(range(data.shape[1]))
+		for ax, l, y in zip(self.axes, self.lines, data):
+			l.set_data(x, y)
+			ax.relim(visible_only = True)
+			ax.autoscale_view(tight = True)
+		super().event(doc)
+

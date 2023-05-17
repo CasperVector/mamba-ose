@@ -1,6 +1,6 @@
 import re
 from bluesky import plans
-from bluesky import plan_stubs as bps, preprocessors as bpp, progress as bprog
+from bluesky import plan_stubs as bps, preprocessors as bpp
 
 PANDA_FREQ = int(125e6)
 
@@ -12,15 +12,13 @@ def encoder_monitor(panda, inp):
 	if not inp.startswith("inenc"):
 		return []
 	inp = re.sub(r"\.[^.]+$", "", inp)
-	if getattr(panda, inp).dcard_type.value.get() != "Encoder Control":
-		return []
 	out = inp.replace("in", "out")
 	return [
 		("%s.%s" % (out, f), ("%s.%s" % (inp, f)).upper())
 		for f in ["a", "b", "z", "data", "val"]
 	] + [("%s.enable" % out, "ONE")]
 
-def prep_simple(panda, outputs, inputs):
+def prep_simple(panda, outputs, inputs, **kwargs):
 	cfg = {
 		"pcap.enable": "ZERO",
 		"pcap.gate": "SEQ1.OUTA",
@@ -35,45 +33,38 @@ def prep_simple(panda, outputs, inputs):
 		if i < 3:
 			cfg.update([("seq1.pos%s" % chr(ord("a") + i), inp.upper())])
 		if motor:
-			inp = getattr(panda, inp)
-			print("%s.motor_drbv - %s.value = %s" %
-				(motor.vname(), inp.vname(), inp.bind(motor)))
+			getattr(panda, inp).bind(motor, **kwargs)
 	panda.configure(cfg)
 
-def seq_disable():
-	return {"seq1.repeats": 1, "seq1.table": dict(
+def seq_disable(block):
+	return {"%s.repeats" % block: 1, "%s.table" % block: dict(
 		[("trigger", ["Immediate"])] +
 		[(f, [1]) for f in ["repeats", "time1", "time2"]] +
 		[(f, [0]) for f in ["position"] + seq_outs_not([])]
 	)}
 
-def seq_warmup():
-	return {"pcap.enable": "ONE", "seq1.repeats": 1, "seq1.table": dict(
+def seq_warmup(block):
+	return {"%s.repeats" % block: 1, "%s.table" % block: dict(
 		[("trigger", ["Immediate"])] +
 		[(f, [1]) for f in ["repeats", "time1", "time2", "outa1"]] +
 		[(f, [0]) for f in ["position"] + seq_outs_not(["outa1"])]
-	)}
+	), "pcap.enable": "ONE"}
 
-def cfg_simple(panda, motor, lo, hi, num, duty,
+def velo_simple(motor, lo, hi, num, duty,
 	period = None, velocity = None, pad = None):
-	inp = panda.motors[motor]
-	assert inp == panda.get_input("seq1.posa")
 	if period is None:
 		if velocity is None:
 			velocity = motor.velocity.get()
-		else:
-			motor.velocity.set(velocity).wait()
 		period = abs(hi - lo) / (num + duty - 1.0) / velocity
 	elif velocity is None:
 		velocity = abs(hi - lo) / (num + duty - 1.0) / period
-		motor.velocity.set(velocity).wait()
 	else:
 		raise ValueError("values given for both period and velocity")
 	if pad is None:
 		pad = max(0.5, 2 * motor.acceleration.get())
 	pad *= velocity
 	assert num > 0 and period > 0.0 and velocity > 0.0 and pad > 0.0
-	return inp, period, pad
+	return period, velocity, pad
 
 def seq_simple(inp, lo, hi, num, duty, period, pad, snake):
 	live, dead = duty * period * PANDA_FREQ, (1.0 - duty) * period * PANDA_FREQ
@@ -82,11 +73,11 @@ def seq_simple(inp, lo, hi, num, duty, period, pad, snake):
 		pad *= -1
 	scale, offset = inp.scale.get(), inp.offset.get()
 	lo, hi, pad = (lo - offset) / scale, (hi - offset) / scale, pad / scale
+	pos = [(p, inp.root.get_input("seq1.pos%s" % p)) for p in "abc"]
+	pos = [p for p, i in pos if i == inp.prefix][0].upper()
 	table = dict([
-		("trigger", ["POSA>=POSITION", "POSA>=POSITION",
-				"POSA<=POSITION", "POSA<=POSITION"]
-			if pad > 0.0 else ["POSA<=POSITION", "POSA<=POSITION",
-				"POSA>=POSITION", "POSA>=POSITION"]),
+		("trigger", ["POS%s%s=POSITION" % (pos, op)
+			for op in (">><<" if pad > 0.0 else "<<>>")]),
 		("position", [lo, hi + pad / 2, hi, lo - pad / 2]),
 		("time1", [live, 0, live, 0]), ("time2", [dead, 1, dead, 1]),
 		("repeats", [num, 1, num, 1]), ("outa1", [1, 0, 1, 0])
@@ -95,9 +86,9 @@ def seq_simple(inp, lo, hi, num, duty, period, pad, snake):
 		table = dict((k, [v[0], v[3]]) for k, v in table.items())
 	return {"seq1.repeats": 0, "seq1.table": table}
 
-def grid_cfg(args, pad, div, snake_axes, progress):
+def grid_cfg(args, div, pad, snake_axes):
 	assert not len(args) % 4
-	oaxes, pnums = len(args) // 4 - 1, []
+	oaxes = len(args) // 4 - 1
 	div = [div, oaxes - 1] if isinstance(div, int) else list(div)
 	if oaxes:
 		assert div[0] >= 0 and 0 <= div[1] < oaxes
@@ -105,15 +96,14 @@ def grid_cfg(args, pad, div, snake_axes, progress):
 			div[0] *= args[4 * i + 3]
 	else:
 		assert div[0] in [0, 1]
-	div[1] = 1
+	pnums, div[1] = [], 1
 	for i in range(oaxes):
-		div[1] *= args[4 * i + 3]
 		pnums.append(args[4 * i + 3])
+		div[1] *= pnums[-1]
 	if not div[0]:
 		div[0] = div[1]
 	pnums.append(2)
-	if progress:
-		progress.bind(bprog.ProgressSimple(pnums))
+	points = div[1] * args[-1]
 
 	lo, hi = args[-3:-1]
 	pad1 = -pad if lo > hi else pad
@@ -124,7 +114,8 @@ def grid_cfg(args, pad, div, snake_axes, progress):
 	def scan_gen(steps):
 		for i in range(steps):
 			yield from next(scans)
-	return snaking[-1], div, scan_gen
+	return snaking[-1], div, scan_gen, \
+		{"num_points": points, "hints": {"progress": ["simple"] + pnums}}
 
 def grid_frag(seqs, num, snake, div, scan_gen):
 	def points_gen():
@@ -145,19 +136,61 @@ def grid_frag(seqs, num, snake, div, scan_gen):
 			yield seq, {"num_points": points}, scan_gen(steps)
 	return frag_gen()
 
-def frag_simple(panda, *args, duty, pad = None, div = 0,
-	snake_axes = True, period = None, velocity = None, progress = None):
+def fwrap_second(plan):
+	second = [True]
+	def fwrap(scan, **kwargs):
+		yield from scan
+		if second[0]:
+			yield from plan
+			second[0] = False
+	return fwrap
+
+def frag_simple(panda, *args, duty, div = 0, snake_axes = True,
+	period = None, velocity = None, pad = None):
 	motor, lo, hi, num = args[-4:]
-	inp, period, pad = cfg_simple(panda, motor, lo, hi, num, duty,
+	period, velocity, pad = velo_simple(motor, lo, hi, num, duty,
 		period = period, velocity = velocity, pad = pad)
-	snake, div, scan_gen = grid_cfg(args, pad, div, snake_axes, progress)
-	seqs = [seq_simple(inp, l, h, num, duty, period, pad, snake)
-		for l, h in [(lo, hi), (hi, lo)]]
-	seqs.append(seq_disable())
-	return grid_frag(seqs, num, snake, div, scan_gen)
+	snake, div, scan_gen, md = grid_cfg(args, div, pad, snake_axes)
+	seqs = [seq_simple(panda.motors[motor], l, h, num,
+		duty, period, pad, snake) for l, h in [(lo, hi), (hi, lo)]]
+	seqs.append(seq_disable("seq1"))
+	return grid_frag(seqs, num, snake, div, scan_gen), \
+		[fwrap_second(bps.configure(motor, {"velocity": velocity}))], md
+
+def fly_frag(panda, adp, devs, frag_gen, fwraps = [], md = None):
+	if callable(fwraps):
+		fwraps = [fwraps]
+	@bpp.stage_run_decorator([adp] + devs, md = md)
+	def inner():
+		for seq, kwargs, scan in frag_gen:
+			yield from bps.configure(panda, seq)
+			yield from bps.configure(panda, {"pcap.enable": "ONE"})
+			yield from bps.configure(adp, {"cam.acquire": 1}, action = True)
+			for fwrap in fwraps:
+				scan = fwrap(scan, **kwargs)
+			yield from scan
+			yield from bps.configure(adp, {"cam.acquire": 0}, action = True)
+	return inner()
+
+def fwrap_first(plan):
+	first = [True]
+	def fwrap(scan, **kwargs):
+		if first[0]:
+			yield from plan
+			first[0] = False
+		yield from scan
+	return fwrap
+
+def fwrap_config(dets, configs):
+	def plan():
+		for det in dets:
+			cfg = configs.get(det)
+			if cfg:
+				yield from bps.configure(det, cfg)
+	return fwrap_first(plan())
 
 def fwrap_adtrig(ads):
-	def frag_wrap(scan, *, num_points, **kwargs):
+	def fwrap(scan, *, num_points, **kwargs):
 		if num_points:
 			for ad in ads:
 				yield from bps.configure(ad, {"cam.num_images": num_points})
@@ -166,24 +199,14 @@ def fwrap_adtrig(ads):
 		if num_points:
 			for ad in ads:
 				yield from bps.configure(ad, {"cam.acquire": 0}, action = True)
-				yield from bps.configure(ad, {"cam.num_images": 1})
-	return frag_wrap
+	return fwrap
 
-def fly_frag(panda, adp, dets, frag_gen, frag_wrap = [], md = None):
-	if callable(frag_wrap):
-		frag_wrap = [frag_wrap]
-	@bpp.stage_run_decorator([adp] + dets, md = md)
-	def inner():
-		armed = False
-		yield from bps.configure(panda, {"pcap.enable": "ONE"})
-		for seq, kwargs, scan in frag_gen:
-			yield from bps.configure(panda, seq)
-			if not armed:
-				yield from bps.configure\
-					(adp, {"cam.acquire": 1}, action = True)
-				armed = True
-			for fwrap in frag_wrap:
-				scan = fwrap(scan, **kwargs)
-			yield from scan
-	return inner()
+def motors_get(args):
+	return [args[4 * i] for i in range(len(args) // 4)]
+
+def fly_simple(panda, adp, dets, *args, configs = {}, md = {}, **kwargs):
+	frag_gen, fwraps, _md = frag_simple(panda, *args, **kwargs)
+	_md.update(md or {})
+	return fly_frag(panda, adp, dets + motors_get(args), frag_gen,
+		[fwrap_adtrig(dets), fwrap_config(dets, configs)] + fwraps, md = _md)
 

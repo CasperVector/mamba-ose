@@ -178,33 +178,42 @@ class PandaField(Device):
 		for k, v in values.items():
 			getattr(self, k)._readback = v
 
-def panda_posout_bind(obj, bind, motor):
+def panda_posout_bind(obj, bind, motor, **kwargs):
 	motors = obj.root.motors
 	if obj.motor:
 		motors.pop(obj.motor)
 	if motor:
 		assert motor not in motors
-		bind(obj, motor)
 		motors[motor] = obj
+	bind(obj, motor, **kwargs)
 	obj.motor = motor
-	return obj.calibrate(False) if motor else None
 
 def panda_posout_calib(obj, setp, run):
-	raw = int(1.0 / obj.scale.get() *
-		(obj.motor.readback.get() - obj.offset.get()))
+	if obj.rep:
+		setp(obj.motor.motor_rep.get())
+	rep = obj.value.get()
 	if run:
-		setp(raw)
-	return raw - obj.value.get()
+		obj.motor.set_current_position\
+			(rep * obj.scale.get() + obj.offset.get())
+	return int((obj.motor.readback.get() - obj.offset.get())
+		/ obj.scale.get()) - rep
 
-def panda_inenc_bind(obj, motor):
-	obj.scale.put(motor.motor_eres.get() *
-		(-1 if motor.offset_dir.get() else 1))
-	obj.offset.put(motor.offset.get())
+def panda_inenc_bind(obj, motor, rep = True):
+	obj.rep = rep
+	if motor:
+		motor.offset_freeze_switch.set(1).wait()
+		obj.scale.put(motor.motor_eres.get() *
+			(-1 if motor.offset_dir.get() else 1))
+		obj.offset.put(motor.offset.get())
+	else:
+		obj.scale.put(1.0)
+		obj.offset.put(0.0)
 
 def panda_inenc_postinit(obj):
 	f = obj.val
 	f.motor = None
-	f.bind = lambda motor: panda_posout_bind(f, panda_inenc_bind, motor)
+	f.bind = lambda motor, **kwargs: \
+		panda_posout_bind(f, panda_inenc_bind, motor, **kwargs)
 	f.calibrate = (lambda run = True:
 		panda_posout_calib(f, obj.setp.value.put, run))
 
@@ -225,7 +234,7 @@ class PandaRoot(Device):
 			[[getattr(self, a) for a in l] for l in omcs]
 		self._period, self._polling = period, False
 		self._poll_event = threading.Event()
-		self.pcap.active.value.subscribe(lambda value, old_value, **kwargs:
+		self.pcap.active.value.subscribe(lambda *, value, old_value, **kwargs:
 			value and not old_value and self._poll_event.set())
 		self._update()
 		self._update_romits()
@@ -281,7 +290,7 @@ class PandaRoot(Device):
 		return ret
 
 	def get_input(self, mux):
-		return getattr(self, getattr(self, mux).value.get().lower())
+		return getattr(self, mux).value.get()
 
 	def desc_or_read(self, op, kind, dot, active_extra):
 		ret = collections.OrderedDict()
