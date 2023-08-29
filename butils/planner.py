@@ -34,7 +34,7 @@ def encoder_check(panda, tols, motors):
 		if inp is None or tol is None:
 			continue
 		delta = inp.calibrate(False)
-		print("%s.motor_rmp - %s.value = %s" %
+		print("%s.motor_rmp - %s.value = %d" %
 			(motor.vname(), inp.vname(), delta))
 		if abs(delta) > tol:
 			raise RuntimeError(("abs(%d) > %d; execute `%s.calibrate()'" +

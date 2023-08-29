@@ -1,6 +1,6 @@
 import time
-from ophyd import Device, Component, \
-	EpicsSignal, EpicsSignalRO, EpicsMotor, PVPositionerPC
+from ophyd import Device, Component, EpicsSignal, EpicsSignalRO, \
+	EpicsMotor, PositionerBase, PVPositioner, PVPositionerPC
 from ophyd.signal import AttributeSignal
 from .common import masked_attr
 
@@ -21,7 +21,7 @@ class ThrottleMonitor(Device):
 class SimpleDet(Device):
 	value = Component(EpicsSignalRO, "")
 
-class MyEpicsMotor(ThrottleMonitor, EpicsMotor):
+class MonitorMotor(ThrottleMonitor):
 	def monitor(self, dnotify):
 		_timestamp = [0.0]
 		def cb(*, value, timestamp, **kwargs):
@@ -31,6 +31,8 @@ class MyEpicsMotor(ThrottleMonitor, EpicsMotor):
 					"timestamps": {self.name: timestamp}
 				})
 		return self.subscribe(cb)
+
+class MyEpicsMotor(MonitorMotor, EpicsMotor): pass
 
 class EpicsMotorRO(MyEpicsMotor):
 	setpoint = Component(EpicsSignalRO, ".VAL", auto_monitor = True)
@@ -45,6 +47,57 @@ class EpicsMotorRO(MyEpicsMotor):
 		[Component(EpicsSignalRO, suffix, kind = "omitted")
 			for suffix in [".STOP", ".HOMF", ".HOMR"]]
 	stop = move = set_current_position = home = set_lim = masked_attr
+
+class ErrorPositioner(PVPositioner):
+	error, error_value = None, 1
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		assert self.error is not None
+		self._event, self._error = threading.Event(), True
+
+	def move(self, position, wait = True, timeout = None, moved_cb = None):
+		self.stop_signal.wait_for_connection()
+		self._event.clear()
+		self._error = True
+		try:
+			status = PositionerBase.move\
+				(self, position, timeout = timeout, moved_cb = moved_cb)
+			self._setup_move(position)
+			self._error = self.error.get() == self.error_value
+		finally:
+			self._event.set()
+		try:
+			if wait:
+				status_wait(status)
+		except KeyboardInterrupt:
+			self.stop()
+			raise
+		return status
+
+	def _done_moving(self, success = True,
+		timestamp = None, value = None, **kwargs):
+		if not self._event.wait(timeout = 1.0) or self._error:
+			success = False
+		if success:
+			self._run_subs(sub_type = self.SUB_DONE,
+				timestamp = timestamp, value = value)
+		self._run_subs(sub_type = self._SUB_REQ_DONE,
+			success = success, timestamp = timestamp)
+		self._reset_sub(self._SUB_REQ_DONE)
+
+class QueueMotor(MonitorMotor, ErrorPositioner):
+	setpoint = Component(EpicsSignal, "val")
+	readback = Component(EpicsSignalRO, "rbv",
+		kind = "hinted", auto_monitor = True)
+	done = stop_signal = Component(EpicsSignal, "dmov",
+		kind = "omitted", auto_monitor = True)
+	error = Component(EpicsSignal, "err", kind = "omitted")
+	done_value = stop_value = error_value = 1
+
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+		self.readback.name = self.name
 
 class MonoEnergy(PVPositionerPC):
 	setpoint = Component(EpicsSignal, "EAO")

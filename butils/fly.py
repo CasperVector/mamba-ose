@@ -61,8 +61,7 @@ def velo_simple(motor, lo, hi, num, duty,
 	else:
 		raise ValueError("values given for both period and velocity")
 	if pad is None:
-		pad = max(0.5, 2 * motor.acceleration.get())
-	pad *= velocity
+		pad = max(0.5, 2 * motor.acceleration.get()) * velocity
 	assert num > 0 and period > 0.0 and velocity > 0.0 and pad > 0.0
 	return period, velocity, pad
 

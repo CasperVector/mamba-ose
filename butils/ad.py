@@ -3,7 +3,7 @@ import numpy
 import threading
 from ophyd import select_version, Component, EpicsSignalRO, \
 	EpicsSignal, ADBase, ADComponent, EpicsSignalWithRBV, \
-	AreaDetector, CamBase, HDF5Plugin, ADTriggerStatus
+	DetectorBase, CamBase, HDF5Plugin, ADTriggerStatus
 from ophyd.device import BlueskyInterface, Staged
 from ophyd.signal import AttributeSignal
 from ophyd.areadetector.plugins import PluginBase
@@ -37,9 +37,9 @@ class SoftTrigger(MyTriggerBase):
 			0 if self._acquisition_signal == self.cam.acquire else 1)])
 
 	def stage(self):
-		self._orig_acquire = self._acquisition_signal.get()
+		self._orig_acquire = self.cam.acquire.get()
 		if self._orig_acquire == self.stage_sigs["cam.acquire"] == 1:
-			self._acquisition_signal.put(0)
+			self.cam.acquire.put(0)
 		(self._counter_signal or self._acquisition_signal)\
 			.subscribe(self._acquire_changed)
 		super().stage()
@@ -49,7 +49,7 @@ class SoftTrigger(MyTriggerBase):
 		(self._counter_signal or self._acquisition_signal)\
 			.clear_sub(self._acquire_changed)
 		if self._orig_acquire == self.stage_sigs["cam.acquire"] == 1:
-			self._acquisition_signal.put(1)
+			self.cam.acquire.put(1)
 
 	def trigger(self):
 		assert self._staged == Staged.yes
@@ -66,14 +66,42 @@ class SoftTrigger(MyTriggerBase):
 			status.set_finished()
 
 class DxpTrigger(MyTriggerBase):
+	_started, _unstage_time = False, 0.2
+
+	def stage(self):
+		super().stage()
+		self._started = False
+
+	def unstage(self):
+		if self._started:
+			self.cam.next_pixel.put(1)
+			time.sleep(self._unstage_time)
+			self.cam.stop_all.put(1)
+			if not self.cam.wait_acquiring(False):
+				super().unstage()
+				raise TimeoutError\
+					("Timeout waiting for %r to be low" % self.cam.acquiring)
+			self._started = False
+		super().unstage()
+
 	def wait_finish(self):
-		self.cam.erase_start.put(1)
-		if not self.cam.wait_acquiring(True):
-			raise TimeoutError\
-				("Timeout waiting for %r to be high" % self.cam.acquiring)
-		time.sleep(self.cam.preset_real.get())
-		self.cam.next_pixel.put(1)
-		if not self.cam.wait_acquiring(False):
+		pixels = self.cam.pixels_per_run.get()
+		if pixels > 0 or not self._started:
+			if pixels <= 0:
+				self._started = True
+			self.cam.erase_start.put(1)
+			if not self.cam.wait_acquiring(True):
+				raise TimeoutError\
+					("Timeout waiting for %r to be high" % self.cam.acquiring)
+		else:
+			self.cam.next_pixel.put(1)
+		if pixels > 0:
+			for i in range(pixels):
+				time.sleep(self.cam.preset_real.get())
+				self.cam.next_pixel.put(1)
+		else:
+			time.sleep(self.cam.preset_real.get())
+		if pixels > 0 and not self.cam.wait_acquiring(False):
 			self.cam.stop_all.put(1)
 			raise TimeoutError\
 				("Timeout waiting for %r to be low" % self.cam.acquiring)
@@ -92,6 +120,12 @@ class DxpTrigger(MyTriggerBase):
 		threading.Thread(target = wait, daemon = True).start()
 		return status
 
+class DxpDetectorBase(DetectorBase):
+	make_data_key = lambda self: dict(
+		shape = (1,) + tuple(self.hdf1.array_size.get())[-2:],
+		source = "PV." + self.prefix, dtype = "array", external = "FILESTORE:"
+	)
+
 class CptHDF5(MyHDF5Plugin, FileStoreHDF5, FileStoreIterativeWrite):
 	get_frames_per_point = lambda self: self.parent.cam.num_images.get()
 
@@ -104,7 +138,8 @@ class CptHDF5(MyHDF5Plugin, FileStoreHDF5, FileStoreIterativeWrite):
 		self.swmr_mode.set(1).wait()
 
 class CptHDF5Dxp(CptHDF5):
-	get_frames_per_point = lambda self: 1
+	def get_frames_per_point(self):
+		return max(self.parent.cam.pixels_per_run.get(), 1)
 
 class MyImagePlugin(ThrottleMonitor, PluginBase):
 	_plugin_type = "NDPluginStdArrays"
@@ -158,6 +193,7 @@ class DxpCam(ADBase):
 		"auto_pixels_per_buffer", "preset_mode", "preset_real"
 	)
 
+	port_name = ADComponent(EpicsSignalRO, "Asyn.PORT", string = True)
 	collect_mode = ADComponent(EpicsSignalWithRBV, "CollectMode")
 	ignore_gate = ADComponent(EpicsSignalWithRBV, "IgnoreGate")
 	input_logic_polarity = ADComponent(EpicsSignalWithRBV, "InputLogicPolarity")
@@ -195,7 +231,7 @@ class SitoroCam(DxpCam):
 
 def make_detector(name, inherit = None, **kwargs):
 	if not inherit:
-		inherit = (SoftTrigger, AreaDetector)
+		inherit = (SoftTrigger, DetectorBase)
 	def warmup(obj):
 		obj.hdf1.warmup()
 		obj.cam.warmup()
@@ -221,7 +257,7 @@ MyAreaDetector = make_detector("MyAreaDetector")
 BaseAreaDetector = make_detector\
 	("BaseAreaDetector", image1 = None, monitor = None)
 DxpDetector, SitoroDetector = [make_detector(
-	name, (DxpTrigger, AreaDetector), cam = Component(cam, ""),
+	name, (DxpTrigger, DxpDetectorBase), cam = Component(cam, ""),
 	hdf1 = Component(CptHDF5Dxp, "HDF1:", write_path_template = "/"),
 	image1 = None, monitor = None
 ) for name, cam in [("DxpDetector", DxpCam), ("SitoroDetector", SitoroCam)]]
