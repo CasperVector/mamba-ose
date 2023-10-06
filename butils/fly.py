@@ -1,6 +1,7 @@
 import re
 from bluesky import plans
 from bluesky import plan_stubs as bps, preprocessors as bpp
+from .bubo import sseq_disable
 
 PANDA_FREQ = int(125e6)
 
@@ -208,4 +209,68 @@ def fly_simple(panda, adp, dets, *args, configs = {}, md = {}, **kwargs):
 	_md.update(md or {})
 	return fly_frag(panda, adp, dets + motors_get(args), frag_gen,
 		[fwrap_adtrig(dets), fwrap_config(dets, configs)] + fwraps, md = _md)
+
+def sseq_base(scomp):
+	def seq(bubo):
+		while True:
+			msg = bubo.get()
+			if msg[0] == "exit" or (scomp(msg) and not bubo.record()):
+				return
+	return seq
+
+def scomp_pcomp(dev, lo, hi, num, pad, snake):
+	assert num > 1 and pad >= 0.0
+	sign = -1 if hi < lo else 1
+	step = abs(hi - lo) / (num - 1)
+	state = [0, 1]
+	def pcomp(msg):
+		if msg[0] != "input" or msg[1] != dev:
+			return False
+		if state[0] >= num:
+			if snake:
+				if sign * (msg[2] - hi) >= pad / 2:
+					state[0], state[1] = num - 1, -1
+				return False
+			else:
+				state[0] = -1
+		if state[0] < 0:
+			if sign * (lo - msg[2]) >= pad / 2:
+				state[0], state[1] = 0, 1
+			return False
+		if (sign * (msg[2] - lo) - state[0] * step) * state[1] >= 0:
+			state[0] += state[1]
+			return True
+		return False
+	return pcomp
+
+def sfrag_simple(bubo, *args, div = 0, snake_axes = True, pad = None):
+	motor, lo, hi, num = args[-4:]
+	bubo.inputs.set([motor.readback]).wait()
+	if pad is None:
+		pad = max(0.5, 2 * motor.acceleration.get()) * motor.velocity.get()
+	snake, div, scan_gen, md = grid_cfg(args, div, pad, snake_axes)
+	seqs = [sseq_base(scomp_pcomp(motor.readback, l, h, num, pad, snake))
+		for l, h in [(lo, hi), (hi, lo)]]
+	seqs.append(sseq_disable)
+	return grid_frag(seqs, num, snake, div, scan_gen), md
+
+def sfly_frag(bubo, devs, frag_gen, fwraps = [], md = None):
+	if callable(fwraps):
+		fwraps = [fwraps]
+	bubo.outputs.set(devs).wait()
+	@bpp.stage_run_decorator([bubo] + devs, md = md)
+	def inner():
+		for seq, kwargs, scan in frag_gen:
+			yield from bps.configure(bubo, {"seq": seq}, action = True)
+			yield from bps.configure(bubo, {"enable": 1}, action = True)
+			for fwrap in fwraps:
+				scan = fwrap(scan, **kwargs)
+			yield from scan
+			yield from bps.configure(bubo, {"enable": 0}, action = True)
+	return inner()
+
+def sfly_simple(bubo, dets, *args, md = {}, **kwargs):
+	frag_gen, _md = sfrag_simple(bubo, *args, **kwargs)
+	_md.update(md or {})
+	return sfly_frag(bubo, dets + motors_get(args), frag_gen, md = _md)
 

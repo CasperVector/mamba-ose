@@ -1,8 +1,14 @@
 import time
+from enum import Enum
 from ophyd import Device, Component, EpicsSignal, EpicsSignalRO, \
 	EpicsMotor, PositionerBase, PVPositioner, PVPositionerPC
 from ophyd.signal import AttributeSignal
+from ophyd.utils.epics_pvs import raise_if_disconnected
 from .common import masked_attr
+
+class HomeEnum(str, Enum):
+	forward, reverse, poslimit, neglimit = \
+		"forward", "reverse", "poslimit", "neglimit"
 
 def cpt_to_dev(cpt, name):
 	return cpt.cls(name = name, **cpt.kwargs) if cpt.suffix is None \
@@ -32,7 +38,30 @@ class MonitorMotor(ThrottleMonitor):
 				})
 		return self.subscribe(cb)
 
-class MyEpicsMotor(MonitorMotor, EpicsMotor): pass
+class MyEpicsMotor(MonitorMotor, EpicsMotor):
+	motor_stop, home_forward, home_reverse, jog_forward, jog_reverse = \
+		[Component(EpicsSignal, suffix, kind = "omitted")
+			for suffix in [".STOP", ".HOMF", ".HOMR", ".JOGF", ".JOGR"]]
+
+	@raise_if_disconnected
+	def home(self, direction, wait = True, **kwargs):
+		sig = getattr(self, {
+			HomeEnum.forward: "home_forward",
+			HomeEnum.reverse: "home_reverse",
+			HomeEnum.poslimit: "jog_forward",
+			HomeEnum.neglimit: "jog_reverse",
+		}[HomeEnum(direction)])
+		self._started_moving = False
+		position = (self.low_limit + self.high_limit) / 2
+		status = PositionerBase.move(self, position, **kwargs)
+		sig.put(1, wait = False)
+		try:
+			if wait:
+				status_wait(status)
+		except KeyboardInterrupt:
+			self.stop()
+			raise
+		return status
 
 class EpicsMotorRO(MyEpicsMotor):
 	setpoint = Component(EpicsSignalRO, ".VAL", auto_monitor = True)

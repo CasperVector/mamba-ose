@@ -121,6 +121,8 @@ def panda_table_parse(ss):
 
 class PandaAttr(Signal):
 	def __init__(self, target, *, mode, typ, **kwargs):
+		if typ == "float":
+			kwargs["rtolerance"] = 1e-9
 		super().__init__(**kwargs)
 		self._client = self.root._client
 		self._block, self._field = target.split(".", 1)

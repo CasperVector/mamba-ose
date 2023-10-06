@@ -1,8 +1,9 @@
 import os
+from epics import caget
 from bluesky.callbacks.core import CallbackBase
 from mamba.backend.planner import MambaPlanner, ChildPlanner
 from .data import ImageFiller, my_broker
-from .fly import fly_simple, motors_get
+from .fly import fly_simple, motors_get, sfly_simple, velo_simple
 
 class ImagePlanner(MambaPlanner):
 	def __init__(self, *args, **kwargs):
@@ -40,6 +41,17 @@ def encoder_check(panda, tols, motors):
 			raise RuntimeError(("abs(%d) > %d; execute `%s.calibrate()'" +
 				" and inform beamline operator") % (delta, tol, inp.vname()))
 
+def vbas_check(ratios, args, kwargs):
+	motor, lo, hi, num = args[-4:]
+	ratio = ratios.get(motor)
+	if ratio is None:
+		return
+	velocity = velo_simple(motor, lo, hi, num, kwargs["duty"],
+		*(kwargs.get(k) for k in ["period", "velocity", "pad"]))[1]
+	if velocity < ratio * caget(motor.prefix + ".VBAS"):
+		raise RuntimeError("%s.velocity < %f * %s.motor_vbas" %
+			(motor.vname(), ratio, motor.vname()))
+
 class HDF5Checker(CallbackBase):
 	def __init__(self, tols, dets, num):
 		self.tols, self.dets, self.num = tols, dets, num
@@ -62,17 +74,30 @@ class HDF5Checker(CallbackBase):
 				raise RuntimeError(("Unexpected value of %s:" +
 					" %d, should be %d") % (sig.vname(), cnt, cur))
 
-class PandaPlanner(ChildPlanner):
-	def __init__(self, panda, adp, *, divs = {},
-		h5_tols = {}, enc_tols = {}, configs = {}):
+class BuboPlanner(ChildPlanner):
+	def __init__(self, bubo, *, divs = {}, h5_tols = {}):
 		super().__init__()
-		self.panda, self.h5_tols, self.enc_tols = panda, h5_tols, enc_tols
+		self.h5_tols = h5_tols
+		self.plans["sfly_grid"] = lambda dets, *args, **kwargs: sfly_simple\
+			(bubo, dets, *args, div = div_get(divs, dets, args[-1]), **kwargs)
+
+	def callback(self, plan, *args, **kwargs):
+		return [HDF5Checker(self.h5_tols, args[0], args[-1]),
+			self.U.mzcb, self.parent.progress]
+
+class PandaPlanner(ChildPlanner):
+	def __init__(self, panda, adp, *, divs = {}, h5_tols = {},
+		enc_tols = {}, vbas_ratios = {}, configs = {}):
+		super().__init__()
+		self.panda, self.h5_tols, self.enc_tols, self.vbas_ratios = \
+			panda, h5_tols, enc_tols, vbas_ratios
 		self.plans["fly_grid"] = lambda dets, *args, **kwargs: \
 			fly_simple(panda, adp, dets, *args, div =
 				div_get(divs, dets, args[-1]), configs = configs, **kwargs)
 
 	def check(self, plan, *args, **kwargs):
 		encoder_check(self.panda, self.enc_tols, motors_get(args[1:]))
+		vbas_check(self.vbas_ratios, args[1:], kwargs)
 
 	def callback(self, plan, *args, **kwargs):
 		return [HDF5Checker(self.h5_tols, args[0], args[-1]),
