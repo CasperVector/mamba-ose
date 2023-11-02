@@ -10,7 +10,7 @@ class ProgressReporter(object):
             self.progress = None
             progress = doc.get("hints", {}).get("progress")
             if progress and progress[0] in self.bars:
-                self.progress = self.bars[progress[0]](progress[1:])
+                self.progress = self.bars[progress[0]](*progress[1:])
                 self.progress.reporter = self
         if self.progress:
             self.progress(name, doc)
@@ -24,7 +24,7 @@ class ProgressBase(CallbackBase):
         self.reporter.progress = None
 
 class ProgressSimple(ProgressBase):
-    def __init__(self, nums):
+    def __init__(self, *nums):
         self.nums = nums
 
     def start(self, doc):

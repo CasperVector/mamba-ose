@@ -3,7 +3,8 @@ import sys
 from PyQt5 import QtGui, QtWidgets
 from mamba.backend.mzserver import config_read, client_build
 from mamba.frontend.utils import MambaZModel, MambaView
-from mamba.frontend.pgitems import MyImageItem, MyROI, TargetPlot, MyImageView
+from mamba.frontend.pgitems import \
+    MyImageItem, MyPlotItem, MyROI, TargetPlot, MyImageView
 from .common import xywh2roi
 
 class XesImage(MambaView, pyqtgraph.GraphicsView):
@@ -17,6 +18,12 @@ class XesImage(MambaView, pyqtgraph.GraphicsView):
         self.roi = MyROI((0, 0))
         self.roi.setZValue(10)
         ci.view.addItem(self.roi)
+        self.angular = ci.view.plot()
+        self.angular.setPen(pyqtgraph.mkPen(color = (0, 255, 0), width = 2))
+        plot = MyPlotItem()
+        plot.setFixedHeight(180)
+        self.radial = plot.plot()
+        ci.addItem(plot, row = 1, col = 0, rowspan = 1, colspan = 2)
         self.setCentralItem(ci)
         self.on_img = ci.setImage
         self.on_roi = self.roi.setXywh
@@ -26,11 +33,15 @@ class XesImage(MambaView, pyqtgraph.GraphicsView):
         self.target.sigPositionChangeFinished.connect\
             (lambda: self.submit("origin", tuple(self.target.pos())))
         self.sbind(model, mtyps, ["roi", "origin"])
-        self.nbind(mtyps, ["mode", "img", "roi", "origin"])
+        self.nbind(mtyps, ["mode", "img", "hist", "roi", "origin"])
 
     def on_mode(self, mode):
         self.roi.setVisible(mode != "unstaged")
         self.target.setVisible(mode != "unstaged")
+
+    def on_hist(self, hist):
+        self.angular.setData(hist[0], hist[1])
+        self.radial.setData(hist[2], hist[3])
 
 class XesView(MambaView, QtWidgets.QMainWindow):
     def __init__(self, model, parent = None):
@@ -52,14 +63,20 @@ class XesView(MambaView, QtWidgets.QMainWindow):
         layout1.addWidget(self.ev, stretch = 3)
         self.tune = QtWidgets.QPushButton("Auto tune", parent)
         layout1.addWidget(self.tune)
+        layout1.addWidget(QtWidgets.QLabel("Temperature:", parent))
+        self.temp = QtWidgets.QLineEdit(parent)
+        self.temp.setMinimumWidth(8)
+        layout1.addWidget(self.temp, stretch = 1)
         layout0.addLayout(layout1)
         widget = XesImage(model)
-        widget.setMinimumHeight(512)
+        widget.setMinimumWidth(900)
+        widget.setMinimumHeight(800)
         layout0.addWidget(widget)
         widget = QtWidgets.QWidget(self)
         widget.setLayout(layout0)
         self.setCentralWidget(widget)
         self.ev.setEnabled(False)
+        self.temp.setEnabled(False)
         self.sbind(model, ({}, {}), ["update", "begin_tune"])
         self.update.clicked.connect(self.submit_update)
         self.tune.clicked.connect(lambda: self.submit("begin_tune"))
@@ -78,7 +95,8 @@ class XesView(MambaView, QtWidgets.QMainWindow):
             self.my.setText("%.7g" % my)
 
     def on_eval(self, ev):
-        self.ev.setText(", ".join("%.7g" % x for x in ev))
+        self.ev.setText(", ".join("%.7g" % x for x in ev[:-1]))
+        self.temp.setText("%.7g" % ev[-1])
 
     def submit_update(self):
         self.submit("update",
@@ -125,18 +143,18 @@ class XesModel(MambaZModel):
             self.notify("img", data[self.ad])
             self.notify("motors", [data[m] for m in self.motors])
             self.notify("eval", data["eval"])
+            self.notify("hist", data["hist"])
         except KeyError:
             return
 
     def do_stage(self):
-        self.mrc_cmd("U.%s.stage()\n" % self.name)
         ret = self.mrc_req("%s/names" % self.name)["ret"]
         self.ad, self.motors = ret[0], ret[1:]
         self.do_mode("staged")
 
     def on_update(self, mx, my):
         if self.mode == "staged":
-            self.mrc_cmd("U.%s.move([%f, %f])\n" % (self.name, mx, my))
+            self.mrc_cmd("U.%s.move([%s, %s])\n" % (self.name, mx, my))
             self.mrc_cmd("U.%s.refresh()\n" % self.name)
         elif self.mode == "unstaged":
             self.do_stage()

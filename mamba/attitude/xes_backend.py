@@ -1,9 +1,10 @@
 import numpy
 from mamba.backend.zserver import raise_syntax, unary_op
 from .common import roi_slice, norm_roi, norm_origin, roi2xywh, \
-    auto_contours, img_phist, stage_wrap, AttiAdMixin
+    auto_contours, img_phist, angular_vis, stage_wrap, AttiAdMixin
 
 QUARTER_BINS = 90
+RADIAL_BINS = 1000
 
 def auto_roi(img, pad, threshold):
     rois = auto_contours(img, threshold)
@@ -20,11 +21,11 @@ def img_eval(img, roi, origin):
     if not img.any():
         img = numpy.array([(1, 0), (0, 0)])
         roi = 0, 2, 0, 2
-    hist = img_phist(img, origin, (0, 4 * QUARTER_BINS))[0]
-    hist = hist.reshape((4, QUARTER_BINS)) * (4 * QUARTER_BINS / hist.sum())
-    quad = hist.sum(1)
+    angular = img_phist(img, origin, (0, 4 * QUARTER_BINS))
+    angular[0][:] *= 4 * QUARTER_BINS / angular[0].sum()
+    quad = angular[0].reshape((4, QUARTER_BINS)).sum(1)
     return (quad[0] + quad[3]) - (quad[1] + quad[2]), \
-        (quad[0] + quad[1]) - (quad[2] + quad[3]), hist.std()
+        (quad[0] + quad[1]) - (quad[2] + quad[3]), angular
 
 class GradOptim(object):
     ratios = 4, 3
@@ -83,16 +84,16 @@ class GradOptim(object):
         return self.xs
 
 class AttiXes(AttiAdMixin):
-    roi_steps = 10
+    roi_threshold, roi_ratio, roi_steps = None, 0.95, 10
 
-    def configure(self, ad, motors, roi_threshold, ylimits, xlimits = None):
+    def configure(self, ad, motors, ylimits, xlimits = None):
         assert int(ad.hdf1.ndimensions.get()) == len(motors) == 2
         if not xlimits:
             xlimits = [(m.low_limit_travel.get(), m.high_limit_travel.get())
                 for m in motors]
             xlimits = [(0.9 * lo + 0.1 * hi, 0.1 * lo + 0.9 * hi)
                 for lo, hi in xlimits]
-        self.ad, self.motors, self.roi_threshold = ad, motors, roi_threshold
+        self.ad, self.motors = ad, motors
         self.devices = [self.ad] + self.motors
         self.optim = GradOptim(xlimits, ylimits)
         self.roi = self.origin = self.cache = None
@@ -106,11 +107,22 @@ class AttiXes(AttiAdMixin):
         doc, img = self.cache
         doc = doc.copy(); doc["data"] = doc["data"].copy()
         if origin:
+            if self.roi_threshold is None:
+                flat = numpy.sort(img.flatten())
+                threshold = flat[int(self.roi_ratio * len(flat))]
+            else:
+                threshold = self.roi_threshold
             self.roi = auto_roi\
-                (img, min(img.shape) // self.roi_steps, self.roi_threshold)
+                (img, min(img.shape) // self.roi_steps, threshold)
             self.origin = (self.roi[0] + self.roi[1]) // 2, \
                 (self.roi[2] + self.roi[3]) // 2
         doc["data"]["eval"] = img_eval(img, self.roi, self.origin)
+        angular = doc["data"]["eval"][-1]
+        doc["data"]["eval"] = doc["data"]["eval"][:-1] + \
+            (angular[0].std(), self.ad.cam.temperature_actual.get())
+        radial = img_phist(img, self.origin, (RADIAL_BINS, 0))
+        doc["data"]["hist"] = angular_vis\
+            (img, self.origin, *angular) + (radial[1], radial[0])
         self.send_event(doc)
         return doc["data"]["eval"]
 

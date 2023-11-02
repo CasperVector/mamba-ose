@@ -10,7 +10,7 @@ def mzs_dev(self, req):
         if op == "keys":
             assert len(path) == 1
         else:
-            assert len(path) > 1 and op in ["describe", "read",
+            assert len(path) > 1 and op in ["prefix", "describe", "read",
                 "describe_configuration", "read_configuration"]
         assert path[0] in ["M", "D"]
     except:
@@ -19,14 +19,16 @@ def mzs_dev(self, req):
         obj, p = self.state, path
         while p:
             obj, p = getattr(obj, p[0]), p[1:]
-        f = getattr(obj, op)
+        attr = getattr(obj, op)
     except:
         raise ZError("key", "invalid device")
     if op == "keys":
         prefix = path[0] + "."
-        ret = [prefix + k for k in f()]
+        ret = [prefix + k for k in attr()]
+    elif op == "prefix":
+        ret = attr
     else:
-        ret = f(dot = True)
+        ret = attr(dot = True)
     return {"err": "", "ret": ret}
 
 def mzs_scan(self, req):
@@ -71,7 +73,7 @@ def lossy_notify(periods, dnotify):
                 caches[typ].setdefault(k, {}).update(v)
             else:
                 caches[typ][k] = v
-        timestamp = time.time()
+        timestamp = time.monotonic()
         if timestamp < timestamps.get(typ, 0.0) + periods.get(typ, 0.0):
             return
         timestamps[typ] = timestamp
