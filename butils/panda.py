@@ -3,6 +3,7 @@ import numpy
 import threading
 from ophyd import Component, Device, Signal, Kind
 from ophyd.utils.epics_pvs import data_type, data_shape
+from .common import fn_wait
 from .panda_client import PandABlocksClient
 
 pandaFields = [
@@ -254,8 +255,7 @@ class PandaRoot(Device):
 			getattr(self, ".".join(k))._update(v)
 
 	def _update_romits(self):
-		for a in self._romits:
-			a.get()
+		assert fn_wait([a.get for a in self._romits])
 
 	def _start_poll(self):
 		def poll():
@@ -272,8 +272,7 @@ class PandaRoot(Device):
 		threading.Thread(target = poll, daemon = True).start()
 
 	def clear_muxes(self):
-		for a in self._muxes:
-			a.put("ZERO")
+		assert fn_wait([(lambda: a.put("ZERO")) for a in self._muxes])
 
 	def clear_capture(self):
 		assert self._client.send_recv("*CAPTURE=\n") == "OK"

@@ -4,7 +4,7 @@ from ophyd import Device, Component, EpicsSignal, EpicsSignalRO, \
 	EpicsMotor, PositionerBase, PVPositioner, PVPositionerPC
 from ophyd.signal import AttributeSignal
 from ophyd.utils.epics_pvs import raise_if_disconnected
-from .common import masked_attr
+from .common import fn_wait, masked_attr
 
 class HomeEnum(str, Enum):
 	forward, reverse, poslimit, neglimit = \
@@ -13,6 +13,17 @@ class HomeEnum(str, Enum):
 def cpt_to_dev(cpt, name):
 	return cpt.cls(name = name, **cpt.kwargs) if cpt.suffix is None \
 		else cpt.cls(cpt.suffix, name = name, **cpt.kwargs)
+
+def my_config(dev, cfg):
+	for k, v in cfg.items():
+		getattr(dev, k).set(v).wait()
+
+def para_move(mposs):
+	try:
+		assert fn_wait([m.set(p).wait for m, p in mposs.items()])
+	except KeyboardInterrupt:
+		assert fn_wait([m.stop for m in mposs])
+		raise
 
 class ThrottleMonitor(Device):
 	monitor_period, _monitor_period = Component(AttributeSignal,

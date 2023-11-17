@@ -45,7 +45,7 @@ class ImageFiller(CallbackBase):
 
 	def descriptor(self, doc):
 		for k, v in doc["data_keys"].items():
-			if v.get("external") == "FILESTORE:":
+			if v.get("external") == "FILESTORE:" and k not in self.fields:
 				self.fields.append(k)
 
 	def resource(self, doc):

@@ -61,47 +61,19 @@ class SoftTrigger(MyTriggerBase):
 	def _acquire_changed(self, *, value, old_value, **kwargs):
 		if self._status is None:
 			return
-		if self._counter_signal or (old_value == 1 and value == 0):
+		if (self._counter_signal and value) or (old_value == 1 and value == 0):
 			status, self._status = self._status, None
 			status.set_finished()
 
 class DxpTrigger(MyTriggerBase):
-	_started, _unstage_time = False, 0.2
-
-	def stage(self):
-		super().stage()
-		self._started = False
-
-	def unstage(self):
-		if self._started:
-			self.cam.next_pixel.put(1)
-			time.sleep(self._unstage_time)
-			self.cam.stop_all.put(1)
-			if not self.cam.wait_acquiring(False):
-				super().unstage()
-				raise TimeoutError\
-					("Timeout waiting for %r to be low" % self.cam.acquiring)
-			self._started = False
-		super().unstage()
-
 	def wait_finish(self):
-		pixels = self.cam.pixels_per_run.get()
-		if pixels > 0 or not self._started:
-			if pixels <= 0:
-				self._started = True
-			self.cam.erase_start.put(1)
-			if not self.cam.wait_acquiring(True):
-				raise TimeoutError\
-					("Timeout waiting for %r to be high" % self.cam.acquiring)
+		self.cam.erase_start.put(1)
+		time.sleep(self.cam.preset_real.get())
+		for i in range(100):
+			if not self.cam.acquiring.get():
+				break
+			time.sleep(0.02)
 		else:
-			self.cam.next_pixel.put(1)
-		if pixels > 0:
-			for i in range(pixels):
-				time.sleep(self.cam.preset_real.get())
-				self.cam.next_pixel.put(1)
-		else:
-			time.sleep(self.cam.preset_real.get())
-		if pixels > 0 and not self.cam.wait_acquiring(False):
 			self.cam.stop_all.put(1)
 			raise TimeoutError\
 				("Timeout waiting for %r to be low" % self.cam.acquiring)
@@ -138,8 +110,7 @@ class CptHDF5(MyHDF5Plugin, FileStoreHDF5, FileStoreIterativeWrite):
 		self.swmr_mode.set(1).wait()
 
 class CptHDF5Dxp(CptHDF5):
-	def get_frames_per_point(self):
-		return max(self.parent.cam.pixels_per_run.get(), 1)
+	get_frames_per_point = lambda self: 1
 
 class MyImagePlugin(ThrottleMonitor, PluginBase):
 	_plugin_type = "NDPluginStdArrays"
@@ -209,19 +180,9 @@ class DxpCam(ADBase):
 	next_pixel = ADComponent(EpicsSignal, "NextPixel")
 	acquiring = ADComponent(EpicsSignal, "Acquiring")
 
-	def wait_acquiring(self, val):
-		for i in range(100):
-			if bool(self.acquiring.get()) == bool(val):
-				return True
-			time.sleep(0.1)
-		else:
-			return False
-
 	def warmup(self):
 		self.erase_start.put(1)
-		self.wait_acquiring(True)
-		self.next_pixel.put(1)
-		self.wait_acquiring(False)
+		time.sleep(min(2.0, self.preset_real.get()))
 		self.stop_all.put(1)
 
 class SitoroCam(DxpCam):
@@ -253,12 +214,27 @@ def make_detector(name, inherit = None, **kwargs):
 			attrs[k] = v
 	return type(name, inherit, attrs)
 
+def make_dxp(name, cam, nchan = 0):
+	ids = [i + 1 for i in range(nchan)]
+	attrs = {"_default_read_attrs":
+		sum([["ch%d_real" % i, "ch%d_live" % i] for i in ids], ["hdf1"])}
+	attrs.update(sum([[
+		("ch%d_real" % i,
+			ADComponent(EpicsSignalRO, "dxp%d:ElapsedRealTime" % i)),
+		("ch%d_live" % i,
+			ADComponent(EpicsSignalRO, "dxp%d:ElapsedLiveTime" % i)),
+	] for i in ids], []))
+	return make_detector(
+		name, (DxpTrigger, DxpDetectorBase), cam = Component(cam, ""),
+		hdf1 = Component(CptHDF5Dxp, "HDF1:", write_path_template = "/"),
+		image1 = None, monitor = None, **attrs
+	)
+
 MyAreaDetector = make_detector("MyAreaDetector")
 BaseAreaDetector = make_detector\
 	("BaseAreaDetector", image1 = None, monitor = None)
-DxpDetector, SitoroDetector = [make_detector(
-	name, (DxpTrigger, DxpDetectorBase), cam = Component(cam, ""),
-	hdf1 = Component(CptHDF5Dxp, "HDF1:", write_path_template = "/"),
-	image1 = None, monitor = None
-) for name, cam in [("DxpDetector", DxpCam), ("SitoroDetector", SitoroCam)]]
+DxpDetector = lambda *args, nchan = 0, **kwargs: \
+	make_dxp("DxpDetector", DxpCam, nchan = nchan)(*args, **kwargs)
+SitoroDetector = lambda *args, nchan = 0, **kwargs: \
+	make_dxp("SitoroDetector", SitoroCam, nchan = nchan)(*args, **kwargs)
 

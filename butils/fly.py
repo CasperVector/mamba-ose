@@ -2,6 +2,7 @@ import re
 from bluesky import plans
 from bluesky import plan_stubs as bps, preprocessors as bpp
 from .bubo import sseq_disable
+from .ophyd import my_config
 
 PANDA_FREQ = int(125e6)
 
@@ -35,7 +36,7 @@ def prep_simple(panda, outputs, inputs, **kwargs):
 			cfg.update([("seq1.pos%s" % chr(ord("a") + i), inp.upper())])
 		if motor:
 			getattr(panda, inp).bind(motor, **kwargs)
-	panda.configure(cfg)
+	my_config(panda, cfg)
 
 def seq_disable(block):
 	return {"%s.repeats" % block: 1, "%s.table" % block: dict(
