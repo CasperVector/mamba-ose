@@ -24,7 +24,8 @@ setup(
              "mamba-gui=mamba.frontend.mamba_gui:main"]
     },
     package_data={
-        "mamba.frontend.widgets.ui": ["*.ui", "*.qrc", "icons/*.png"]
+        "mamba.gengyd.widgets": ["*.ui"],
+        "mamba": ["icons/*.png", "icons/*.qrc"]
     }
 )
 
