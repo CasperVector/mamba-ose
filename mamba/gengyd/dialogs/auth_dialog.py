@@ -1,4 +1,3 @@
-import ldap
 from mamba.backend.zserver import ZError, zsv_err_fmt
 from PyQt5.QtWidgets import (QDialog, QFormLayout, QLabel,
     QLineEdit, QMessageBox, QPushButton, QSpacerItem)

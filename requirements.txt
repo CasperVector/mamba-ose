@@ -1,13 +1,12 @@
 bluesky
 h5py
-matplotlib
 numpy
 ophyd
 pexpect
 PyQt5
 pyqtgraph
-python-ldap
 PyYAML
 pyzmq
+scipy
 setuptools
 

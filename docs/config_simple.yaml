@@ -1,0 +1,10 @@
+---
+backend:
+    lport: 5678
+    init: "~/.mamba/init.py"
+    saddons: ["mamba.backend.addon_core:saddon_core()"]
+    caddons: ["mamba.backend.addon_core:caddon_core()"]
+
+frontend:
+    guis: []
+

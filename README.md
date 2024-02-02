@@ -27,8 +27,8 @@ Mamba is the experimental control framework-to-be of HEPS. It aims to provide
 * Before first use (customise the config after this):
     ```sh
     $ mkdir -p ~/.mamba
-    $ cp docs/example_config.yaml ~/.mamba/config.yaml
-    $ cp docs/example_init.py ~/.mamba/init.py
+    $ cp docs/config_gengyd.yaml ~/.mamba/config.yaml
+    $ cp docs/init_sim.py ~/.mamba/init.py
     ```
 
 * Routine use, starting the backend first:

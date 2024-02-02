@@ -11,6 +11,7 @@ class XesImage(MambaView, pyqtgraph.GraphicsView):
     def __init__(self, model, parent = None, mtyps = ({}, {})):
         super().__init__(parent)
         ci = MyImageView(view = TargetPlot())
+        ci.lut.setColorMap("CET-L16")
         self.target = ci.view.target
         self.target.setZValue(20)
         ci.view.vl.setZValue(10)
@@ -40,8 +41,8 @@ class XesImage(MambaView, pyqtgraph.GraphicsView):
         self.target.setVisible(mode != "unstaged")
 
     def on_hist(self, hist):
-        self.angular.setData(hist[0], hist[1])
-        self.radial.setData(hist[2], hist[3])
+        self.radial.setData(hist[0], hist[1])
+        self.angular.setData(hist[2], hist[3])
 
 class XesView(MambaView, QtWidgets.QMainWindow):
     def __init__(self, model, parent = None):
@@ -59,8 +60,8 @@ class XesView(MambaView, QtWidgets.QMainWindow):
         layout1.addWidget(self.update)
         layout1.addWidget(QtWidgets.QLabel("Evaluation:", parent))
         self.ev = QtWidgets.QLineEdit(parent)
-        self.ev.setMinimumWidth(24 * 8)
-        layout1.addWidget(self.ev, stretch = 3)
+        self.ev.setMinimumWidth(16 * 8)
+        layout1.addWidget(self.ev, stretch = 2)
         self.tune = QtWidgets.QPushButton("Auto tune", parent)
         layout1.addWidget(self.tune)
         layout1.addWidget(QtWidgets.QLabel("Temperature:", parent))
@@ -90,13 +91,13 @@ class XesView(MambaView, QtWidgets.QMainWindow):
     def on_motors(self, mxy):
         mx, my = mxy
         if mx is not None:
-            self.mx.setText("%.7g" % mx)
+            self.mx.setText("%g" % mx)
         if my is not None:
-            self.my.setText("%.7g" % my)
+            self.my.setText("%g" % my)
 
     def on_eval(self, ev):
-        self.ev.setText(", ".join("%.7g" % x for x in ev[:-1]))
-        self.temp.setText("%.7g" % ev[-1])
+        self.ev.setText(", ".join("%g" % x for x in ev[:-1]))
+        self.temp.setText("%g" % ev[-1])
 
     def submit_update(self):
         self.submit("update",
@@ -142,19 +143,19 @@ class XesModel(MambaZModel):
         try:
             self.notify("img", data[self.ad])
             self.notify("motors", [data[m] for m in self.motors])
-            self.notify("eval", data["eval"])
+            self.notify("eval", data["aeval"])
             self.notify("hist", data["hist"])
         except KeyError:
             return
 
     def do_stage(self):
-        ret = self.mrc_req("%s/names" % self.name)["ret"]
-        self.ad, self.motors = ret[0], ret[1:]
+        (self.ad,), self.motors = self.mrc_req("%s/names" % self.name)["ret"]
         self.do_mode("staged")
 
     def on_update(self, mx, my):
         if self.mode == "staged":
-            self.mrc_cmd("U.%s.move([%s, %s])\n" % (self.name, mx, my))
+            if None not in [mx, my]:
+                self.mrc_cmd("U.%s.put_x([%s, %s])\n" % (self.name, mx, my))
             self.mrc_cmd("U.%s.refresh()\n" % self.name)
         elif self.mode == "unstaged":
             self.do_stage()

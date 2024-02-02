@@ -1,0 +1,11 @@
+---
+backend:
+    lport: 5678
+    init: "~/.mamba/init.py"
+    saddons: ["mamba.backend.addon_core:saddon_core()",
+              "lib_capi:saddon_capi()"]
+    caddons: ["mamba.backend.addon_core:caddon_core()"]
+
+frontend:
+    guis: ["mamba.attitude.capi_frontend:main(atti_capi):Main"]
+

@@ -1,0 +1,8 @@
+record(calc, "IOC:6485")
+{
+	field(INPA, "IOC:m2")
+	field(CALC, "A * A")
+	field(PINI, "YES")
+	field(SCAN, ".1 second")
+}
+
