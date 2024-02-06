@@ -227,6 +227,7 @@ class AttiOptim(object):
         self.ad_rois = {}
         self.motors = self.dets = self.ads = None
         self.send_event = lambda doc: mzcb("event", doc)
+        self.stopped = False
 
     def configure(self, dets, motors):
         self.dets = {d.vname(): d for d in dets}
@@ -234,6 +235,7 @@ class AttiOptim(object):
         self.ads = {d.vname(): None for d in dets if hasattr(d, "hdf1")}
 
     def stage(self):
+        self.stopped = False
         for d in self.dets.values():
             d.stage()
         for a in self.ads:
@@ -250,6 +252,15 @@ class AttiOptim(object):
                 os.remove(f)
         for d in reversed(list(self.dets.values())):
             d.unstage()
+
+    def stop(self):
+        self.stopped = True
+        for m in self.motors.values():
+            m.stop()
+
+    def callback(self, *args, **kwargs):
+        if self.stopped:
+            raise StopIteration()
 
     def get_x(self, motors = None):
         motors = motors or list(self.motors)
@@ -290,21 +301,23 @@ class AttiOptim(object):
             return y
         return f
 
-def mzs_atti(self, req):
-    op, state = unary_op(req), self.get_state(req)
-    if op == "names":
-        return {"err": "", "ret":
-            [[d.replace(".", "_") + "_image" for d in state.dets],
-            [m.replace(".", "_") for m in state.motors]]
-        }
-    raise_syntax(req)
+def make_mzs(outputs = None):
+    def mzs(self, req):
+        op, state = unary_op(req), self.get_state(req)
+        if op == "names":
+            ret = {} if outputs is None else {"outputs": outputs}
+            ret.update({"dets": list(state.dets), "motors": list(state.motors)})
+            return {"err": "", "ret": ret}
+        raise_syntax(req)
+    return mzs
 
 def make_state(name, cls):
     return lambda U, config: setattr(U, name, cls(U.mzcb))
 
-def make_saddon(atti, cls):
+def make_saddon(atti, cls, outputs = None):
     def saddon(arg):
         name = arg or atti
-        return {"mzs": {name: mzs_atti}, "state": make_state(name, cls)}
+        return {"mzs": {name: make_mzs(outputs)},
+            "state": make_state(name, cls)}
     return saddon
 

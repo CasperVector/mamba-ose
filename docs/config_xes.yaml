@@ -1,0 +1,12 @@
+---
+backend:
+    lport: 5678
+    init: "~/.mamba/init.py"
+    saddons: ["mamba.backend.addon_core:saddon_core()",
+              "mamba.attitude.xes_backend:saddon_xes()"]
+    caddons: ["mamba.backend.addon_core:caddon_core()"]
+
+frontend:
+    guis: ["mamba.attitude.xes_frontend:main():Main",
+           "mamba.attitude.capi_frontend:main(atti_xes):Attitude"]
+

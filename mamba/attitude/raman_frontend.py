@@ -130,7 +130,8 @@ class RamanView(MambaView, QtWidgets.QMainWindow):
             ("begin_perm", "ROI matching"),
             ("begin_focus", "Focus tuning"),
             ("refresh", "Refresh data"),
-            ("begin_commit", "Commit changes")
+            ("begin_commit", "Commit changes"),
+            ("stop", "Stop motors")
         ]:
             item = QtWidgets.QAction(desc, self)
             item.triggered.connect((lambda typ: lambda: self.submit(typ))(typ))
@@ -152,7 +153,7 @@ class RamanView(MambaView, QtWidgets.QMainWindow):
             self.addDockWidget(Qt.RightDockWidgetArea
                 if right else Qt.LeftDockWidgetArea, dock)
         self.sbind(model, ({}, {}), ["auto_rois", "begin_perm",
-            "begin_focus", "refresh", "begin_commit"])
+            "begin_focus", "refresh", "begin_commit", "stop"])
         self.nbind(({}, {}), ["mode"])
 
     def on_mode(self, mode, allowed):
@@ -167,22 +168,22 @@ class RamanModel(MambaZModel):
         "unstaged": ["auto_rois"], "staged": ["auto_rois",
             "begin_perm", "begin_focus", "refresh", "edit"],
         "edit": ["begin_commit", "refresh"],
-        "commit": [], "perm": [], "focus": []
+        "commit": ["stop"], "perm": ["stop"], "focus": ["stop"]
     }
 
     def __init__(self, name):
         super().__init__()
         self.table = pandas.DataFrame(columns =
             ["show", "x0", "x1", "x2", "x", "y", "w", "h", "pen"])
-        self.ad = self.dim = self.motors = self.nanal = self.mdict = \
+        self.img_name = self.dim = self.motors = self.nanal = self.mdict = \
             self.xx = self.yy = self.delta = self.perm = None
         self.name, (self.mrc, self.mnc) = name, client_build(config_read())
         self.app, self.view = QtWidgets.QApplication([]), RamanView(self)
         self.mnc.subscribe("doc", self.zcb_mk("doc"))
         self.mnc.subscribe("monitor", self.zcb_mk("monitor"))
         self.sbind([
-            "monitor", "doc", "cell", "tdrag", "roi",
-            "refresh", "begin_commit", "end_commit", "auto_rois",
+            "monitor", "doc", "cell", "tdrag", "roi", "refresh",
+            "stop", "begin_commit", "end_commit", "auto_rois",
             "begin_perm", "end_perm", "begin_focus", "end_focus"
         ])
         self.do_mode("unstaged")
@@ -223,7 +224,7 @@ class RamanModel(MambaZModel):
                     self.table.iat[k] = v
                     self.notify("cells", *k)
         elif msg["typ"][1] == "image":
-            img = msg["doc"]["data"].get(self.ad)
+            img = msg["doc"]["data"].get(self.img_name)
             if img is not None:
                 self.notify("img", img)
 
@@ -232,7 +233,7 @@ class RamanModel(MambaZModel):
             return
         data = msg["doc"]["data"]
         try:
-            img = data[self.ad]
+            img = data[self.img_name]
             self.table.loc[:, "x0" : "x2"] = [[data[self.motors[3 * i + j]]
                 for j in range(3)] for i in range(self.nanal)]
         except KeyError:
@@ -256,8 +257,11 @@ class RamanModel(MambaZModel):
         self.notify("cells", i, self.colid("show"), j, self.colid("show"))
 
     def do_stage(self):
-        (self.ad,), self.motors, self.dim = \
-            self.mrc_req("%s/names" % self.name)["ret"]
+        names = self.mrc_req("%s/names" % self.name)["ret"]
+        self.dim, (self.img_name,), self.motors = \
+            names["dim"], names["dets"], names["motors"]
+        self.img_name = self.img_name.replace(".", "_") + "_image"
+        self.motors = [m.replace(".", "_") for m in self.motors]
         self.nanal = len(self.motors) // 3
         self.mdict = dict((self.motors[3 * i + j], (i, j + self.colid("x0")))
             for i in range(self.nanal) for j in range(3))
@@ -341,6 +345,9 @@ class RamanModel(MambaZModel):
         if self.mode == "edit":
             self.delta = self.perm = None
             self.do_mode("staged")
+
+    def on_stop(self):
+        self.mrc_cmd("U.%s.stop()\n" % self.name)
 
     def on_begin_commit(self):
         if self.perm:

@@ -34,7 +34,7 @@ class AttiRaman(AttiOptim):
             bounds = [(0.9 * lo + 0.1 * hi, 0.1 * lo + 0.9 * hi)
                 for lo, hi in bounds]
         super().configure([ad], motors)
-        self.ad, self.ad_name = ad, ad.name + "_image"
+        self.ad, self.img_name = ad, ad.name + "_image"
         self.bounds, self.rois = numpy.array(bounds).reshape((-1, 3, 2)), None
         self.groups = [list(range(i, len(self.bounds), self.focus_groups))
             for i in range(self.focus_groups)]
@@ -53,7 +53,7 @@ class AttiRaman(AttiOptim):
         self.send_event(doc)
         if not roi:
             return
-        rois = auto_rois(doc["data"][self.ad_name],
+        rois = auto_rois(doc["data"][self.img_name],
             min(self.dim) // self.roi_steps, self.roi_threshold)
         self.set_rois(rois)
         return max(len(self.bounds) - len(rois), 0)
@@ -65,7 +65,7 @@ class AttiRaman(AttiOptim):
         if i >= 0:
             self.put_x(x, [3 * i + 1, 3 * i + 2])
         doc = self.get_y()
-        img = bg_bad(doc["data"][self.ad_name].copy(),
+        img = bg_bad(doc["data"][self.img_name].copy(),
             self.bg_threshold, self.bad_threshold)
         y = numpy.array([img_peak(roi_crop(img, roi))[0] for roi in self.rois])
         if i < 0:
@@ -83,13 +83,14 @@ class AttiRaman(AttiOptim):
         err, perm = perm_diffmax(
             self.func_perm, self.get_x().reshape((-1, 3))[:, 1 : 3],
             bounds = bounds, steps = self.perm_steps[0],
-            threshold = (self.perm_ratio, min(self.dim) / self.perm_steps[1])
+            threshold = (self.perm_ratio, min(self.dim) / self.perm_steps[1]),
+            callback = self.callback
         )
         self.perm_rois(perm)
         return err, perm
 
     def proc_focus(self, doc, group):
-        img = bg_bad(doc["data"][self.ad_name].copy(),
+        img = bg_bad(doc["data"][self.img_name].copy(),
             self.bg_threshold, self.bad_threshold)
         doc["data"]["eval"] = \
             [self.focus_eval(roi_crop(img, roi)) for roi in self.rois]
@@ -101,7 +102,7 @@ class AttiRaman(AttiOptim):
             self.wrap(
                 [self.ad.vname()], [motors[3 * i] for i in group],
                 lambda doc: self.proc_focus(doc, group)
-            ), bounds = self.bounds[group, 0, :],
+            ), callback = self.callback, bounds = self.bounds[group, 0, :],
             steps = self.focus_steps, threshold = self.focus_ratio
         )
 
@@ -120,10 +121,8 @@ def mzs_raman(self, req):
     if op == "rois":
         return {"err": "", "ret": [roi2xywh(roi) for roi in state.rois]}
     elif op == "names":
-        return {"err": "", "ret":
-            [[d.replace(".", "_") + "_image" for d in state.dets],
-            [m.replace(".", "_") for m in state.motors], state.dim]
-        }
+        return {"err": "", "ret": {"dim": state.dim,
+            "dets": list(state.dets), "motors": list(state.motors)}}
     raise_syntax(req)
 
 def saddon_raman(arg):

@@ -37,83 +37,97 @@ class XesImage(MambaView, pyqtgraph.GraphicsView):
         self.nbind(mtyps, ["mode", "img", "hist", "roi", "origin"])
 
     def on_mode(self, mode):
-        self.roi.setVisible(mode != "unstaged")
-        self.target.setVisible(mode != "unstaged")
+        for widget in [self.roi, self.target]:
+            widget.setVisible(mode != "unstaged")
+            widget.setEnabled(mode == "staged")
 
     def on_hist(self, hist):
         self.radial.setData(hist[0], hist[1])
-        self.angular.setData(hist[2], hist[3])
+        if hist[2] is not None and hist[3] is not None:
+            self.angular.setData(hist[2], hist[3])
 
 class XesView(MambaView, QtWidgets.QMainWindow):
     def __init__(self, model, parent = None):
         super().__init__(parent)
-        self.setWindowTitle("Attitude tuning for XES spectrometer")
+        self.setWindowTitle("XES experiment")
         layout0, layout1 = QtWidgets.QVBoxLayout(), QtWidgets.QHBoxLayout()
-        layout1.addWidget(QtWidgets.QLabel("Motors:", parent))
-        self.mx = QtWidgets.QLineEdit(parent)
-        self.my = QtWidgets.QLineEdit(parent)
-        for widget in [self.mx, self.my]:
-            widget.setMinimumWidth(6 * 8)
-            widget.setValidator(QtGui.QDoubleValidator(parent))
-            layout1.addWidget(widget, stretch = 1)
-        self.update = QtWidgets.QPushButton("Update", parent)
-        layout1.addWidget(self.update)
-        layout1.addWidget(QtWidgets.QLabel("Evaluation:", parent))
-        self.ev = QtWidgets.QLineEdit(parent)
+        layout1.addWidget(QtWidgets.QLabel("Acquire time:", self))
+        self.atime = QtWidgets.QLineEdit(self)
+        self.atime.setMinimumWidth(8 * 8)
+        self.atime.setValidator(QtGui.QDoubleValidator(self))
+        layout1.addWidget(self.atime, stretch = 1)
+        layout1.addWidget(QtWidgets.QLabel("Save path:", self))
+        self.output = QtWidgets.QLineEdit(self)
+        self.output.setMinimumWidth(40 * 8)
+        layout1.addWidget(self.output, stretch = 4)
+        layout0.addLayout(layout1)
+        layout1 = QtWidgets.QHBoxLayout()
+        self.acquire = QtWidgets.QPushButton("Acquire image", self)
+        layout1.addWidget(self.acquire)
+        self.reorigin = QtWidgets.QPushButton("Auto origin", self)
+        layout1.addWidget(self.reorigin)
+        layout1.addWidget(QtWidgets.QLabel("Evaluation:", self))
+        self.ev = QtWidgets.QLineEdit(self)
         self.ev.setMinimumWidth(16 * 8)
         layout1.addWidget(self.ev, stretch = 2)
-        self.tune = QtWidgets.QPushButton("Auto tune", parent)
-        layout1.addWidget(self.tune)
-        layout1.addWidget(QtWidgets.QLabel("Temperature:", parent))
-        self.temp = QtWidgets.QLineEdit(parent)
-        self.temp.setMinimumWidth(8)
+        layout1.addWidget(QtWidgets.QLabel("Temperature:", self))
+        self.temp = QtWidgets.QLineEdit(self)
+        self.temp.setMinimumWidth(4 * 8)
         layout1.addWidget(self.temp, stretch = 1)
         layout0.addLayout(layout1)
         widget = XesImage(model)
-        widget.setMinimumWidth(900)
-        widget.setMinimumHeight(800)
+        widget.setMinimumHeight(600)
         layout0.addWidget(widget)
         widget = QtWidgets.QWidget(self)
         widget.setLayout(layout0)
         self.setCentralWidget(widget)
-        self.ev.setEnabled(False)
-        self.temp.setEnabled(False)
-        self.sbind(model, ({}, {}), ["update", "begin_tune"])
-        self.update.clicked.connect(self.submit_update)
-        self.tune.clicked.connect(lambda: self.submit("begin_tune"))
-        self.nbind(({}, {}), ["mode", "motors", "eval"])
+        self.ev.setReadOnly(True)
+        self.temp.setReadOnly(True)
+        self.sbind(model, ({}, {}), ["acquire_time",
+            "begin_refresh", "stop_refresh", "stop_reorigin"])
+        self.atime.returnPressed.connect(lambda:
+            self.submit("acquire_time", float(self.atime.text())))
+        self.acquire.clicked.connect(lambda: self.submit_acquire(True))
+        self.reorigin.clicked.connect(lambda: self.submit_acquire(False))
+        self.nbind(({}, {}), ["mode", "acquire_time", "eval"])
 
     def on_mode(self, mode):
-        self.update.setEnabled(mode != "tuning")
-        for widget in [self.mx, self.my, self.tune]:
+        for widget in [self.atime, self.output]:
             widget.setEnabled(mode == "staged")
+        self.acquire.setEnabled(mode != "reorigin")
+        self.reorigin.setEnabled(mode in ["staged", "reorigin"])
+        self.acquire.setText\
+            ("Stop exposure" if mode == "acquire" else "Acquire image")
+        self.reorigin.setText\
+            ("Stop origin" if mode == "reorigin" else "Auto origin")
+        self.mode = mode
 
-    def on_motors(self, mxy):
-        mx, my = mxy
-        if mx is not None:
-            self.mx.setText("%g" % mx)
-        if my is not None:
-            self.my.setText("%g" % my)
+    def on_acquire_time(self, atime, temp):
+        self.atime.setText("%g" % atime)
+        self.temp.setText("%g" % temp)
 
     def on_eval(self, ev):
-        self.ev.setText(", ".join("%g" % x for x in ev[:-1]))
-        self.temp.setText("%g" % ev[-1])
+        self.ev.setText(", ".join("%g" % x for x in ev))
 
-    def submit_update(self):
-        self.submit("update",
-            float(self.mx.text()) if self.mx.hasAcceptableInput() else None,
-            float(self.my.text()) if self.my.hasAcceptableInput() else None)
+    def submit_acquire(self, acquire):
+        if self.mode == "acquire":
+            self.submit("stop_refresh")
+        elif self.mode == "reorigin":
+            self.submit("stop_reorigin")
+        else:
+            self.submit("begin_refresh",
+                self.output.text() if acquire else None)
 
 class XesModel(MambaZModel):
     def __init__(self, name):
         super().__init__()
         self.name, (self.mrc, self.mnc) = name, client_build(config_read())
         self.app, self.view = QtWidgets.QApplication([]), XesView(self)
-        self.ad = self.motors = None
+        self.ad = self.img_name = None
         self.mnc.subscribe("doc", self.zcb_mk("doc"))
         self.mnc.subscribe("monitor", self.zcb_mk("monitor"))
-        self.sbind(["monitor", "doc", "update",
-            "roi", "origin", "begin_tune", "end_tune"])
+        self.sbind(["monitor", "doc", "roi", "origin", "acquire_time",
+            "stop_refresh", "stop_reorigin", "begin_refresh", "end_refresh"])
         self.do_mode("unstaged")
 
     def run(self):
@@ -122,17 +136,21 @@ class XesModel(MambaZModel):
         return self.app.exec_()
 
     def do_mode(self, mode):
+        if mode == "acquire":
+            atime, temp = [
+                self.mrc_req("dev/read", path = "%s.cam.%s" % (self.ad, attr))\
+                    ["ret"]["%s.cam.%s" % (self.ad, attr)]["value"]
+                for attr in ["acquire_time", "temperature_actual"]
+            ]
+            self.notify("acquire_time", 1e-3 * atime, temp)
         self.mode = mode
         self.notify("mode", mode)
 
     def on_monitor(self, msg):
         if self.mode == "unstaged":
             return
-        if msg["typ"][1] == "position":
-            self.notify("motors",
-                [msg["doc"]["data"].get(m) for m in self.motors])
-        elif msg["typ"][1] == "image":
-            img = msg["doc"]["data"].get(self.ad)
+        if msg["typ"][1] == "image":
+            img = msg["doc"]["data"].get(self.img_name)
             if img is not None:
                 self.notify("img", img)
 
@@ -140,55 +158,61 @@ class XesModel(MambaZModel):
         if msg["typ"][1] != "event" or self.mode == "unstaged":
             return
         data = msg["doc"]["data"]
-        try:
-            self.notify("img", data[self.ad])
-            self.notify("motors", [data[m] for m in self.motors])
-            self.notify("eval", data["aeval"])
-            self.notify("hist", data["hist"])
-        except KeyError:
-            return
+        for k1, k2 in [
+            ("img", self.img_name), ("eval", "aeval"),
+            ("hist", "hist"), ("origin", "origin")
+        ]:
+            if k2 in data:
+                self.notify(k1, data[k2])
 
-    def do_stage(self):
-        (self.ad,), self.motors = self.mrc_req("%s/names" % self.name)["ret"]
-        self.do_mode("staged")
-
-    def on_update(self, mx, my):
-        if self.mode == "staged":
-            if None not in [mx, my]:
-                self.mrc_cmd("U.%s.put_x([%s, %s])\n" % (self.name, mx, my))
-            self.mrc_cmd("U.%s.refresh()\n" % self.name)
-        elif self.mode == "unstaged":
-            self.do_stage()
-            self.mrc_cmd("U.%s.refresh(origin = True)\n" % self.name)
+    def on_begin_refresh(self, output):
+        if self.mode == "unstaged":
+            self.ad, = self.mrc_req("%s/names" % self.name)["ret"]["dets"]
+            self.img_name = self.ad.replace(".", "_") + "_image"
+            self.do_mode("acquire")
+            self.mrc_go("end_refresh", "%%go U.%s.refresh()\n" % self.name)
+        elif output is not None:
+            self.do_mode("acquire")
+            self.mrc_go("end_refresh",
+                "%%go U.%s.refresh(%r)\n" % (self.name, output))
         else:
-            return
+            self.do_mode("reorigin")
+            self.mrc_go("end_refresh",
+                "%%go U.%s.refresh(mode = 'o')\n" % self.name)
+
+    def on_end_refresh(self, rep = None):
         xywh, origin = self.mrc_req("%s/roi_origin" % self.name)["ret"]
         self.notify("roi", xywh)
         self.notify("origin", origin)
+        self.do_mode("staged")
+        if rep:
+            self.rep_chk(rep)
+
+    def on_stop_refresh(self):
+        self.mrc_cmd("%s.cam.acquire.set(0).wait()\n" % self.ad)
+
+    def on_stop_reorigin(self):
+        self.mrc_cmd("U.%s.stop()\n" % self.name)
+
+    def on_acquire_time(self, time):
+        self.mrc_cmd("%s.cam.acquire_time.set(%d).wait()\n" %
+            (self.ad, round(1e3 * time)))
 
     def on_roi(self, xywh):
-        if self.mode != "tuning":
+        if self.mode == "staged":
             self.mrc_cmd("U.%s.set_roi(%r)\n" % (self.name, xywh2roi(xywh)))
         self.notify("roi", self.mrc_req\
             ("%s/roi_origin" % self.name)["ret"][0])
-        if self.mode != "tuning":
-            self.mrc_cmd("U.%s.refresh(acquire = False)\n" % self.name)
+        if self.mode == "staged":
+            self.mrc_cmd("U.%s.refresh(mode = '')\n" % self.name)
 
     def on_origin(self, origin):
-        if self.mode != "tuning":
+        if self.mode == "staged":
             self.mrc_cmd("U.%s.set_origin(%r)\n" % (self.name, origin))
         self.notify("origin", self.mrc_req\
             ("%s/roi_origin" % self.name)["ret"][1])
-        if self.mode != "tuning":
-            self.mrc_cmd("U.%s.refresh(acquire = False)\n" % self.name)
-
-    def on_begin_tune(self):
-        self.do_mode("tuning")
-        self.mrc_go("end_tune", "%%go U.%s.auto_tune()\n" % self.name)
-
-    def on_end_tune(self, rep):
-        self.do_mode("staged")
-        self.rep_chk(rep)
+        if self.mode == "staged":
+            self.mrc_cmd("U.%s.refresh(mode = '')\n" % self.name)
 
 def main(arg = ""):
     name = arg or "atti_xes"
