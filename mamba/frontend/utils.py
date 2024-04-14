@@ -1,5 +1,5 @@
 import numpy
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import Qt, QEvent
 from PyQt5.QtWidgets import QStyle
 from ..backend.zserver import ZError, zsv_rep_chk, zsv_err_fmt

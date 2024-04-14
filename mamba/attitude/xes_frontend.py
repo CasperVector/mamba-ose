@@ -1,6 +1,7 @@
 import pyqtgraph
 import sys
-from PyQt5 import QtGui, QtWidgets
+import time
+from PyQt5 import QtCore, QtGui, QtWidgets
 from mamba.backend.mzserver import config_read, client_build
 from mamba.frontend.utils import MambaZModel, MambaView
 from mamba.frontend.pgitems import \
@@ -103,8 +104,9 @@ class XesView(MambaView, QtWidgets.QMainWindow):
         self.mode = mode
 
     def on_acquire_time(self, atime, temp):
-        self.atime.setText("%g" % atime)
-        self.temp.setText("%g" % temp)
+        self.atime.setText("%.0f" % atime)
+        if temp is not None:
+            self.temp.setText("%g" % temp)
 
     def on_eval(self, ev):
         self.ev.setText(", ".join("%g" % x for x in ev))
@@ -123,10 +125,14 @@ class XesModel(MambaZModel):
         super().__init__()
         self.name, (self.mrc, self.mnc) = name, client_build(config_read())
         self.app, self.view = QtWidgets.QApplication([]), XesView(self)
-        self.ad = self.img_name = None
+        self.mode = self.aratio = None
+        self.ad = self.img_name = self.atime = self.stamp = None
+        self.timer = QtCore.QTimer()
+        self.timer.setSingleShot(False)
+        self.timer.timeout.connect(lambda: self.submit("timer"))
         self.mnc.subscribe("doc", self.zcb_mk("doc"))
         self.mnc.subscribe("monitor", self.zcb_mk("monitor"))
-        self.sbind(["monitor", "doc", "roi", "origin", "acquire_time",
+        self.sbind(["monitor", "doc", "roi", "origin", "acquire_time", "timer",
             "stop_refresh", "stop_reorigin", "begin_refresh", "end_refresh"])
         self.do_mode("unstaged")
 
@@ -142,7 +148,13 @@ class XesModel(MambaZModel):
                     ["ret"]["%s.cam.%s" % (self.ad, attr)]["value"]
                 for attr in ["acquire_time", "temperature_actual"]
             ]
-            self.notify("acquire_time", 1e-3 * atime, temp)
+            self.atime = atime / self.aratio
+            self.stamp = time.monotonic() + self.atime
+            self.notify("acquire_time", self.atime, temp)
+            self.timer.start(500)
+        elif self.mode == "acquire":
+            self.timer.stop()
+            self.notify("acquire_time", self.atime, None)
         self.mode = mode
         self.notify("mode", mode)
 
@@ -167,7 +179,8 @@ class XesModel(MambaZModel):
 
     def on_begin_refresh(self, output):
         if self.mode == "unstaged":
-            self.ad, = self.mrc_req("%s/names" % self.name)["ret"]["dets"]
+            ret = self.mrc_req("%s/names" % self.name)["ret"]
+            self.aratio, (self.ad,) = ret["atime_ratio"], ret["dets"]
             self.img_name = self.ad.replace(".", "_") + "_image"
             self.do_mode("acquire")
             self.mrc_go("end_refresh", "%%go U.%s.refresh()\n" % self.name)
@@ -194,9 +207,14 @@ class XesModel(MambaZModel):
     def on_stop_reorigin(self):
         self.mrc_cmd("U.%s.stop()\n" % self.name)
 
-    def on_acquire_time(self, time):
+    def on_acquire_time(self, atime):
         self.mrc_cmd("%s.cam.acquire_time.set(%d).wait()\n" %
-            (self.ad, round(1e3 * time)))
+            (self.ad, round(atime * self.aratio)))
+
+    def on_timer(self):
+        if self.mode == "acquire":
+            self.notify("acquire_time",
+                max(self.stamp - time.monotonic(), 0.0), None)
 
     def on_roi(self, xywh):
         if self.mode == "staged":

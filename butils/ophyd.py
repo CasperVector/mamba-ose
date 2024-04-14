@@ -15,10 +15,6 @@ def cpt_to_dev(cpt, name):
     return cpt.cls(name = name, **cpt.kwargs) if cpt.suffix is None \
         else cpt.cls(cpt.suffix, name = name, **cpt.kwargs)
 
-def my_config(dev, cfg):
-    for k, v in cfg.items():
-        getattr(dev, k).set(v).wait()
-
 def para_move(mposs):
     try:
         assert fn_wait([m.set(p).wait for m, p in mposs.items()])

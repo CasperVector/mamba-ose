@@ -140,20 +140,25 @@ class MyImagePlugin(ThrottleMonitor, PluginBase):
         return self.array_data.subscribe(cb, run = False)
 
 class MyCam(CamBase):
-    def warmup(self, sleep = 2.0):
+    warmup_sleep = 1.0, 1.0
+
+    def warmup(self, sleep = None):
+        if sleep is None:
+            sleep = self.warmup_sleep
         sigs = [(self.array_callbacks, 1), (self.acquire, 1)]
         orig_vals = [(sig, sig.get()) for sig, val in sigs]
 
         for sig, val in sigs:
-            time.sleep(0.1)
             sig.put(val)
-        if sleep > 0:
-            time.sleep(sleep)
-        else:
-            for i in range(100):
-                if not self.acquire.get():
-                    break
-                time.sleep(0.1)
+            time.sleep(0.1)
+        for i in range(int(sleep[0] / 0.1)):
+            if self.acquire.get():
+                break
+            time.sleep(0.1)
+        for i in range(int(sleep[1] / 0.1)):
+            if not self.acquire.get():
+                break
+            time.sleep(0.1)
         for sig, val in reversed(orig_vals):
             sig.set(val).wait()
 

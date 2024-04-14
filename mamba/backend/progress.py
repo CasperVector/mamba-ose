@@ -25,6 +25,7 @@ class ProgressBase(CallbackBase):
 
 class ProgressSimple(ProgressBase):
     def __init__(self, *nums):
+        super().__init__()
         self.nums = nums
 
     def start(self, doc):
@@ -47,7 +48,7 @@ class ProgressSimple(ProgressBase):
             self.reporter.report(percent, None)
             return
         for i, step in enumerate(self.steps):
-            if not self.idx % step[1]:
+            if not (self.idx - 1) % step[1]:
                 break
         self.progress[i][0] += 1
         self.progress[i][1] += cur - self.prev

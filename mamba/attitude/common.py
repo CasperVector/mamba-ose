@@ -12,11 +12,11 @@ def roi_crop(img, roi):
     return img[roi[2] : roi[3], roi[0] : roi[1]]
 
 def norm_roi(roi, w, h):
-    x0, x1, y0, y1 = map(int, numpy.clip(roi, 0, (w, w, h, h)))
+    x0, x1, y0, y1 = numpy.clip(roi, 0, (w, w, h, h)).tolist()
     return (x0, x1, y0, y1) if x0 < x1 and y0 < y1 else (0, w, 0, h)
 
 def norm_origin(origin, w, h):
-    return tuple(map(int, numpy.clip(origin, 0, (w, h))))
+    return tuple(numpy.clip(origin, 0, (w, h)).tolist())
 
 def roi2xywh(roi):
     x0, x1, y0, y1 = roi
@@ -55,8 +55,8 @@ def auto_contours(img, threshold):
     return [roi for total, roi in ret]
 
 def proj_peak(proj):
-    peak = numpy.mean(proj[proj >= 0.95 * proj.max()]) / 0.98
-    pos = int(numpy.mean((proj >= 0.95 * peak).nonzero()))
+    peak = proj[proj >= 0.95 * proj.max()].mean() / 0.98
+    pos = int((proj >= 0.95 * peak).nonzero()[0].mean())
     roi = (proj[:pos] < peak / 2).astype(int).sum(), \
         len(proj) - (proj[pos:] < peak / 2).astype(int).sum()
     return pos, roi
@@ -95,7 +95,8 @@ def img_phist(img, origin, nbins):
     return ret
 
 def angular_vis(img, origin, hist, bins):
-    hist = (hist - hist.mean()) / hist.std() * 0.125 + 0.5
+    std = hist.std()
+    hist = (hist - hist.mean()) * (1 / std if std else 0.0) * 0.125 + 0.5
     if numpy.isfinite(hist).all():
         hist[hist < 0.125] = 0.125
         hist[hist > 0.875] = 0.875

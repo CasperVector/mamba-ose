@@ -1,6 +1,8 @@
 import collections
 import numpy
+import queue
 import threading
+import time
 from ophyd import Component, Device, Signal, Kind
 from ophyd.utils.epics_pvs import data_type, data_shape
 from .common import fn_wait
@@ -85,7 +87,7 @@ def panda_table_fmt(fields, data):
         i, = {f.bits_lo // 32, f.bits_hi // 32}
         ret[i] |= (l & (2 ** (f.bits_hi - f.bits_lo + 1) - 1)) \
             << (f.bits_lo % 32)
-    return list(ret.T.flatten())
+    return list(ret.T.reshape((-1,)))
 
 def panda_table_fmt_alt(fields, val):
     val = [val[k.lower()] for k in fields] \
@@ -228,15 +230,200 @@ class PandaBlock(Device):
         if hasattr(self, "_post_init"):
             self._post_init()
 
+def seq_outs_not(l):
+    return [f for f in ["out%s%d" % (c, i)
+        for i in [1, 2] for c in "abcdef"] if f not in l]
+
+def table_disable():
+    return dict(
+        [("trigger", ["Immediate"])] +
+        [(f, [1]) for f in ["repeats", "time1", "time2"]] +
+        [(f, [0]) for f in ["position"] + seq_outs_not([])]
+    )
+
+def seq_disable(block):
+    return {"%s.repeats" % block: 1, "%s.table" % block: table_disable()}
+
+class PandaDseqEnable(Signal):
+    def put(self, val):
+        if not self._readback and val:
+            self.parent._stage()
+        elif self._readback and not val:
+            self.parent._q0.put(("exit",))
+        super().put(1 if val else 0)
+
+class PandaDseqPoll(Signal):
+    def put(self, val):
+        if val:
+            for i in range(int(self.root._poll_period[1] /
+                self.parent._poll_period)):
+                if self.root.pcap.active.value.get():
+                    break
+                time.sleep(self.parent._poll_period)
+            else:
+                super().put(0)
+                return
+        super().put(1 if val else 0)
+
+class PandaDseqTables(Signal):
+    def put(self, tables):
+        for table in tables:
+            self.parent._q0.put(("table", table))
+        super().put("")
+
+    def set(self, tables, **kwargs):
+        if not isinstance(tables, list):
+            tables = [tables]
+        val = [panda_table_fmt_alt(self.parent._fields, table)
+            if table is not None else [] for table in tables]
+        return super().set(val, **kwargs)
+
+    def _set_and_wait(self, value, timeout, **kwargs):
+        self.put(value)
+
+class PandaDseq(Device):
+    _poll_period = 0.01
+    state = Component(Signal, value = "idle", kind = "normal")
+    counter = Component(Signal, value = 0, kind = "normal")
+    enable = Component(PandaDseqEnable, value = 0, kind = "config")
+    poll = Component(PandaDseqPoll, value = 0, kind = "omitted")
+    tables = Component(PandaDseqTables, value = "", kind = "omitted")
+
+    def __init__(self, *args, fields, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.state._metadata["write_access"] = False
+        self.counter._metadata["write_access"] = False
+        self._q0 = self._q1 = self._subs = None
+        self._fields, self._end = fields, False
+        self._idx, self._max = 0, -1
+
+    def make_cfg(self):
+        ret = {
+            "pcap.enable": "ZERO",
+            "pcap.trig_edge": "Falling",
+            "seq1.enable": "SRGATE1.OUT",
+            "seq2.enable": "SRGATE2.OUT",
+            "lut7.func": "A&~B",
+            "lut8.func": "A&~B",
+            "lut7.inpa": "PCAP.ACTIVE",
+            "lut8.inpa": "PCAP.ACTIVE",
+            "lut7.inpb": "SEQ2.ACTIVE",
+            "lut8.inpb": "SEQ1.ACTIVE",
+            "srgate1.enable": "ZERO",
+            "srgate2.enable": "ZERO",
+            "srgate1.set_": "LUT7.OUT",
+            "srgate2.set_": "LUT8.OUT",
+            "srgate1.set_edge": "Rising",
+            "srgate2.set_edge": "Rising",
+            "srgate1.when_disabled": "Set output low",
+            "srgate2.when_disabled": "Set output low"
+        }
+        ret.update(seq_disable("seq1"))
+        ret.update(seq_disable("seq2"))
+        return ret
+
+    def max_rows(self):
+        return self.root.seq1.table.max_length._readback // \
+            (max(f.bits_hi for f in self._fields.values()) // 32 + 1)
+
+    def _stage(self):
+        # This also ensures the latest state of these values is retrieved,
+        # preventing spurious edges (note each value gets queried twice)
+        # appearing on the later subscriptions because of an untimely poll.
+        assert not any(block.active.value.get() or block.active.value.get()
+            for block in [self.root.seq1, self.root.seq2, self.root.pcap])
+        Signal.put(self.poll, 0)
+        Signal.put(self.counter, 0, force = True)
+        Signal.put(self.state, "run", force = True)
+        table = table_disable()
+        self.root.configure({
+            "seq1.table": table,
+            "seq2.table": table,
+            "srgate1.enable": "ONE",
+            "srgate2.enable": "ONE",
+            "srgate1.force_set": "",
+            "srgate2.force_set": ""
+        }, action = True)
+        self._q0, self._q1 = queue.Queue(), collections.deque()
+        self._subs = [block.active.value.subscribe((lambda i: (
+            lambda *, value, old_value, **kwargs:
+            not value and old_value and self._q0.put(("inactive", i))
+        ))(i)) for i, block in enumerate([self.root.seq1, self.root.seq2])]
+        self._subs.append(self.root.pcap.active.value.subscribe(
+            lambda *, value, old_value, **kwargs:
+            value and not old_value and self._q0.put(("inactive", -1))
+        ))
+        self._end, self._idx, self._max = False, 0, -1
+        threading.Thread(target = self._run, daemon = True).start()
+
+    def _unstage(self, ret):
+        if self._subs:
+            for sub, block in zip(self._subs, [
+                self.root.seq1, self.root.seq2, self.root.pcap
+            ]):
+                block.active.value.unsubscribe(sub)
+        self.root.configure({"srgate1.enable": "ZERO", "srgate2.enable": "ZERO"})
+        Signal.put(self.state, ret, force = True)
+        Signal.put(self.poll, 0)
+        Signal.put(self.enable, 0)
+        self._q0 = self._q1 = None
+
+    def _run(self):
+        try:
+            while self.counter.get() < self._max or self._max < 0:
+                msg = self._q0.get()
+                if msg[0] == "exit":
+                    break
+                elif msg[0] == "table":
+                    self._fill0(msg[1])
+                elif msg[0] == "inactive":
+                    self._fill1(msg[1])
+            self._unstage("idle")
+        except:
+            self._unstage("error")
+            raise
+
+    def _fill(self, table):
+        if not table:
+            self._max = self._idx
+            return
+        i = self._idx % 2
+        getattr(self.root, "srgate%d" % (1 + i)).force_rst.value.put("")
+        getattr(self.root, "seq%d" % (1 + i)).table.value.put(table)
+        self._idx += 1
+
+    def _fill0(self, table):
+        assert not self._end
+        if not table:
+            self._end = True
+        if self._idx:
+            self._q1.append(table)
+        else:
+            self._fill(table)
+
+    def _fill1(self, i):
+        if i < 0:
+            assert self._idx == 1
+        else:
+            n = self.counter.get()
+            assert i >= 0 and n % 2 == i
+            Signal.put(self.counter, n + 1, force = True)
+        i = self._idx % 2
+        if self._max < 0:
+            self._fill(self._q1.popleft())
+        if self._max < 0 or self.counter.get() < self._max - 1:
+            assert getattr(self.root, "seq%d" % (2 - i)).active.value.get()
+
 class PandaRoot(Device):
-    def __init__(self, client, *, name, omcs, period = (1.0, 0.1), **kwargs):
+    _poll_period = (1.0, 0.1)
+
+    def __init__(self, client, *, name, omcs, **kwargs):
         self._client = client
         super().__init__(name = name, **kwargs)
         self.motors = {}
         self._romits, self._muxes, self._caps = \
             [[getattr(self, a) for a in l] for l in omcs]
-        self._period, self._polling = period, False
-        self._poll_event = threading.Event()
+        self._poll_active, self._poll_event = False, threading.Event()
         self.pcap.active.value.subscribe(lambda *, value, old_value, **kwargs:
             value and not old_value and self._poll_event.set())
         self._update()
@@ -259,20 +446,21 @@ class PandaRoot(Device):
 
     def _start_poll(self):
         def poll():
-            self._polling = True
+            self._poll_active = True
             while True:
                 try:
                     self._poll_event.wait\
-                        (self._period[self.pcap.active.value._readback])
+                        (self._poll_period[self.pcap.active.value._readback])
                     self._poll_event.clear()
                     self._update()
                 except:
-                    self._polling = False
+                    self._poll_active = False
                     raise
         threading.Thread(target = poll, daemon = True).start()
 
     def clear_muxes(self):
-        assert fn_wait([(lambda: a.put("ZERO")) for a in self._muxes])
+        assert fn_wait\
+            ([(lambda a: lambda: a.put("ZERO"))(a) for a in self._muxes])
 
     def clear_capture(self):
         assert self._client.send_recv("*CAPTURE=\n") == "OK"
@@ -306,9 +494,18 @@ class PandaRoot(Device):
         return self.desc_or_read\
             ("describe_configuration", Kind.config, dot, active_extra)
 
-    def read_configuration(self, dot = False, active_extra = ["system"]):
-        return self.desc_or_read\
+    def read_configuration(self, dot = False,
+        fast = False, active_extra = ["system"]):
+        if fast and not dot and self._config_cache is not None:
+            return self._config_cache[int(not dot)].copy()
+        ret = self.desc_or_read\
             ("read_configuration", Kind.config, dot, active_extra)
+        self._config_cache = ret, collections.OrderedDict\
+            ((k.replace(".", "_"), ret[k]) for k in ret)
+        return self._config_cache[int(not dot)].copy()
+
+    def configure(self, cfg, action = False, fast = True):
+        return super().configure(cfg, action = action, fast = fast)
 
 def panda_typ_fmt(s):
     return s.replace("_", "").title()
@@ -340,11 +537,15 @@ def panda_fclasses():
         ret[f] = cls, mode, enums, romit, tbmo
     return ret
 
-def PandaDevice(hostname = "localhost", port = 8888, *, name, **kwargs):
+def PandaDevice(hostname = "localhost",
+    port = 8888, *, name, inherit = None, **kwargs):
+    if not inherit:
+        inherit = PandaRoot,
     client = PandABlocksClient(hostname, port)
     client.start()
     capbits = client.get_pcap_bits_fields()
     fclasses, blocks, omcd = panda_fclasses(), [], {}
+    sfields = None
 
     for k, v in client.get_blocks_data().items():
         block, romits, muxcaps = [], [], ([], [])
@@ -355,6 +556,8 @@ def PandaDevice(hostname = "localhost", port = 8888, *, name, **kwargs):
             if table:
                 values["fields"] = client.get_table_fields\
                     (k + "1" if v.number > 1 else k, kk)
+                if k == "SEQ":
+                    sfields = values["fields"]
             if bits:
                 values["bits"] = capbits["%s.%s.CAPTURE" % (k, kk)]
 
@@ -378,7 +581,8 @@ def PandaDevice(hostname = "localhost", port = 8888, *, name, **kwargs):
         for idx in idxs(n) for a in omcd[k][i]] for i in range(3)
     ]
     blocks = [(k + idx, block) for k, n, block in blocks for idx in idxs(n)]
-    return type("PandaDevice", (PandaRoot,), dict(
-        (k.lower(), Component(block, k)) for k, block in blocks
+    return type("PandaDevice", inherit, dict(
+        [(k.lower(), Component(block, k)) for k, block in blocks] +
+        [("dseq", Component(PandaDseq, fields = sfields))]
     ))(client, name = name, omcs = omcs, **kwargs)
 

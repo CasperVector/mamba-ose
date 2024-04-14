@@ -11,7 +11,7 @@ from .common import roi_crop, norm_roi, norm_origin, roi2xywh, \
 RADIAL_BINS, ANGULAR_BINS = 1000, 360
 
 def auto_bg(img, roi):
-    crop = roi_crop(img, roi).flatten()
+    crop = roi_crop(img, roi).reshape((-1,))
     return numpy.sort(crop)[len(crop) // 2]
 
 def img_radial(img, origin, bg):
@@ -26,9 +26,6 @@ def img_radial(img, origin, bg):
 def img_eval(img, roi, origin, bg):
     img = roi_crop(img, roi)
     origin = origin[0] - roi[0], origin[1] - roi[2]
-    if not img.any():
-        img = numpy.array([(1, 0), (0, 0)])
-        roi = 0, 2, 0, 2
     rev, radial, rad = img_radial(img, origin, bg)
     angular = img_phist(bg_bad(img.copy(), bg, 0), origin, (0, ANGULAR_BINS))
     mean = angular[0].sum() / ANGULAR_BINS
@@ -37,7 +34,8 @@ def img_eval(img, roi, origin, bg):
     return rev, angular[0].std(), radial, angular
 
 class AttiXes(AttiOptim):
-    bg_threshold, bad_threshold, origin_rad, origin_tol = None, 0, 1.0, 1.0
+    bg_threshold, atime_ratio = None, 1e3
+    bad_threshold, origin_rad, origin_tol = 0, 1.0, 1.0
     init_rad, maxfev, xatol, fatol = 0.1, 25, 1e-2, (20, 5e-4)
 
     def configure(self, ad, motors):
@@ -161,8 +159,8 @@ def mzs_xes(self, req):
     if op == "roi_origin":
         return {"err": "", "ret": (roi2xywh(state.roi), state.origin)}
     elif op == "names":
-        return {"err": "", "ret":
-            {"dets": list(state.dets), "motors": list(state.motors)}}
+        return {"err": "", "ret": {"atime_ratio": state.atime_ratio,
+            "dets": list(state.dets), "motors": list(state.motors)}}
     raise_syntax(req)
 
 def saddon_xes(arg):

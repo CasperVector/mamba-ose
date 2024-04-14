@@ -11,9 +11,9 @@ from queue_iocs.qioc_seq import QMotorHubIOCBase
 groups_b5 = [("mhaydon", "mFocus", 5, 3), ("mopto", "mopto", 2, 15)]
 
 class MhubB5IOCBase(QMotorHubIOCBase):
-    def __init__(self, motor_pvs, hub_pvs, **kwargs):
+    def __init__(self, motor_pvs, hub_pvs, nhub, **kwargs):
         hubs, minfo = {}, self._motors
-        i, j = 0, len(hub_pvs) // len(self._hubs)
+        i, j = 0, len(hub_pvs) // nhub
         super().__init__(motor_pvs, **kwargs)
         for motor, num in minfo:
             for sub in range(num):
@@ -38,10 +38,9 @@ def make_mhubb5(**options):
     minfo, motor_pvs, hub_pvs = make_minfo(nhub)
     class MhubB5IOC(MhubB5IOCBase.make_ioc(minfo)):
         _choose_delay1, _choose_delay2 = 0.1, 0.5
-        _hubs = ["hub%d" % i for i in range(nhub)]
     return MhubB5IOC(
         [options["macros"]["motor"] + pv for pv in motor_pvs],
-        [options["macros"]["hub"] + pv for pv in hub_pvs], **options
+        [options["macros"]["hub"] + pv for pv in hub_pvs], nhub, **options
     )
 
 def parse_mhubb5(*argv):

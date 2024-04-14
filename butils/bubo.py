@@ -132,22 +132,15 @@ class BuboCapture(Signal):
             {"type": "integer", "shape": [], "source": "BUBO:capture"}}
 
 class BuboEnable(Signal):
-    _val = 0
-
     def _finish_cb(self, status):
-        self._val = 0
         super().put(0)
 
     def put(self, val):
-        if not self._val and val:
-            self._val = 1
+        if not self._readback and val:
             self.root._bubo.start().add_callback(self._finish_cb)
-        elif self._val and not val:
+        elif self._readback and not val:
             self.root._bubo.abort()
-        super().put(self.get())
-
-    def get(self):
-        return self._val
+        super().put(1 if val else 0)
 
     def describe(self, dot = False):
         return {self.vname(dot):

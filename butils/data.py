@@ -82,7 +82,6 @@ class MyLiveImage(CallbackBase):
         self.iv.show()
 
     def event(self, doc):
-        super().event(doc)
         self.iv.setImage(numpy.array(doc["data"][self.field]))
 
 @mpl_cb.make_class_safe(logger = mpl_cb.logger)

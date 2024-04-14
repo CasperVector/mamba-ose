@@ -19,15 +19,16 @@ def my_gauss(x):
     return numpy.power(2, -4 * x ** 2)
 
 class MyCam(Device):
+    atime_ratio = 1e3
     temperature_actual = Component(SynSignal, func = lambda: -25.0)
     acquire_time = Component(AttributeSignal,
         attr = "_acquire_time", kind = "config")
     @property
     def _acquire_time(self):
-        return round(1e3 * self.parent.image.exposure_time)
+        return round(self.parent.image.exposure_time * self.atime_ratio)
     @_acquire_time.setter
     def _acquire_time(self, x):
-        self.parent.image.exposure_time = 1e-3 * x
+        self.parent.image.exposure_time = x / self.atime_ratio
 
 class MySimImage(SimMotorImage):
     dim, gauss, lam = (2048, 2048), (400, 25), (1400, 0.66)

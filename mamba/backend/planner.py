@@ -3,7 +3,9 @@ from epics import caget
 from bluesky import plans
 from bluesky.callbacks.core import CallbackBase
 from butils.data import ImageFiller, my_broker
-from butils.fly import fly_simple, motors_get, sfly_simple, velo_simple
+from butils.fly import fly_dsimple, \
+    fly_pcomp, fly_simple, sfly_simple, velo_simple
+from butils.plans import motors_get, plan_fmt
 from .progress import ProgressReporter, progressBars
 
 class BasePlanner(object):
@@ -21,7 +23,10 @@ class BasePlanner(object):
     def run(self, plan, *args, **kwargs):
         self.check(plan, *args, **kwargs)
         cb = self.callback(plan, *args, **kwargs)
-        return self.U.RE(self.plans[plan](*args, **kwargs), cb)
+        md = kwargs.pop("md", None) or {}
+        return self.U.RE(self.plans[plan](*args, **kwargs, md = {
+            "plan_cmd": plan_fmt(("P." + plan, args, kwargs))
+        }), cb, md = md)
 
 class ChildPlanner(BasePlanner):
     parent = None
@@ -60,9 +65,12 @@ class MambaPlanner(ParentPlanner):
         self.check(plan, *args, **kwargs)
         cb = self.callback(plan, *args, **kwargs)
         rkargs = {}
-        if hasattr(self.U, "mdg"):
-            rkargs["md"] = self.U.mdg.read_advance()
-        return self.U.RE(self.plans[plan](*args, **kwargs), cb, **rkargs)
+        rkargs["md"] = self.U.mdg.read_advance() \
+            if hasattr(self.U, "mdg") else {}
+        rkargs["md"].update(kwargs.pop("md", None) or {})
+        return self.U.RE(self.plans[plan](*args, **kwargs, md = {
+            "plan_cmd": plan_fmt(("P." + plan, args, kwargs))
+        }), cb, **rkargs)
 
 class ImagePlanner(MambaPlanner):
     def __init__(self, *args, **kwargs):
@@ -116,13 +124,23 @@ class HDF5Checker(CallbackBase):
         self.tols, self.dets, self.num = tols, dets, num
 
     def start(self, doc):
-        self.idx = 0
+        self.idx = [0, 0]
+        self.names = {}, {}
+
+    def descriptor(self, doc):
+        if doc["name"] in self.names[1]:
+            self.names[0].pop(self.names[1][doc["name"]])
+        self.names[0][doc["uid"]] = doc["name"]
+        self.names[1][doc["name"]] = doc["uid"]
 
     def event(self, doc):
-        self.idx += 1
-        if self.idx % 2:
+        if self.names[0][doc["descriptor"]] == "primary":
+            self.idx[1] += 1
             return
-        cur = self.idx // 2 * self.num
+        self.idx[0] += 1
+        if self.idx[0] % 2:
+            return
+        cur = self.idx[0] // 2 * self.num + self.idx[1]
         for det in self.dets:
             tol = self.tols.get(det)
             if tol is None:
@@ -150,9 +168,12 @@ class PandaPlanner(ChildPlanner):
         super().__init__()
         self.panda, self.h5_tols, self.enc_tols, self.vbas_ratios = \
             panda, h5_tols, enc_tols, vbas_ratios
-        self.plans["fly_grid"] = lambda dets, *args, **kwargs: \
-            fly_simple(panda, adp, dets, *args, div =
-                div_get(divs, dets, args[-1]), configs = configs, **kwargs)
+        for k, f in [("fly_grid", fly_simple),
+            ("fly_dgrid", fly_dsimple), ("fly_pgrid", fly_pcomp)]:
+            self.plans[k] = (lambda f: lambda dets, *args, **kwargs: f(
+                panda, adp, dets, *args, configs = configs,
+                div = div_get(divs, dets, args[-1]), **kwargs
+            ))(f)
 
     def check(self, plan, *args, **kwargs):
         encoder_check(self.panda, self.enc_tols, motors_get(args[1:]))
