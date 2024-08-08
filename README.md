@@ -23,6 +23,9 @@ Mamba is the experimental control framework-to-be of HEPS. It aims to provide
     $ ./prepare.sh
     $ python3 ./setup.py install  # For real installation; maybe with `--user`.
     ```
+    On windows, you may encounter compilation failure for python-ldap,
+    please download corresponding python wheels [here](https://github.com/cgohlke/python-ldap-build/releases/tag/v3.4.4),
+    then `pip install <your python_ldap-*.whl>`.
 
 * Before first use (customise the config after this):
     ```sh
