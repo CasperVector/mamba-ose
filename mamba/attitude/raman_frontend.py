@@ -4,12 +4,13 @@ import pyqtgraph
 import sys
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import Qt
+from butils.gutils import MambaView, \
+    DragTableView, DragTableModel, PandasMMixin, DragTable
+from butils.pgitems import \
+    MyImageItem, MyPlotItem, MultiRois, ThumbLines, MyImageView
 from mamba.backend.zserver import ZError
 from mamba.backend.mzserver import config_read, client_build
-from mamba.frontend.utils import MambaZModel, MambaView, \
-    DragTableView, DragTableModel, PandasMMixin, DragTable
-from mamba.frontend.pgitems import \
-    MyImageItem, MyPlotItem, MultiRois, ThumbLines, MyImageView
+from mamba.frontend.utils import MambaZModel
 from .common import norm_xywh, xywhs2rois
 
 def rot2perm(src, dest, n):
@@ -69,7 +70,8 @@ class RamanImage(MambaView, pyqtgraph.GraphicsView):
     def __init__(self, model, parent = None, mtyps = ({}, {})):
         super().__init__(parent)
         self.ci = MyImageView(view = MultiRois())
-        self.ci.lut.setColorMap("CET-L16")
+        self.ci.lut.gradient.setColorMap(pyqtgraph.colormap.get("CET-L16"))
+        self.ci.lut.gradient.showTicks(False)
         self.setCentralItem(self.ci)
         self.on_img = self.ci.setImage
         self.sbind(model, mtyps, ["roi"])
@@ -122,7 +124,7 @@ class RamanView(MambaView, QtWidgets.QMainWindow):
 
     def __init__(self, model, parent = None):
         super().__init__(parent)
-        self.setWindowTitle("Attitude tuning for XRS analysers")
+        self.setWindowTitle("Attitude tuning of XRS analysers")
         self.actions = {}
         toolbar = QtWidgets.QToolBar()
         for typ, desc in [

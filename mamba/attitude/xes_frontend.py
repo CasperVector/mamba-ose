@@ -2,17 +2,19 @@ import pyqtgraph
 import sys
 import time
 from PyQt5 import QtCore, QtGui, QtWidgets
-from mamba.backend.mzserver import config_read, client_build
-from mamba.frontend.utils import MambaZModel, MambaView
-from mamba.frontend.pgitems import \
+from butils.gutils import MambaView
+from butils.pgitems import \
     MyImageItem, MyPlotItem, MyROI, TargetPlot, MyImageView
+from mamba.backend.mzserver import config_read, client_build
+from mamba.frontend.utils import MambaZModel
 from .common import xywh2roi
 
 class XesImage(MambaView, pyqtgraph.GraphicsView):
     def __init__(self, model, parent = None, mtyps = ({}, {})):
         super().__init__(parent)
         ci = MyImageView(view = TargetPlot())
-        ci.lut.setColorMap("CET-L16")
+        ci.lut.gradient.setColorMap(pyqtgraph.colormap.get("CET-L16"))
+        ci.lut.gradient.showTicks(False)
         self.target = ci.view.target
         self.target.setZValue(20)
         ci.view.vl.setZValue(10)

@@ -35,7 +35,7 @@ class zspawn(pexpect.pty_spawn.spawn):
 
     # Also a duplicate here.
     def _interact_writen(self, fd, data):
-        while data != b'' and self.isalive():
+        while data != b"" and self.isalive():
             n = os.write(fd, data)
             data = data[n:]
 

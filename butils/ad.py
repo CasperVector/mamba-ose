@@ -6,6 +6,7 @@ from ophyd import select_version, Component, EpicsSignalRO, \
     DetectorBase, CamBase, HDF5Plugin, ADTriggerStatus
 from ophyd.device import BlueskyInterface, Staged
 from ophyd.signal import AttributeSignal
+from ophyd.areadetector.base import DDC_EpicsSignalRO
 from ophyd.areadetector.plugins import PluginBase
 from ophyd.areadetector.filestore_mixins import \
     FileStoreHDF5, FileStoreIterativeWrite
@@ -106,7 +107,6 @@ class CptHDF5(MyHDF5Plugin, FileStoreHDF5, FileStoreIterativeWrite):
         self.filestore_spec = "AD_HDF5_SWMR"
 
     def warmup(self):
-        self.enable.set(1).wait()
         self.swmr_mode.set(1).wait()
 
 class CptHDF5Dxp(CptHDF5):
@@ -114,7 +114,10 @@ class CptHDF5Dxp(CptHDF5):
 
 class MyImagePlugin(ThrottleMonitor, PluginBase):
     _plugin_type = "NDPluginStdArrays"
-    array_data = Component(EpicsSignalRO, "ArrayData", auto_monitor = True)
+    array_size, array_data = DDC_EpicsSignalRO(
+        ("depth", "ArraySize2_RBV"), ("height", "ArraySize1_RBV"),
+        ("width", "ArraySize0_RBV"), doc = "The array size", auto_monitor = True
+    ), Component(EpicsSignalRO, "ArrayData", auto_monitor = True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -199,8 +202,10 @@ def make_detector(name, inherit = None, **kwargs):
     if not inherit:
         inherit = (SoftTrigger, DetectorBase)
     def warmup(obj):
+        obj.hdf1.enable.set(1).wait()
         obj.hdf1.warmup()
         obj.cam.warmup()
+        obj.hdf1.enable.set(0).wait()
         if not sum(obj.hdf1.array_size.get()):
             raise UnprimedPlugin("%s failed to warm up" % obj.hdf1.vname())
     def monitor(obj, dnotify):
@@ -218,6 +223,13 @@ def make_detector(name, inherit = None, **kwargs):
         else:
             attrs[k] = v
     return type(name, inherit, attrs)
+
+def make_xsp3(name, nchan = 0):
+    ids = [i + 1 for i in range(nchan)]
+    attrs = {"_default_read_attrs": ["ch%d_dtperc" % i for i in ids] + ["hdf1"]}
+    attrs.update([("ch%d_dtperc" % i,
+        ADComponent(EpicsSignalRO, "ch%d:DeadTime_RBV" % i)) for i in ids])
+    return make_detector(name, image1 = None, monitor = None, **attrs)
 
 def make_dxp(name, cam, nchan = 0):
     ids = [i + 1 for i in range(nchan)]
@@ -238,6 +250,8 @@ def make_dxp(name, cam, nchan = 0):
 MyAreaDetector = make_detector("MyAreaDetector")
 BaseAreaDetector = make_detector\
     ("BaseAreaDetector", image1 = None, monitor = None)
+Xsp3Detector = lambda *args, nchan = 0, **kwargs: \
+    make_xsp3("Xsp3Detector", nchan = nchan)(*args, **kwargs)
 DxpDetector = lambda *args, nchan = 0, **kwargs: \
     make_dxp("DxpDetector", DxpCam, nchan = nchan)(*args, **kwargs)
 SitoroDetector = lambda *args, nchan = 0, **kwargs: \

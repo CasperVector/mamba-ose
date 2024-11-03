@@ -88,6 +88,14 @@ class DbPlanner(ImagePlanner):
     def callback(self, plan, *args, **kwargs):
         return [self.db.insert, self.filler, self.U.mzcb, self.progress]
 
+class AttiPlanner(ChildPlanner):
+    def __init__(self, motors):
+        super().__init__()
+        self.plans["atti_scan"] = lambda dets, *args, md = None: plans.scan(
+            list(dets) + list(set(motors) - set(args[:-1 : 3])),
+            *args, md = md
+        )
+
 def div_get(divs, dets, num):
     div = 0
     for det in dets:

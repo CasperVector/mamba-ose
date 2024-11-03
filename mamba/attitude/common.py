@@ -2,9 +2,12 @@ import h5py
 import numpy
 import os
 from butils.ophyd import para_move
-from ..backend.zserver import raise_syntax, unary_op
 try:
     import cv2
+except ImportError:
+    pass
+try:
+    from ..backend.zserver import raise_syntax, unary_op
 except ImportError:
     pass
 

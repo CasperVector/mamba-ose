@@ -4,6 +4,7 @@ import pyqtgraph
 import bluesky.callbacks.mpl_plotting as mpl_cb
 from databroker.v0 import Broker
 from bluesky.callbacks.core import CallbackBase
+from .pgitems import gv_wrap, MyImageView
 
 def roi_sum(roi, img):
     img = numpy.array(img)
@@ -35,6 +36,24 @@ def func_sub(fdic):
                     for k2, f in fdic[k1]:
                         doc["data"][k2] = f(x)
     return cb
+
+class ProcessorCallback(CallbackBase):
+    def __init__(self, fields, postproc, preproc = None):
+        self.preproc, self.postproc = preproc, postproc
+        self.fields, self.data = fields, None
+
+    def start(self, doc):
+        self.data = {field: [] for k in self.fields}
+
+    def event(self, doc):
+        if self.preproc:
+            self.preproc(doc)
+        data = doc["data"]
+        for k, v in self.data.items():
+            v.append(data[k])
+
+    def stop(self, doc):
+        self.postproc(*[self.data[k] for k in self.fields])
 
 class ImageFiller(CallbackBase):
     def __init__(self):
@@ -75,11 +94,11 @@ class ImageFiller(CallbackBase):
 class MyLiveImage(CallbackBase):
     def __init__(self, field):
         super().__init__()
-        pyqtgraph.setConfigOptions(imageAxisOrder = "row-major")
         pyqtgraph.mkQApp()
         self.field = field
-        self.iv = pyqtgraph.ImageView()
-        self.iv.show()
+        self.iv = MyImageView()
+        self.gv = gv_wrap(self.iv)
+        self.gv.show()
 
     def event(self, doc):
         self.iv.setImage(numpy.array(doc["data"][self.field]))

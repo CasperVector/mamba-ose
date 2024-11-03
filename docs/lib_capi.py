@@ -1,5 +1,6 @@
 from scipy import optimize
 from mamba.attitude.common import stage_wrap, make_saddon, AttiOptim
+from mamba.backend.planner import AttiPlanner
 
 class AttiCapi(AttiOptim):
     def proc(self, doc, output, motors):
@@ -34,6 +35,14 @@ class AttiCapi(AttiOptim):
     @stage_wrap
     def tune(self, *args, **kwargs):
         self.tune_area(*args, **kwargs)
+
+class CapiPlanner(AttiPlanner):
+    def callback(self, plan, *args, **kwargs):
+        assert plan == "atti_scan"
+        (det,), motors = args[0], args[1 : -1 : 3]
+        proc = lambda name, doc: name == "event" and \
+            AttiCapi.proc(None, doc, det.name, [m.name for m in motors])
+        return [proc, self.U.mzcb]
 
 saddon_capi = make_saddon("atti_capi", AttiCapi, ["D_rosen1", "D_rosen2"])
 

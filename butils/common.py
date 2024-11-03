@@ -1,6 +1,7 @@
 import functools
 import glob
 import os
+import queue
 import re
 import threading
 
@@ -35,19 +36,26 @@ def user_glob(*ss):
     return sorted(sum([glob.glob(os.path.expanduser(s))
         for s in ss], []), key = strverskey)
 
-def fn_wait(fs):
-    ret = [None] * (len(fs) + 1)
+def fn_wait(fs, abort = True):
+    q, ret = queue.Queue(), [None] * len(fs)
     def wrap(i, f):
         try:
-            ret[i] = f()
+            q.put((i, f()))
         except Exception as e:
-            ret[-1] = e
+            q.put((e, None))
             raise
     ts = [threading.Thread(target = wrap, args = (i, f), daemon = True)
         for i, f in enumerate(fs)]
     [t.start() for t in ts]
+    for f in fs:
+        msg = q.get()
+        if isinstance(msg[0], Exception):
+            if not abort:
+                [t.join() for t in ts]
+            return
+        ret[msg[0]] = msg[1]
     [t.join() for t in ts]
-    return None if ret[-1] else ret[:-1]
+    return ret
 
 def input_gen(argv):
     if argv:

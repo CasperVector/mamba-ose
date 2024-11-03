@@ -10,6 +10,8 @@ from butils.common import AttrDict
 from butils.ophyd import MyEpicsMotor
 from butils.sim import SimMotorImage
 from mamba.backend.mzserver import config_read, server_start
+from mamba.backend.planner import MambaPlanner
+from lib_capi import CapiPlanner
 
 def rosenbrock(x):
     return (100.0 * (x[1:] - x[:-1] ** 2.0) ** 2.0 + (1 - x[:-1]) ** 2.0).sum(0)
@@ -41,6 +43,9 @@ D.rosen2.bind(test_obj2, [M.m1, M.m2, M.m4])
 RE = RunEngine({})
 U = server_start(globals(), config_read())
 U.atti_capi.configure(list(D.values()), list(M.values()))
+U.planner = MambaPlanner(U)
+U.planner.extend(CapiPlanner(M.values()))
+P = U.planner.make_plans()
 
 print("Beamline init script loaded.")
 

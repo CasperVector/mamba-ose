@@ -87,8 +87,7 @@ class ScanManager(object):
         return command
 
     def run_scan_plan(self, plan):
-        self.mrc.req_rep_base("cmd", go = "",
-            cmd = self.generate_scan_command(plan))
+        self.mrc.do_cmd(self.generate_scan_command(plan), go = True)
 
     def getScanPlan(self, name):
         if name in self.plans:

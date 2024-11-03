@@ -184,127 +184,6 @@ class OptimMap(OptimScatter):
         self.vl.setValue(cur[0])
         self.hl.setValue(cur[1])
 
-class HistoColorBarItem(pyqtgraph.GraphicsWidget):
-    cmaps = ("CET-L16", "CET-R2")
-
-    def __init__(self, image = None, colorMap = None, position = "right"):
-        super().__init__()
-        self.image = lambda: None
-        self.colorMap = None
-        self.menu = QtWidgets.QMenu()
-        self.actions = QtWidgets.QActionGroup(self.menu)
-        for i, cmap in enumerate(("(Grayscale)",) + self.cmaps):
-            action = QtWidgets.QAction(cmap, self.menu)
-            action.setCheckable(True)
-            action.triggered.connect((lambda cmap:
-                lambda: self.setColorMap(cmap))(cmap if i else None))
-            self.actions.addAction(action)
-        self.menu.addActions(self.actions.actions())
-        self.actions.actions()[0].setChecked(True)
-        def mouseClickEvent(ev):
-            if ev.button() == QtCore.Qt.MouseButton.RightButton:
-                ev.accept()
-                self.menu.popup(ev.screenPos().toQPoint())
-
-        self.vb = pyqtgraph.ViewBox(parent = self)
-        self.vb.enableAutoRange(self.vb.XYAxes)
-        if position in ["left", "right"]:
-            self.vb.setMaximumWidth(100)
-            self.vb.setMinimumWidth(30)
-            self.vb.setMouseEnabled(x = False, y = True)
-        else:
-            self.vb.setMaximumHeight(100)
-            self.vb.setMinimumHeight(30)
-            self.vb.setMouseEnabled(x = True, y = False)
-        ax = {"left": "right", "right": "left",
-            "top": "bottom", "bottom": "top"}[position]
-        self.axis = pyqtgraph.AxisItem(ax,
-            maxTickLength = -10, linkView = self.vb, parent = self)
-
-        regOrient = "horizontal" \
-            if position in ["left", "right"] else "vertical"
-        self.region = pyqtgraph.LinearRegionItem\
-            ([0, 1], regOrient, swapMode = "block")
-        self.region.setZValue(1000)
-        self.region.lines[0].addMarker("<|>", size = 6)
-        self.region.lines[1].addMarker("<|>", size = 6)
-        self.region.sigRegionChanged.connect(self.regionChanging)
-        self.region.sigRegionChangeFinished.connect(self.regionChanged)
-        self.vb.addItem(self.region)
-        self.plot = pyqtgraph.PlotCurveItem(pen = (200, 200, 200, 100))
-        self.plot.setFillLevel(0.0)
-        self.plot.setBrush((100, 100, 200))
-        if position in ["left", "right"]:
-            self.plot.setRotation(90)
-        self.vb.addItem(self.plot)
-
-        self.bar = pyqtgraph.ImageItem(axisOrder = "row-major")
-        self.bar.setImage(numpy.linspace(0, 1, 256).reshape
-            ((-1, 1) if position in ["left", "right"] else (1, -1)))
-        barBox = pyqtgraph.ViewBox(parent = self)
-        if position in ["left", "right"]:
-            barBox.setFixedWidth(20)
-        else:
-            barBox.setFixedHeight(20)
-        barBox.setMouseEnabled(x = False, y = False)
-        barBox.mouseClickEvent = mouseClickEvent
-        barBox.addItem(self.bar)
-
-        self.layout = QtWidgets.QGraphicsGridLayout()
-        self.layout.setContentsMargins(1, 1, 1, 1)
-        self.layout.setSpacing(0)
-        self.setLayout(self.layout)
-        for w, i in zip([self.axis, self.vb, barBox], [0, 1, 2]
-            if position in ["right", "bottom"] else [2, 1, 0]):
-            self.layout.addItem(w, *((0, i)
-                if position in ["left", "right"] else (i, 0)))
-        barBox.setFlag(barBox.GraphicsItemFlag.ItemStacksBehindParent)
-        self.vb.setFlag(self.vb.GraphicsItemFlag.ItemStacksBehindParent)
-        if image is not None:
-            self.setImageItem(image)
-        if colorMap is not None:
-            self.setColorMap(colorMap)
-
-    def setImageItem(self, img):
-        self.image = weakref.ref(img)
-        if self.colorMap is not None:
-            img.setLookupTable(self.colorMap.getLookupTable(nPts = 256))
-        self.regionChanged()
-        self.imageChanged(autoLevels = True)
-        img.sigImageChanged.connect(self.imageChanged)
-
-    def setColorMap(self, colorMap):
-        if isinstance(colorMap, str):
-            colorMap = pyqtgraph.colormap.get(colorMap)
-        self.colorMap = colorMap
-        lut = colorMap and colorMap.getLookupTable(nPts = 256)
-        self.bar.setLookupTable(lut)
-        img = self.image()
-        if img is not None:
-            img.setLookupTable(lut)
-
-    def regionChanged(self):
-        img = self.image()
-        if img is not None:
-            img.setLevels(self.region.getRegion())
-
-    def regionChanging(self):
-        img = self.image()
-        if img is not None:
-            img.setLevels(self.region.getRegion())
-        self.update()
-
-    def imageChanged(self, autoLevels = False):
-        img = self.image()
-        if img is None:
-            return
-        h = img.getHistogram()
-        if h[0] is None:
-            return
-        self.plot.setData(*h)
-        mn, mx = (h[0][0], h[0][-1]) if autoLevels else img.levels
-        self.region.setRegion([mn, mx])
-
 class MyImageView(pyqtgraph.GraphicsLayout):
     def __init__(self, *args, view = None, imageItem = None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -319,7 +198,7 @@ class MyImageView(pyqtgraph.GraphicsLayout):
         self.image = imageItem or MyImageItem()
         self.image.setOpts(axisOrder = "row-major")
         self.view.addItem(self.image)
-        self.lut = HistoColorBarItem()
+        self.lut = pyqtgraph.HistogramLUTItem()
         self.lut.setImageItem(self.image)
         self.setShift(0, 0)
 

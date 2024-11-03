@@ -3,9 +3,10 @@ import pandas
 import pyqtgraph
 import sys
 from PyQt5 import QtCore, QtWidgets
+from butils.gutils import MambaView
+from butils.pgitems import OptimMap, OptimScatter
 from mamba.backend.mzserver import config_read, client_build
-from mamba.frontend.utils import MambaZModel, MambaView
-from mamba.frontend.pgitems import OptimMap, OptimScatter
+from mamba.frontend.utils import MambaZModel
 
 IDLE_PAUSE = 0.2
 

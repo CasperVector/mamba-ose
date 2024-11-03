@@ -459,8 +459,8 @@ class PandaRoot(Device):
         threading.Thread(target = poll, daemon = True).start()
 
     def clear_muxes(self):
-        assert fn_wait\
-            ([(lambda a: lambda: a.put("ZERO"))(a) for a in self._muxes])
+        assert fn_wait([(lambda a: lambda: a.put("ZERO"))(a)
+            for a in self._muxes], abort = False)
 
     def clear_capture(self):
         assert self._client.send_recv("*CAPTURE=\n") == "OK"

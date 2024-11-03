@@ -89,15 +89,17 @@ def seq_dwarmup():
     }
 
 def velo_simple(motor, lo, hi, num, duty,
-    period = None, velocity = None, pad = None):
+    period = None, atime = None, velocity = None, pad = None):
     velos = motor.velocity.get()
-    if period is None:
-        velos = (velos, velos) if velocity is None else (velos, velocity)
-        period = abs(hi - lo) / (num - 1) / velos[1]
-    elif velocity is None:
+    if len([x for x in [period, atime, velocity] if x is not None]) > 1:
+        raise ValueError("conflicting values for period, velocity and atime")
+    elif period is not None or atime is not None:
+        if atime is not None:
+            period = atime / duty
         velos = velos, abs(hi - lo) / (num - 1) / period
     else:
-        raise ValueError("values given for both period and velocity")
+        velos = (velos, velos) if velocity is None else (velos, velocity)
+        period = abs(hi - lo) / (num - 1) / velos[1]
     if pad is None:
         pad = max(0.5, 2 * motor.acceleration.get()) * velos[1]
     assert num > 1 and period > 0.0 and velos[1] > 0.0 and pad > 0.0
@@ -220,10 +222,10 @@ def grid_frag(seqs, num, snake, div, scan_gen):
     return frag_gen()
 
 def frag_simple(panda, *args, pcomp, duty, div = 0, snake_axes = True,
-    period = None, velocity = None, pad = None, pos_cache = None):
+    period = None, atime = None, velocity = None, pad = None, pos_cache = None):
     motor, lo, hi, num = args[-4:]
     period, velos, pad = velo_simple(motor, lo, hi, num, duty,
-        period = period, velocity = velocity, pad = pad)
+        period = period, atime = atime, velocity = velocity, pad = pad)
     pad0 = (hi - lo) / (num - 1) * duty / 2
     snake, div, scan_gen, md = grid_cfg\
         (args, div, abs(pad0) + pad, snake_axes, pos_cache, velos)
@@ -245,12 +247,15 @@ def fly_frag(panda, adp, devs, frag_gen, fwraps = [], finals = [], md = None):
     def inner():
         yield from bps.configure(panda, {"pcap.enable": "ONE"})
         for seq, kwargs, scan in frag_gen:
-            yield from bps.configure(panda, seq)
-            yield from bps.configure(adp, {"cam.acquire": 1}, action = True)
+            def plan():
+                yield from bps.configure(panda, seq)
+                yield from bps.configure(adp, {"cam.acquire": 1}, action = True)
+                yield from scan
+                yield from bps.configure(adp, {"cam.acquire": 0}, action = True)
+            plan = plan()
             for fwrap in fwraps:
-                scan = fwrap(scan, **kwargs)
-            yield from scan
-            yield from bps.configure(adp, {"cam.acquire": 0}, action = True)
+                plan = fwrap(plan, **kwargs)
+            yield from plan
         for plan in finals:
             yield from plan
         yield from bps.configure(panda, {"pcap.enable": "ZERO"})
@@ -264,16 +269,19 @@ def fly_dfrag(panda, adp, devs, frag_gen, fwraps = [], finals = [], md = None):
         yield from bps.configure\
             (panda, {"dseq.enable": 0, "pcap.enable": "ONE"})
         for tables, kwargs, scan in frag_gen:
-            yield from bps.configure(panda, {
-                "dseq.enable": 1, "dseq.tables": tables + [None]
-            }, action = True)
-            yield from bps.configure(adp, {"cam.acquire": 1}, action = True)
-            yield from bps.configure(panda, {"dseq.poll": 1}, action = True)
+            def plan():
+                yield from bps.configure(panda, {
+                    "dseq.enable": 1, "dseq.tables": tables + [None]
+                }, action = True)
+                yield from bps.configure(adp, {"cam.acquire": 1}, action = True)
+                yield from bps.configure(panda, {"dseq.poll": 1}, action = True)
+                yield from scan
+                yield from bps.configure(adp, {"cam.acquire": 0}, action = True)
+                yield from bps.configure(panda, {"dseq.enable": 0})
+            plan = plan()
             for fwrap in fwraps:
-                scan = fwrap(scan, **kwargs)
-            yield from scan
-            yield from bps.configure(adp, {"cam.acquire": 0}, action = True)
-            yield from bps.configure(panda, {"dseq.enable": 0})
+                plan = fwrap(plan, **kwargs)
+            yield from plan
         for plan in finals:
             yield from plan
         yield from bps.configure(panda, {"pcap.enable": "ZERO"})
@@ -297,17 +305,17 @@ def fwrap_second(plan):
             second[0] = False
     return fwrap
 
-def fwrap_config(dets, configs):
+def fwrap_config(devs, configs):
     def plan():
-        for det in dets:
-            cfg = configs.get(det)
+        for dev in devs:
+            cfg = configs.get(dev)
             if cfg:
-                yield from bps.configure(det, cfg)
+                yield from bps.configure(dev, cfg)
     return fwrap_first(plan())
 
-def final_config(dets, configs):
-    return final_config_base([(det, list(configs[det]))
-        for det in dets if det in configs])
+def final_config(devs, configs):
+    return final_config_base([(dev, list(configs[dev]))
+        for dev in devs if dev in configs])
 
 def fwrap_adtrig(ads):
     def fwrap(scan, *, num_points, **kwargs):
@@ -429,12 +437,15 @@ def sfly_frag(bubo, devs, frag_gen, fwraps = [], finals = [], md = None):
     @bpp.stage_run_decorator([bubo] + devs, md = md)
     def inner():
         for seq, kwargs, scan in frag_gen:
-            yield from bps.configure(bubo, {"seq": seq}, action = True)
-            yield from bps.configure(bubo, {"enable": 1}, action = True)
+            def plan():
+                yield from bps.configure(bubo, {"seq": seq}, action = True)
+                yield from bps.configure(bubo, {"enable": 1}, action = True)
+                yield from scan
+                yield from bps.configure(bubo, {"enable": 0}, action = True)
+            plan = plan()
             for fwrap in fwraps:
-                scan = fwrap(scan, **kwargs)
-            yield from scan
-            yield from bps.configure(bubo, {"enable": 0}, action = True)
+                plan = fwrap(plan, **kwargs)
+            yield from plan
         for plan in finals:
             yield from plan
     return inner()

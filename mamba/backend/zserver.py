@@ -64,9 +64,16 @@ class ZServer(object):
         if "get_ipython" in globals:
             self.ipy = True
             def putter(result):
+                rep = {"ret": result.result, "err":
+                    result.error_before_exec or result.error_in_exec}
                 if self.q:
-                    self.q.put({"ret": result.result, "err":
-                        result.error_before_exec or result.error_in_exec})
+                    self.q.put(rep)
+                elif self.uid:
+                    uid, self.uid = self.uid, None
+                    self.notify({"typ": "go", "uid": str(uid), "rep": (
+                        zsv_err_rep(rep["err"]) if rep["err"]
+                        else {"err": "", "ret": rep["ret"]}
+                    )})
             globals["get_ipython"]().events.register("post_run_cell", putter)
             from IPython.core.magic import register_line_cell_magic
             @register_line_cell_magic
@@ -124,20 +131,22 @@ class ZServer(object):
 
     def do_cmd(self, req):
         try:
-            cmd = req["cmd"].encode("UTF-8")
-            uid = req.get("go", None)
-            if uid is not None and uid != "":
+            cmd, uid = req["cmd"], req.get("go", None)
+            doq = uid is None or bool(re.match(r"%%?go\b", cmd))
+            cmd = cmd.encode("UTF-8")
+            if uid is not None:
                 assert self.ipy
-                self.uid = uid = uuid.UUID(uid)
+                self.uid = uid = uuid.UUID(uid) if uid else uuid.uuid4()
         except:
             raise_syntax(req)
-        if uid is None:
+        if doq:
             self.q = queue.Queue()
         self.lsock.send(cmd)
         assert not self.lsock.recv()
-        if uid is None:
+        if doq:
             ret = self.q.get()
             self.q = None
+        if uid is None:
             if ret["err"]:
                 raise(ret["err"])
             ret = {"err": "", "ret": ret["ret"]}
@@ -211,7 +220,7 @@ class ZStatus(object):
         with self.zrc.slock:
             if not self.rep:
                 self.cb = cb
-            return
+                return
         cb(self.rep)
 
     def wait(self, timeout = None):
@@ -244,13 +253,15 @@ class ZrClient(object):
     def req_rep(self, typ, **kwargs):
         return zsv_rep_chk(self.req_rep_base(typ, **kwargs))
 
-    def do_cmd(self, cmd):
-        if not re.match(r"%%?go\b", cmd):
+    def do_cmd(self, cmd, go = None):
+        if go is None:
+            go = bool(re.match(r"%%?go\b", cmd))
+        if not go:
             return self.req_rep("cmd", cmd = cmd)
         assert isinstance(self.znc.handles, dict)
         uid = uuid.uuid4()
         status = ZStatus(self, uid)
-        self.req_rep("cmd", cmd = "" if cmd == "%go\n" else cmd, go = str(uid))
+        self.req_rep("cmd", cmd = cmd, go = str(uid))
         return status
 
 def zcompose(name, parent, addon):

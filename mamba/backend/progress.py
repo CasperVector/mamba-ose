@@ -1,3 +1,4 @@
+import collections
 from bluesky.callbacks.core import CallbackBase
 
 class ProgressReporter(object):
@@ -20,43 +21,65 @@ class ProgressReporter(object):
             "progress": progress, "eta": eta})
 
 class ProgressBase(CallbackBase):
+    def __init__(self, table):
+        CallbackBase.__init__(self)
+        self.table, self.num = table, len(table)
+        self.steps = dict(collections.Counter(table))
+        self.steps[table[0]] -= 1
+
+    def key(self, idx):
+        return self.table[idx]
+
+    def start(self, doc):
+        self.idx, self.prev = 0, None
+        self.progress = {k: [0, 0.0] for k in self.steps}
+
+    def eta(self, diff):
+        prog = self.progress[self.key(self.idx)]
+        prog[0], prog[1] = prog[0] + 1, prog[1] + diff
+        used, remain, nul = 0.0, 0.0, 0
+        for key in self.progress:
+            step, prog = self.steps[key], self.progress[key]
+            if prog[0]:
+                used += prog[1]
+                remain += prog[1] / prog[0] * (step - prog[0])
+            else:
+                nul += step
+        return remain + used / self.idx * nul
+
+    def event(self, doc):
+        prev, self.prev = self.prev, doc["time"]
+        diff = None if prev is None else self.prev - prev
+        eta = None if diff is None else self.eta(diff)
+        self.idx = self.idx + 1
+        self.reporter.report(self.idx / self.num,
+            None if eta is None else self.prev + eta)
+
     def stop(self, doc):
         self.reporter.progress = None
 
 class ProgressSimple(ProgressBase):
     def __init__(self, *nums):
-        super().__init__()
-        self.nums = nums
-
-    def start(self, doc):
-        self.scan, self.prev = doc["scan_id"], None
-        self.idx, self.progress = 0, [[0, 0.0] for n in self.nums]
-        gaps = [1]
+        CallbackBase.__init__(self)
+        self.nums, gaps = nums, [1]
         for n in reversed(self.nums):
             gaps.append(gaps[-1] * n)
-        self.steps, self.num = list(reversed(gaps[:-1])), gaps[-1]
-        self.steps = [[self.num // gap, gap] for gap in self.steps]
-        for i in range(len(self.nums)):
-            self.steps[i][0] -= sum(step[0] for step in self.steps[:i])
-        self.steps[0][0] -= 1
+        self.gaps, self.num = gaps[-2 :: -1], gaps[-1]
+        self.steps = {i: self.num // gap for i, gap in enumerate(self.gaps)}
+        for i in range(len(self.nums) - 1, 0, -1):
+            self.steps[i] -= self.steps[i - 1]
+        self.steps[0] -= 1
 
-    def event(self, doc):
-        self.idx, cur = self.idx + 1, doc["time"]
-        percent = self.idx / self.num
-        if self.idx == 1:
-            self.prev = cur
-            self.reporter.report(percent, None)
-            return
-        for i, step in enumerate(self.steps):
-            if not (self.idx - 1) % step[1]:
-                break
-        self.progress[i][0] += 1
-        self.progress[i][1] += cur - self.prev
-        delta, self.prev = 0.0, cur
-        for step, prog in zip(self.steps, self.progress):
-            if prog[0]:
-                delta += prog[1] / prog[0] * (step[0] - prog[0])
-        self.reporter.report(percent, cur + delta)
+    def key(self, idx):
+        for i, gap in enumerate(self.gaps):
+            if not idx % gap:
+                return i
 
-progressBars = {"simple": ProgressSimple}
+def expand_simple(nums):
+    ret = []
+    for i, n in reversed(list(enumerate(nums))):
+        ret = ([i] + ret[1:]) * n
+    return ret
+
+progressBars = {"base": ProgressBase, "simple": ProgressSimple}
 
