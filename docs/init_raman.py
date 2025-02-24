@@ -12,7 +12,7 @@ from butils.sim import SimMotorImage
 from mamba.attitude.common import img_polar
 from mamba.backend.mzserver import config_read, server_start
 
-nmod = 1
+bases, mods = ["vb", "vu", "vd", "hb", "hl", "hr"], [0]
 my_gauss = lambda x: numpy.power(2, -4 * x ** 2)
 class MySimImage(SimMotorImage):
     dim, gauss, lam = (280, 240, 6), (4, 12, 20), (200, 0.1)
@@ -35,15 +35,12 @@ class MySimImage(SimMotorImage):
 M = AttrDict()
 M.update([
     (name, MyEpicsMotor("IOC:" + name, name = "M." + name))
-    for name in ["m%d" % (i + 1) for i in range(5 + 2)]
+    for name in ["m%d" % (i + 1) for i in range(len(mods) * 7)]
 ])
-M.update([
-    (name, QueueMotor("B5:%s:" % name, name = "M." + name)) for name in
-    ["mhaydon%d%d_sub%d" % (i, j, k) for i in range(nmod)
-        for j in range(5) for k in range(3)] +
-    ["mopto%d%d_sub%d" % (i, j, k) for i in range(nmod)
-        for j in range(2) for k in range(15)]
-])
+mm = [(bases[i], "abcde"[j // 3], j % 3 + 1) for i in mods for j in range(15)]
+mm = [s % m for m in mm for s in ["%s_%s%d_foc", "%s_%s%d_th", "%s_%s%d_chi"]]
+M.update([(name, QueueMotor("B5:%s:" % name,
+    name = "M." + name)) for name in mm])
 D = AttrDict(ad = MySimImage(name = "D.ad"))
 D.ad.monitor_period.set(0.2)
 time.sleep(1.0)
@@ -54,18 +51,15 @@ U.monitor_periods["monitor/position"] = 0.2
 [d.monitor(U.lnotify) for d in list(M.values()) + [D.ad]]
 [M[m].configure({"velocity": 8.0,
     "low_limit_travel": -10000.0, "high_limit_travel": 10000.0,
-}) for m in M if "_sub" not in m]
+}) for m in M if m.startswith("m")]
 origins = [6 * i - 42 for i in range(15)], \
     [(56 * (i // 3) + 28, 80 * (i % 3) + 40) for i in range(15)]
 numpy.random.shuffle(origins[0]); numpy.random.shuffle(origins[1])
-mm = sum([[
-    M["mhaydon%d%d_sub%d" % (i, j // 3, j % 3)],
-    M["mopto%d0_sub%d" % (i, j)], M["mopto%d1_sub%d" % (i, j)],
-] for i in range(nmod) for j in range(15)], [])
+mm = [M[m] for m in mm]
 D.ad.bind(mm, [(x, y, mu) for mu, (x, y) in zip(origins[0], origins[1])])
 U.atti_raman.configure(D.ad, mm,
-    [(-50, 50), (-4.5, 4.5), (-4.5, 4.5)] * (nmod * 15))
+    [(-50, 50), (-4.5, 4.5), (-4.5, 4.5)] * (len(mods) * 15))
 
-del nmod, origins, mm
+del bases, mods, origins, mm
 print("Beamline init script loaded.")
 

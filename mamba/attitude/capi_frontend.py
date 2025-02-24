@@ -196,19 +196,26 @@ class CapiModel(MambaZModel):
             return
         data = msg["doc"]["data"]
         try:
-            meta = data["meta"]
-            output = self.outputs.index(meta["y"]) if "y" in meta else 0
-            d = self.data[output]
-            d.loc[len(d)] = [len(d)] + [data[k] for k in self.motors + ["eval"]]
-            if self.autosel:
-                self.axes = [output] + \
-                    [self.motors.index(m) + 1 for m in meta["x"]][:2]
+            meta, evs = data["meta"], data["eval"]
+            pos = [data[k] for k in self.motors]
+            if "y" not in meta:
+                ys, evs = [0], [evs]
+            elif isinstance(meta["y"], str):
+                ys, evs = [self.outputs.index(meta["y"])], [evs]
+            else:
+                ys = [self.outputs.index(y) for y in meta["y"]]
+            xs = [self.motors.index(m) + 1 for m in meta["x"]]
         except KeyError:
             return
-        if len(self.axes) == 1:
-            self.axes += [0, 0]
-        elif len(self.axes) == 2:
-            self.axes = [self.axes[0], 0, self.axes[1]]
+        for y, ev in zip(ys, evs):
+            d = self.data[y]
+            d.loc[len(d)] = [len(d)] + pos + [ev]
+        if self.autosel:
+            self.axes = [ys[0]] + xs[:2]
+            if len(self.axes) == 1:
+                self.axes += [0, 0]
+            elif len(self.axes) == 2:
+                self.axes = [self.axes[0], 0, self.axes[1]]
         self.on_idle(2)
 
     def on_clear(self):

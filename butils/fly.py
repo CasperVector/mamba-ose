@@ -4,7 +4,7 @@ from bluesky import plans
 from bluesky import plan_stubs as bps, preprocessors as bpp
 from .bubo import sseq_disable
 from .panda import seq_disable, seq_outs_not
-from .plans import motors_get, norm_snake
+from .plans import cfg_trans, motors_get, norm_snake
 
 PANDA_FREQ, DSEQ_DELAY = int(125e6), 9
 
@@ -150,8 +150,9 @@ def table_pcomp(inp, lo, hi, num, duty, period, pad, snake):
     return table
 
 def final_config_base(configs):
-    cache = [(dev, {k: getattr(dev, k).get() for k in reversed(keys)})
-        for dev, keys in reversed(configs)]
+    cache = [(dev, {k: getattr(dev, k).get() for k in
+        reversed(list(cfg_trans(dev, {k: None for k in keys})))
+    }) for dev, keys in reversed(configs)]
     def plan():
         for dev, cfg in cache:
             yield from bps.configure(dev, cfg)
@@ -337,12 +338,13 @@ def fly_simple(panda, adp, dets, *args,
     frag_gen, _md = frag_simple(panda, *args,
         pcomp = False, pos_cache = pos_cache, **kwargs)
     motors = motors_get(args)
+    devs = [panda, adp] + list(dets) + motors
     _md.update(md or {})
     return fly_frag(
         panda, adp, list(dets) + motors, frag_gen,
-        [fwrap_adtrig(dets), fwrap_config(dets, configs)],
-        [final_fly_motor(motors[-1]), final_adtrig(dets),
-            final_config(dets, configs)], md = _md
+        [fwrap_adtrig(dets), fwrap_config(devs, configs)],
+        [final_adtrig(dets), final_fly_motor(motors[-1]),
+            final_config(devs, configs)], md = _md
     )
 
 def fly_dseq_simple(panda, adp, dets, *args, pcomp,
@@ -350,6 +352,7 @@ def fly_dseq_simple(panda, adp, dets, *args, pcomp,
     frag_gen, _md = frag_simple(panda, *args,
         pcomp = pcomp, pos_cache = pos_cache, **kwargs)
     motors = motors_get(args)
+    devs = [panda, adp] + list(dets) + motors
     _md.update(md or {})
     def dfrag_gen():
         for seq, kwargs, scan in frag_gen:
@@ -370,8 +373,8 @@ def fly_dseq_simple(panda, adp, dets, *args, pcomp,
     return fly_dfrag(
         panda, adp, list(dets) + motors, dfrag_gen(),
         [fwrap_adtrig(dets), fwrap_config(dets, configs)],
-        [final_fly_motor(motors[-1]), final_adtrig(dets),
-            final_config(dets, configs)], md = _md
+        [final_adtrig(dets), final_fly_motor(motors[-1]),
+            final_config(devs, configs)], md = _md
     )
 
 def fly_dsimple(panda, adp, dets, *args,

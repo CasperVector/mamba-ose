@@ -1,6 +1,9 @@
 import collections
+import re
 from ophyd.ophydobj import OphydObject
 from bluesky import plan_stubs as bps, preprocessors as bpp
+
+_cfg_trans = [lambda dev, cfg: cfg]
 
 def plan_fmt(obj):
     if isinstance(obj, OphydObject):
@@ -15,6 +18,21 @@ def plan_fmt(obj):
         return dict((plan_fmt(k), plan_fmt(v)) for k, v in obj.items())
     else:
         return obj
+
+def cfg_trans(dev, cfg):
+    return _cfg_trans[0](dev, cfg)
+
+def ctrans_base(dev, cfg):
+    if not hasattr(dev, "cam"):
+        cfg = {re.sub(r"^cam\.", "", k): v for k, v in cfg.items()}
+    return cfg
+
+def ctrans_reg(ctrans = ctrans_base):
+    _cfg_trans[0] = ctrans
+    if not hasattr(bps, "_configure"):
+        bps._configure = bps.configure
+        bps.configure = lambda dev, cfg, **kwargs: \
+            bps._configure(dev, cfg_trans(dev, cfg), **kwargs)
 
 def motors_get(args, use_list = False):
     return list(args[::2] if use_list else args[::4])

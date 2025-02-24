@@ -44,7 +44,7 @@ RE = RunEngine({})
 U = server_start(globals(), config_read())
 U.atti_capi.configure(list(D.values()), list(M.values()))
 U.planner = MambaPlanner(U)
-U.planner.extend(CapiPlanner(M.values()))
+U.planner.extend(CapiPlanner(U.atti_capi, M.values()))
 P = U.planner.make_plans()
 
 print("Beamline init script loaded.")

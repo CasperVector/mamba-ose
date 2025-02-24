@@ -50,7 +50,7 @@ class ParentPlanner(BasePlanner):
         return ret
 
 class MambaPlanner(ParentPlanner):
-    plans = ["grid_scan", "scan", "count"]
+    plans = ["list_grid_scan", "list_scan", "grid_scan", "scan", "count"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -61,16 +61,19 @@ class MambaPlanner(ParentPlanner):
     def callback(self, plan, *args, **kwargs):
         return [self.U.mzcb, self.progress]
 
+    def md_gen(self, plan, *args, **kwargs):
+        md = self.U.mdg.read_advance() if hasattr(self.U, "mdg") else {}
+        md.update(kwargs["md"])
+        return md
+
     def run(self, plan, *args, **kwargs):
         self.check(plan, *args, **kwargs)
         cb = self.callback(plan, *args, **kwargs)
-        rkargs = {}
-        rkargs["md"] = self.U.mdg.read_advance() \
-            if hasattr(self.U, "mdg") else {}
-        rkargs["md"].update(kwargs.pop("md", None) or {})
+        md = self.md_gen(plan, *args,
+            md = kwargs.pop("md", None) or {}, **kwargs)
         return self.U.RE(self.plans[plan](*args, **kwargs, md = {
             "plan_cmd": plan_fmt(("P." + plan, args, kwargs))
-        }), cb, **rkargs)
+        }), cb, md = md)
 
 class ImagePlanner(MambaPlanner):
     def __init__(self, *args, **kwargs):
@@ -89,8 +92,9 @@ class DbPlanner(ImagePlanner):
         return [self.db.insert, self.filler, self.U.mzcb, self.progress]
 
 class AttiPlanner(ChildPlanner):
-    def __init__(self, motors):
+    def __init__(self, atti, motors):
         super().__init__()
+        self.atti = atti
         self.plans["atti_scan"] = lambda dets, *args, md = None: plans.scan(
             list(dets) + list(set(motors) - set(args[:-1 : 3])),
             *args, md = md

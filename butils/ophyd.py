@@ -154,6 +154,7 @@ class ErrorPositioner(PVPositioner):
         super().__init__(*args, **kwargs)
         assert self.error is not None
         self._event, self._error = threading.Event(), True
+        self._event.set()
 
     def move(self, position, wait = True, timeout = None, moved_cb = None):
         self.stop_signal.wait_for_connection()
@@ -301,7 +302,7 @@ class SerialEnergy(PositionerBase):
         return status
 
 class LinearEnergy(SerialEnergy):
-    _energy_tol = 1e-5
+    _energy_unit, _energy_tol = 1e3, 1e-2
 
     def __init__(self, *args, energy = None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -325,7 +326,7 @@ class LinearEnergy(SerialEnergy):
     def calibrate(self, value = None, mode = None):
         empty = value is None and mode is not None
         if value is None:
-            value = self._energy and self._energy.position
+            value = self._energy and self._energy.position * self._energy_unit
         if mode is None:
             mode = self._mode
         assert mode is not None and (value is not None or empty)
@@ -333,7 +334,8 @@ class LinearEnergy(SerialEnergy):
         if empty:
             return
         i, close = self._find(emap, value, approx = True)
-        pos = [value if m == self._energy else m.position for m in self._motors]
+        pos = [value / self._energy_unit if m == self._energy
+            else m.position for m in self._motors]
         if close:
             emap[i] = (value, pos)
         else:

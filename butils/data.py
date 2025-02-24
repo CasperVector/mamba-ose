@@ -2,9 +2,12 @@ import h5py
 import numpy
 import pyqtgraph
 import bluesky.callbacks.mpl_plotting as mpl_cb
-from databroker.v0 import Broker
 from bluesky.callbacks.core import CallbackBase
 from .pgitems import gv_wrap, MyImageView
+try:
+    from databroker.v0 import Broker
+except ImportError:
+    pass
 
 def roi_sum(roi, img):
     img = numpy.array(img)
@@ -43,7 +46,7 @@ class ProcessorCallback(CallbackBase):
         self.fields, self.data = fields, None
 
     def start(self, doc):
-        self.data = {field: [] for k in self.fields}
+        self.data = {k: [] for k in self.fields}
 
     def event(self, doc):
         if self.preproc:
