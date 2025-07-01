@@ -82,8 +82,11 @@ def panda_table_fmt(fields, data):
     for f, l in zip(fields, data):
         if f.labels:
             l = [f.labels.index(x) for x in l if isinstance(x, str)]
-        l = numpy.array(l, dtype =
-            "int32" if f.signed else "uint32").view("uint32")
+        l = numpy.array(l)
+        if numpy.issubdtype(l.dtype, numpy.floating):
+            l = l.round()
+        l = l.astype("int32" if f.signed else "uint32",
+            copy = False).view("uint32")
         i, = {f.bits_lo // 32, f.bits_hi // 32}
         ret[i] |= (l & (2 ** (f.bits_hi - f.bits_lo + 1) - 1)) \
             << (f.bits_lo % 32)
@@ -195,24 +198,31 @@ def panda_posout_bind(obj, bind, motor, **kwargs):
 
 def panda_posout_calib(obj, setp, run):
     if obj.rep:
-        setp(obj.motor.motor_rep.get())
+        setp(round(obj.motor.motor_rep.get() * obj.rev))
     rep = obj.value.get()
     if run:
-        obj.motor.set_current_position\
-            (rep * obj.scale.get() + obj.offset.get())
-    return int((obj.motor.readback.get() - obj.offset.get())
+        if obj.rep:
+            obj.motor.set_current_position\
+                (rep * obj.scale.get() + obj.offset.get())
+        else:
+            obj.offset.put(obj.motor.readback.get() - rep * obj.scale.get())
+    return round((obj.motor.readback.get() - obj.offset.get())
         / obj.scale.get()) - rep
 
-def panda_inenc_bind(obj, motor, rep = True):
-    obj.rep = rep
+def panda_inenc_bind(obj, motor, rep = True, rev = 1.0):
+    obj.rep, obj.rev = rep, rev
     if motor:
-        motor.offset_freeze_switch.set(1).wait()
-        obj.scale.put(motor.motor_eres.get() *
+        if obj.rep:
+            motor.offset_freeze_switch.set(1).wait()
+        obj.scale.put(motor.motor_eres.get() / obj.rev *
             (-1 if motor.offset_dir.get() else 1))
         obj.offset.put(motor.offset.get())
     else:
-        obj.scale.put(1.0)
+        obj.scale.put(1.0 / obj.rev)
         obj.offset.put(0.0)
+
+def panda_fmcin_bind(obj, motor):
+    obj.rep, obj.rev = False, 1.0
 
 def panda_inenc_postinit(obj):
     f = obj.val
@@ -222,7 +232,18 @@ def panda_inenc_postinit(obj):
     f.calibrate = (lambda run = True:
         panda_posout_calib(f, obj.setp.value.put, run))
 
-pandaPostInit = {"inenc": panda_inenc_postinit}
+def panda_fmcin_postinit(obj):
+    for f in obj.component_names:
+        if not f.startswith("val"):
+            continue
+        f = getattr(obj, f)
+        f.motor = None
+        f.bind = (lambda f: lambda motor, **kwargs:
+            panda_posout_bind(f, panda_fmcin_bind, motor, **kwargs))(f)
+        f.calibrate = (lambda f: lambda run = True:
+            panda_posout_calib(f, None, run))(f)
+
+pandaPostInit = {"inenc": panda_inenc_postinit, "fmc_in": panda_fmcin_postinit}
 
 class PandaBlock(Device):
     def __init__(self, *args, **kwargs):
@@ -458,8 +479,15 @@ class PandaRoot(Device):
                     raise
         threading.Thread(target = poll, daemon = True).start()
 
-    def clear_muxes(self):
-        assert fn_wait([(lambda a: lambda: a.put("ZERO"))(a)
+    def clear_muxes(self, keep = {}):
+        keep = {getattr(self, k): keep[k] for k in keep}
+        def reset(a):
+            if a in keep:
+                if a.get() != keep[a]:
+                    a.put(keep[a])
+            else:
+                a.put("ZERO")
+        assert fn_wait([(lambda a: lambda: reset(a))(a)
             for a in self._muxes], abort = False)
 
     def clear_capture(self):
@@ -496,7 +524,7 @@ class PandaRoot(Device):
 
     def read_configuration(self, dot = False,
         fast = False, active_extra = ["system"]):
-        if fast and not dot and self._config_cache is not None:
+        if fast and self._config_cache is not None:
             return self._config_cache[int(not dot)].copy()
         ret = self.desc_or_read\
             ("read_configuration", Kind.config, dot, active_extra)

@@ -1,5 +1,4 @@
 import os
-from epics import caget
 from bluesky import plans
 from bluesky.callbacks.core import CallbackBase
 from butils.data import ImageFiller, my_broker
@@ -20,16 +19,23 @@ class BasePlanner(object):
     def callback(self, plan, *args, **kwargs):
         return [self.U.mzcb]
 
+    def md_gen(self, plan, *args, **kwargs):
+        return kwargs["md"]
+
     def run(self, plan, *args, **kwargs):
         self.check(plan, *args, **kwargs)
         cb = self.callback(plan, *args, **kwargs)
-        md = kwargs.pop("md", None) or {}
+        md = self.md_gen(plan, *args,
+            md = kwargs.pop("md", None) or {}, **kwargs)
         return self.U.RE(self.plans[plan](*args, **kwargs, md = {
             "plan_cmd": plan_fmt(("P." + plan, args, kwargs))
         }), cb, md = md)
 
 class ChildPlanner(BasePlanner):
     parent = None
+
+    def md_gen(self, plan, *args, **kwargs):
+        return self.parent.md_gen(plan, *args, **kwargs)
 
 class ParentPlanner(BasePlanner):
     def __init__(self, U):
@@ -41,9 +47,10 @@ class ParentPlanner(BasePlanner):
         child.U, child.parent = self.U, self
 
     def make_plans(self):
-        ret = type("MambaPlans", (object,), {})()
+        ret = type("MambaPlans", (object,), {"_plans": {}})()
         for obj in self.origins:
             for plan in obj.plans:
+                ret._plans[plan] = obj.plans[plan]
                 setattr(ret, plan, (lambda run, plan:
                     lambda *args, **kwargs: run(plan, *args, **kwargs)
                 )(obj.run, plan))
@@ -65,15 +72,6 @@ class MambaPlanner(ParentPlanner):
         md = self.U.mdg.read_advance() if hasattr(self.U, "mdg") else {}
         md.update(kwargs["md"])
         return md
-
-    def run(self, plan, *args, **kwargs):
-        self.check(plan, *args, **kwargs)
-        cb = self.callback(plan, *args, **kwargs)
-        md = self.md_gen(plan, *args,
-            md = kwargs.pop("md", None) or {}, **kwargs)
-        return self.U.RE(self.plans[plan](*args, **kwargs, md = {
-            "plan_cmd": plan_fmt(("P." + plan, args, kwargs))
-        }), cb, md = md)
 
 class ImagePlanner(MambaPlanner):
     def __init__(self, *args, **kwargs):
@@ -101,10 +99,8 @@ class AttiPlanner(ChildPlanner):
         )
 
 def div_get(divs, dets, num):
-    div = 0
-    for det in dets:
-        if det in divs:
-            div = max(div, divs[det])
+    div = [divs[det] for det in dets if det in divs]
+    div = min(div) if div else 0
     assert div >= num or not div
     return div // num
 
@@ -126,8 +122,8 @@ def vbas_check(ratios, args, kwargs):
     if ratio is None:
         return
     velocity = velo_simple(motor, lo, hi, num, kwargs["duty"],
-        *(kwargs.get(k) for k in ["period", "velocity", "pad"]))[1]
-    if velocity < ratio * caget(motor.prefix + ".VBAS"):
+        *(kwargs.get(k) for k in ["period", "velocity", "pad"]))[1][1]
+    if velocity < ratio * motor.motor_vbas.get():
         raise RuntimeError("%s.velocity < %f * %s.motor_vbas" %
             (motor.vname(), ratio, motor.vname()))
 
@@ -178,14 +174,19 @@ class PandaPlanner(ChildPlanner):
     def __init__(self, panda, adp, *, divs = {}, h5_tols = {},
         enc_tols = {}, vbas_ratios = {}, configs = {}):
         super().__init__()
-        self.panda, self.h5_tols, self.enc_tols, self.vbas_ratios = \
-            panda, h5_tols, enc_tols, vbas_ratios
+        self.panda, self._configs = panda, configs
+        self.h5_tols, self.enc_tols, self.vbas_ratios = \
+            h5_tols, enc_tols, vbas_ratios
         for k, f in [("fly_grid", fly_simple),
             ("fly_dgrid", fly_dsimple), ("fly_pgrid", fly_pcomp)]:
-            self.plans[k] = (lambda f: lambda dets, *args, **kwargs: f(
-                panda, adp, dets, *args, configs = configs,
+            self.plans[k] = (lambda k, f: lambda dets, *args, **kwargs: f(
+                panda, adp, dets, *args,
+                configs = self.configs(k, dets, *args, **kwargs),
                 div = div_get(divs, dets, args[-1]), **kwargs
-            ))(f)
+            ))(k, f)
+
+    def configs(self, plan, *args, **kwargs):
+        return self._configs
 
     def check(self, plan, *args, **kwargs):
         encoder_check(self.panda, self.enc_tols, motors_get(args[1:]))

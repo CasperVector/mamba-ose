@@ -70,10 +70,19 @@ def img_peak(img):
     return pos, roi, (roi_crop(img, roi).sum(), \
         (roi[1] - roi[0]) * (roi[3] - roi[2]))
 
+def img_bary(img):
+    total = img.sum()
+    if total:
+        idxs = [numpy.arange(img.shape[1 - i]) for i in [0, 1]]
+        x, y = [(idxs[i] * img.sum(i)).sum() / total for i in [0, 1]]
+    else:
+        x, y = img.shape[1] / 2, img.shape[0] / 2
+    return x, y
+
 def img_polar(shape, origin):
     h, w = shape
-    coords = numpy.full((h, w), numpy.arange(w) - origin[0]) * (1 + 0j)
-    coords += numpy.full((w, h), origin[1] - numpy.arange(h)).T * (0 + 1j)
+    coords = numpy.tile((numpy.arange(w) - origin[0]) * (1 + 0j), (h, 1))
+    coords += numpy.tile((origin[1] - numpy.arange(h)) * (0 + 1j), (w, 1)).T
     rads, thetas = numpy.abs(coords), numpy.angle(coords)
     thetas[thetas < 0] += 2 * numpy.pi
     return rads, thetas

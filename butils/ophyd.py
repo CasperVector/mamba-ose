@@ -1,3 +1,5 @@
+import json
+import os
 import threading
 import time
 import traceback
@@ -304,12 +306,31 @@ class SerialEnergy(PositionerBase):
 class LinearEnergy(SerialEnergy):
     _energy_unit, _energy_tol = 1e3, 1e-2
 
-    def __init__(self, *args, energy = None, **kwargs):
+    def __init__(self, *args, energy = None, store = "", **kwargs):
         super().__init__(*args, **kwargs)
-        self._energy, self._mode = energy, None
-        self._calib_map = {}
+        self._energy, self._mode, self._calib_map = energy, None, {}
+        self._store = store and os.path.expanduser(store)
+        if self._store:
+            try:
+                self._load()
+            except:
+                self._save()
 
-    def _find(self, emap, value, approx = False):
+    def _save(self, store = ""):
+        store = os.path.expanduser(store) if store else self._store
+        open(store, "w").write(json.dumps({
+            "calib_map": self._calib_map,
+            "motors": [m.vname() for m in self._motors],
+            "mode": self._mode,
+        }, sort_keys = True, indent = 1) + "\n")
+
+    def _load(self, store = ""):
+        store = os.path.expanduser(store) if store else self._store
+        data = json.load(open(self._store if store is None else store))
+        assert data["motors"] == [m.vname() for m in self._motors]
+        self._calib_map, self._mode = data["calib_map"], data["mode"]
+
+    def _find(self, emap, value, approx):
         for i, (v, pos) in enumerate(emap):
             if value <= v:
                 break
@@ -332,23 +353,29 @@ class LinearEnergy(SerialEnergy):
         assert mode is not None and (value is not None or empty)
         self._mode, emap = mode, self._calib_map.setdefault(mode, [])
         if empty:
+            self._save()
             return
-        i, close = self._find(emap, value, approx = True)
+        i, close = self._find(emap, value, True)
         pos = [value / self._energy_unit if m == self._energy
             else m.position for m in self._motors]
         if close:
-            emap[i] = (value, pos)
+            emap[i] = [value, pos]
         else:
-            emap.insert(i, (value, pos))
+            emap.insert(i, [value, pos])
+        self._set_position(value)
+        self._save()
 
     def uncalibrate(self, value = None, mode = None):
         if value is None:
             self._calib_map.pop(mode)
+            if mode == self._mode:
+                self._mode = None
         else:
             emap = self._calib_map[self._mode if mode is None else mode]
-            i, close = self._find(emap, value, approx = True)
+            i, close = self._find(emap, value, True)
             assert close
             emap.pop(i)
+        self._save()
 
     def _pos(self, value):
         emap = self._calib_map[self._mode]
@@ -357,7 +384,7 @@ class LinearEnergy(SerialEnergy):
             return {m: m.position for m in self._motors}
         elif n == 1:
             return {m: p for m, p in zip(self._motors, emap[0][1])}
-        i = max(0, min(n - 2, self._find(emap, value) - 1))
+        i = max(0, min(n - 2, self._find(emap, value) - 1), False)
         x = (emap[i + 1][0] - value) / (emap[i + 1][0] - emap[i][0])
         return {m: x * p0 + (1.0 - x) * p1 for m, p0, p1 in zip
             (self._motors, emap[i][1], emap[i + 1][1])}

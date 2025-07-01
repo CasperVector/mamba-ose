@@ -4,10 +4,10 @@ import epics
 import numpy
 from butils.gutils import QueueServer, err_state
 from mamba.attitude.common import roi_crop, \
-    norm_roi, roi2xywh, xywh2roi, proj_peak, img_peak
+    norm_roi, roi2xywh, xywh2roi, proj_peak, img_peak, img_bary
 
 def auto_roi(img, ratio = (2.5, 5.0)):
-    roi = tuple()
+    roi = ()
     for i in [0, 1]:
         proj = img.sum(i)
         pos, lohi = proj_peak(proj)
@@ -21,13 +21,7 @@ def auto_roi(img, ratio = (2.5, 5.0)):
 
 def img_bpm(img, roi):
     crop = roi_crop(img, roi)
-    total = crop.sum()
-    if total:
-        idxs = [numpy.arange(crop.shape[1 - i]) for i in [0, 1]]
-        x, y = [(idxs[i] * crop.sum(i)).sum() / total for i in [0, 1]]
-    else:
-        x, y = (roi[0] + roi[1]) / 2, (roi[2] + roi[3]) / 2
-    total, area = img_peak(crop)[2]
+    (x, y), (total, area) = img_bary(crop), img_peak(crop)[2]
     return roi[0] + x, roi[2] + y, (total / area if area else 0.0)
 
 def fmt_pos(x):

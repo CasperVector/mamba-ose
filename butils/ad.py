@@ -5,6 +5,7 @@ from ophyd import select_version, Component, Device, EpicsSignalRO, \
     EpicsSignal, ADBase, ADComponent, EpicsSignalWithRBV, \
     DetectorBase, CamBase, HDF5Plugin, ADTriggerStatus
 from ophyd.device import BlueskyInterface, Staged
+from ophyd.status import Status
 from ophyd.areadetector.base import DDC_EpicsSignalRO
 from ophyd.areadetector.plugins import PluginBase
 from ophyd.areadetector.filestore_mixins import \
@@ -33,13 +34,15 @@ class SoftTrigger(MyTriggerBase):
             self._acquisition_signal = getattr(self, self._acquisition_signal)
         if self._counter_signal:
             self._counter_signal = getattr(self, self._counter_signal)
-        self.stage_sigs.update([("cam.acquire",
-            0 if self._acquisition_signal == self.cam.acquire else 1)])
+        acquire = "cam.acquire" if hasattr(self, "cam") else "acquire"
+        self._acquire = getattr(self, acquire)
+        self._stage_acquire = int(self._acquisition_signal != self._acquire)
+        self.stage_sigs.update([(acquire, self._stage_acquire)])
 
     def stage(self):
-        self._orig_acquire = self.cam.acquire.get()
-        if self._orig_acquire == self.stage_sigs["cam.acquire"] == 1:
-            self.cam.acquire.put(0)
+        self._orig_acquire = self._acquire.get()
+        if self._orig_acquire == self._stage_acquire == 1:
+            self._acquire.set(0).wait()
         (self._counter_signal or self._acquisition_signal)\
             .subscribe(self._acquire_changed)
         super().stage()
@@ -48,22 +51,28 @@ class SoftTrigger(MyTriggerBase):
         super().unstage()
         (self._counter_signal or self._acquisition_signal)\
             .clear_sub(self._acquire_changed)
-        if self._orig_acquire == self.stage_sigs["cam.acquire"] == 1:
-            self.cam.acquire.put(1)
+        if self._orig_acquire == self._stage_acquire == 1:
+            self._acquire.set(1).wait()
 
     def trigger(self):
         assert self._staged == Staged.yes
-        self._status = self._status_type(self)
+        self._status = status = self._status_type(self)
         self._acquisition_signal.put(1)
-        self.dispatch(self._image_name, time.time())
-        return self._status
+        if hasattr(self, "cam"):
+            self.dispatch(self._image_name, time.time())
+        return status
 
     def _acquire_changed(self, *, value, old_value, **kwargs):
-        if self._status is None:
+        status = self._status
+        if status is None:
             return
         if (self._counter_signal and value) or (old_value == 1 and value == 0):
-            status, self._status = self._status, None
+            self._status = None
             status.set_finished()
+
+class QSoftTrigger(SoftTrigger):
+    _status_type = Status
+    _acquisition_signal = "acquire"
 
 class Xsp3Trigger(SoftTrigger):
     def _maybe_erase(self):
@@ -71,11 +80,11 @@ class Xsp3Trigger(SoftTrigger):
             self.cam.erase.put(1, use_complete = True)
 
     def stage(self):
-        self._orig_acquire = self.cam.acquire.get()
-        if self.stage_sigs["cam.acquire"]:
+        self._orig_acquire = self._acquire.get()
+        if self._stage_acquire:
             assert self.cam.num_images.get() > 0
             if self._orig_acquire:
-                self.cam.acquire.put(0)
+                self._acquire.set(0).wait()
             self._acquisition_signal.put(0)
             self._maybe_erase()
         (self._counter_signal or self._acquisition_signal)\
@@ -83,20 +92,21 @@ class Xsp3Trigger(SoftTrigger):
         MyTriggerBase.stage(self)
 
     def trigger(self):
-        if not self.stage_sigs["cam.acquire"]:
+        if not self._stage_acquire:
             self._maybe_erase()
         elif self.cam.array_counter.get() >= self.cam.num_images.get():
-            self.cam.acquire.set(0).wait()
+            self._acquire.set(0).wait()
             self._maybe_erase()
-            self.cam.acquire.set(1).wait()
+            self._acquire.set(1).wait()
         return super().trigger()
 
     def _acquire_changed(self, *, value, old_value, **kwargs):
-        if self._status is None:
+        status = self._status
+        if status is None:
             return
         if (self._counter_signal and value) or (old_value == 1 and value == 0):
-            status, self._status = self._status, None
-            if self.stage_sigs["cam.acquire"]:
+            self._status = None
+            if self._stage_acquire:
                 self._acquisition_signal.put(0)
             status.set_finished()
 
@@ -151,7 +161,7 @@ class MyImagePlugin(ThrottleMonitor, PluginBase):
     array_size, array_data = DDC_EpicsSignalRO(
         ("depth", "ArraySize2_RBV"), ("height", "ArraySize1_RBV"),
         ("width", "ArraySize0_RBV"), doc = "The array size", auto_monitor = True
-    ), Component(EpicsSignalRO, "ArrayData", auto_monitor = True)
+    ), Component(EpicsSignalRO, "ArrayData")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -200,14 +210,11 @@ class MyCam(CamBase):
             sig.set(val).wait()
 
 class Xsp3Cam(MyCam):
-    erase = ADComponent(EpicsSignal, "ERASE")
-    soft_trigger = ADComponent(EpicsSignal, "SoftTrigger")
-    num_images = ADComponent(EpicsSignalWithRBV,
-        "NumImages", auto_monitor = True)
-    array_counter = ADComponent(EpicsSignalWithRBV,
-        "ArrayCounter", auto_monitor = True)
-    erase_on_start = ADComponent(EpicsSignal,
-        "EraseOnStart", auto_monitor = True)
+    erase = ADComponent(EpicsSignal, "ERASE", kind = "omitted")
+    soft_trigger = ADComponent(EpicsSignal, "SoftTrigger", kind = "omitted")
+    num_images = ADComponent(EpicsSignalWithRBV, "NumImages")
+    array_counter = ADComponent(EpicsSignalWithRBV, "ArrayCounter")
+    erase_on_start = ADComponent(EpicsSignal, "EraseOnStart")
     warmup_sleep = 2.0, 1.0
 
 class DxpCam(ADBase):
@@ -218,6 +225,8 @@ class DxpCam(ADBase):
     )
 
     port_name = ADComponent(EpicsSignalRO, "Asyn.PORT", string = True)
+    array_counter = ADComponent(EpicsSignalWithRBV, "ArrayCounter")
+    array_callbacks = ADComponent(EpicsSignalWithRBV, "ArrayCallbacks")
     collect_mode = ADComponent(EpicsSignalWithRBV, "CollectMode")
     ignore_gate = ADComponent(EpicsSignalWithRBV, "IgnoreGate")
     input_logic_polarity = ADComponent(EpicsSignalWithRBV, "InputLogicPolarity")
@@ -280,6 +289,7 @@ def make_xsp3(name, nchan = 0, soft_trigger = True):
     return make_detector(
         name, (Xsp3Trigger, DetectorBase),
         cam = Component(Xsp3Cam, "cam1:"),
+        hdf1 = Component(CptHDF5Dxp, "HDF1:", write_path_template = "/"),
         image1 = None, monitor = None, **attrs
     )
 
@@ -299,13 +309,15 @@ def make_dxp(name, cam, nchan = 0):
         image1 = None, monitor = None, **attrs
     )
 
-def make_qzdetector(name, nout):
-    attrs = {"acquire": Component(EpicsSignal, "acquire"),
+def make_qzdetector(name, nout, inherit = None):
+    if not inherit:
+        inherit = (QSoftTrigger, Device)
+    attrs = {"acquire": Component(EpicsSignal, "acquire", kind = "omitted"),
         "num_images": Component(EpicsSignal, "num_images", kind = "config")}
     attrs.update({"output%d" % i: Component(
         EpicsSignal, "output%d" % i, string = True, kind = "config"
     ) for i in range(nout)})
-    return type(name, (Device,), attrs)
+    return type(name, inherit, attrs)
 
 MyAreaDetector = make_detector("MyAreaDetector")
 BaseAreaDetector = make_detector\

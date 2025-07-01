@@ -54,7 +54,7 @@ def prep_simple(panda, outputs, inputs, pgate = True, **kwargs):
 def prep_dseq(panda, outputs, inputs, pgate = True, **kwargs):
     cfg = panda.dseq.make_cfg()
     cfg.update(cfg_inputs(panda, inputs, dseq = True, **kwargs))
-    luts = dict()
+    luts = {}
     if pgate:
         outputs = [("pcap.gate", "a"), ("pcap.trig", "a")] + outputs
     for out in outputs:
@@ -69,11 +69,29 @@ def prep_dseq(panda, outputs, inputs, pgate = True, **kwargs):
         ])
     panda.configure(cfg)
 
+def prep_dshut(panda, outputs):
+    cfg, luts = {}, {}
+    for out in outputs:
+        luts[out] = ord(out) - ord("a") + 1
+        cfg["lut%d.inpc" % luts[out]] = "PCAP.ACTIVE"
+    def set_mode(lut, mode):
+        lut.func.value.put({"hard": "A|B", "soft": "D",
+            "auto": "C?(A|B):D"}[mode])
+    def set_state(lut, state):
+        lut.inpd.value.put({"ZERO": "ZERO", "ONE": "ONE"}[state])
+    def set_shutter(out, **kwargs):
+        for o in out:
+            l = getattr(panda, "lut%d" % luts[o])
+            for k, v in kwargs.items():
+                {"mode": set_mode, "state": set_state}[k](l, v)
+    panda.configure(cfg)
+    panda.set_shutter = set_shutter
+
 def table_warmup():
     return dict(
         [("trigger", ["Immediate"])] +
-        [(f, [1]) for f in ["repeats", "time1", "time2", "outa1"]] +
-        [(f, [0]) for f in ["position"] + seq_outs_not(["outa1"])]
+        [(k, [1]) for k in ["repeats", "time1", "time2", "outa1"]] +
+        [(k, [0]) for k in ["position"] + seq_outs_not(["outa1"])]
     )
 
 def seq_warmup(block):
@@ -104,50 +122,6 @@ def velo_simple(motor, lo, hi, num, duty,
         pad = max(0.5, 2 * motor.acceleration.get()) * velos[1]
     assert num > 1 and period > 0.0 and velos[1] > 0.0 and pad > 0.0
     return period, velos, pad
-
-def seq_simple(inp, lo, hi, num, duty, period, pad, snake):
-    live, dead = duty * period * PANDA_FREQ, (1.0 - duty) * period * PANDA_FREQ
-    assert live >= 1.0 and dead >= 1.0
-    if lo > hi:
-        pad *= -1
-    scale, offset = inp.scale.get(), inp.offset.get()
-    lo, hi, pad = (lo - offset) / scale, (hi - offset) / scale, pad / scale
-    pos = [(p, inp.root.get_input("seq1.pos%s" % p)) for p in "abc"]
-    pos = [p for p, i in pos if i == inp.prefix][0].upper()
-    table = dict([
-        ("trigger", ["POS%s%s=POSITION" % (pos, op)
-            for op in (">><<" if pad > 0.0 else "<<>>")]),
-        ("position", [lo, hi + pad / 2, hi, lo - pad / 2]),
-        ("time1", [live, 0, live, 0]), ("time2", [dead, 1, dead, 1]),
-        ("repeats", [num, 1, num, 1]), ("outa1", [1, 0, 1, 0])
-    ] + [(f, [0] * 4) for f in seq_outs_not(["outa1"])])
-    if not snake:
-        table = dict((k, [v[0], v[3]]) for k, v in table.items())
-    return {"seq1.repeats": 0, "seq1.table": table}
-
-def table_pcomp(inp, lo, hi, num, duty, period, pad, snake):
-    units, live = num + duty - 1.0, duty * period * PANDA_FREQ
-    assert live >= 1.0 and (1.0 - duty) * period * PANDA_FREQ >= 1.0
-    if lo > hi:
-        pad *= -1
-    scale, offset = inp.scale.get(), inp.offset.get()
-    pos = [(p, inp.root.get_input("seq1.pos%s" % p)) for p in "abc"]
-    pos = [p for p, i in pos if i == inp.prefix][0].upper()
-    poss = [((units - x) * lo + x * hi) / units for x in range(num)], \
-        [(x * lo + (units - x) * hi) / units for x in range(num)]
-    poss = [(x - offset) / scale for x in poss[0] + [hi + pad / 2]] + \
-        [(x - offset) / scale for x in poss[1] + [lo - pad / 2]]
-    pattern = lambda l: [l[0]] * num + [l[1]] + [l[2]] * num + [l[3]]
-    table = dict([
-        ("trigger", pattern(["POS%s%s=POSITION" % (pos, op)
-            for op in (">><<" if pad > 0.0 else "<<>>")])),
-        ("position", poss), ("outa1", pattern([1, 0, 1, 0])),
-        ("time1", pattern([live, 0, live, 0])),
-        ("time2", pattern([1] * 4)), ("repeats", pattern([1] * 4))
-    ] + [(f, pattern([0] * 4)) for f in seq_outs_not(["outa1"])])
-    if not snake:
-        table = dict((k, v[:num] + v[-1:]) for k, v in table.items())
-    return table
 
 def final_config_base(configs):
     cache = [(dev, {k: getattr(dev, k).get() for k in
@@ -202,6 +176,50 @@ def grid_cfg(args, div, pad, snake_axes, pos_cache, velos):
             yield from next(scans)
     return snake, div, scan_gen, \
         {"num_points": points, "hints": {"progress": ["simple"] + pnums}}
+
+def seq_simple(inp, lo, hi, num, duty, period, pad, snake):
+    live, dead = duty * period * PANDA_FREQ, (1.0 - duty) * period * PANDA_FREQ
+    assert live >= 1.0 and dead >= 1.0
+    if lo > hi:
+        pad *= -1
+    scale, offset = inp.scale.get(), inp.offset.get()
+    lo, hi, pad = (lo - offset) / scale, (hi - offset) / scale, pad / scale
+    pos = [(p, inp.root.get_input("seq1.pos%s" % p)) for p in "abc"]
+    pos = [p for p, i in pos if i == inp.prefix][0].upper()
+    table = dict([
+        ("trigger", ["POS%s%s=POSITION" % (pos, op)
+            for op in (">><<" if pad > 0.0 else "<<>>")]),
+        ("position", [lo, hi + pad / 2, hi, lo - pad / 2]),
+        ("time1", [live, 0, live, 0]), ("time2", [dead, 1, dead, 1]),
+        ("repeats", [num, 1, num, 1]), ("outa1", [1, 0, 1, 0])
+    ] + [(k, [0] * 4) for k in seq_outs_not(["outa1"])])
+    if not snake:
+        table = dict((k, [v[0], v[3]]) for k, v in table.items())
+    return {"seq1.repeats": 0, "seq1.table": table}
+
+def table_pcomp(inp, lo, hi, num, duty, period, pad, snake):
+    units, live = num + duty - 1.0, duty * period * PANDA_FREQ
+    assert live >= 1.0 and (1.0 - duty) * period * PANDA_FREQ >= 1.0
+    if lo > hi:
+        pad *= -1
+    scale, offset = inp.scale.get(), inp.offset.get()
+    pos = [(p, inp.root.get_input("seq1.pos%s" % p)) for p in "abc"]
+    pos = [p for p, i in pos if i == inp.prefix][0].upper()
+    poss = [((units - x) * lo + x * hi) / units for x in range(num)], \
+        [(x * lo + (units - x) * hi) / units for x in range(num)]
+    poss = [(x - offset) / scale for x in poss[0] + [hi + pad / 2]] + \
+        [(x - offset) / scale for x in poss[1] + [lo - pad / 2]]
+    pattern = lambda l: [l[0]] * num + [l[1]] + [l[2]] * num + [l[3]]
+    table = dict([
+        ("trigger", pattern(["POS%s%s=POSITION" % (pos, op)
+            for op in (">><<" if pad > 0.0 else "<<>>")])),
+        ("position", poss), ("outa1", pattern([1, 0, 1, 0])),
+        ("time1", pattern([live, 0, live, 0])),
+        ("time2", pattern([1] * 4)), ("repeats", pattern([1] * 4))
+    ] + [(k, pattern([0] * 4)) for k in seq_outs_not(["outa1"])])
+    if not snake:
+        table = dict((k, v[:num] + v[-1:]) for k, v in table.items())
+    return table
 
 def grid_frag(seqs, num, snake, div, scan_gen):
     def points_gen():
@@ -372,7 +390,7 @@ def fly_dseq_simple(panda, adp, dets, *args, pcomp,
                 }, panda.dseq.max_rows()), kwargs, scan
     return fly_dfrag(
         panda, adp, list(dets) + motors, dfrag_gen(),
-        [fwrap_adtrig(dets), fwrap_config(dets, configs)],
+        [fwrap_adtrig(dets), fwrap_config(devs, configs)],
         [final_adtrig(dets), final_fly_motor(motors[-1]),
             final_config(devs, configs)], md = _md
     )

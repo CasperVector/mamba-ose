@@ -1,7 +1,6 @@
 #!../../bin/linux-x86_64/opticsApp
 
 < envPaths
-epicsEnvSet EPICS_CA_MAX_ARRAY_BYTES 64008
 
 cd "${TOP}"
 dbLoadDatabase "dbd/opticsApp.dbd"

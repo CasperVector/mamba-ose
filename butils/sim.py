@@ -185,8 +185,8 @@ class SimHDF5Acquire(Signal):
             self.hdf1.q.put("acquire")
 
 class SimHDF5Cam(CamBase):
-    acquire = ADComponent(SimHDF5Acquire, value = 0)
-    _acquire = ADComponent(EpicsSignalWithRBV, "Acquire")
+    acquire = ADComponent(SimHDF5Acquire, value = 0, kind = "omitted")
+    _acquire = ADComponent(EpicsSignalWithRBV, "Acquire", kind = "omitted")
 
 class SimHDF5Detector(SingleTrigger, AreaDetector):
     _default_read_attrs = ["hdf1"]

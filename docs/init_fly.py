@@ -51,7 +51,8 @@ U = server_start(globals(), config_read())
 U.planner = ImagePlanner(U)
 U.planner.extend(MyPandaPlanner(
     D.panda, D.adp, divs = {D.xsp3: 12216}, h5_tols = {D.xsp3: 0},
-    enc_tols = {m: 25 for m in M}, vbas_ratios = {m: 2.0 for m in M},
+    enc_tols = {m: 25 for m in M.values()},
+    vbas_ratios = {m: 2.0 for m in M.values()},
     configs = {D.xsp3: {"cam.trigger_mode": 3}}
 ))
 U.planner.extend(MyBuboPlanner(D.bubo,

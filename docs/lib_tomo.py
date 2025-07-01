@@ -50,7 +50,7 @@ class AttiTomo(AttiOptim):
             return doc["data"]["aeval"] if first else doc["data"]["eval"][0]
         return f
 
-    def tune_base(self, dets, motors, *, maxfev, init_rad):
+    def tune_coarse(self, dets, motors, fast = True):
         (ad,), pitch_roll, (yaw,) = dets, motors[:2], motors[2:]
         f = self.wrap(ad, pitch_roll, yaw)
         x0 = self.get_x(pitch_roll)
@@ -58,13 +58,26 @@ class AttiTomo(AttiOptim):
         x0 = x0 + numpy.degrees([numpy.sign(y0[0]) * numpy.arcsin(
             ((y0[0] ** 2 + y0[2] ** 2) / (y0[1] ** 2 + y0[3] ** 2)) ** 0.5
         ), numpy.arctan(y0[1] / y0[3])])
+        if fast:
+            f(x0)
+        else:
+            self.put_x(x0, pitch_roll)
+
+    def tune_fine(self, dets, motors, *, maxfev, init_rad):
+        (ad,), pitch_roll, (yaw,) = dets, motors[:2], motors[2:]
+        f = self.wrap(ad, pitch_roll, yaw)
+        x0 = self.get_x(pitch_roll)
         return optimize.minimize(f, x0, method = "nelder-mead", options = {
             "disp": True, "maxfev": maxfev, "xatol": 0.05, "fatol": 1.0,
             "initial_simplex": x0 + init_rad * random_simplex(2)
         })
 
-    def tune(self, init_rad = 0.5):
-        self.tune_base(["D.ad"], ["M.pitch", "M.roll", "M.yaw"],
+    def tune(self, first = True, init_rad = None):
+        if init_rad is None:
+            init_rad = 0.5 if first else 0.1
+        if first:
+            self.tune_coarse(["D.ad"], ["M.pitch", "M.roll", "M.yaw"])
+        self.tune_fine(["D.ad"], ["M.pitch", "M.roll", "M.yaw"],
             maxfev = 50, init_rad = init_rad)
 
 class MyMambaPlanner(MambaPlanner):
