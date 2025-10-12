@@ -23,10 +23,10 @@ M = AttrDict(
 )
 D = AttrDict(
     bubo = BuboDevice(name = "D.bubo"),
-    panda = PandaDevice("192.168.1.11", name = "D.panda"),
     adp = BaseAreaDetector("PANDA1:", name = "D.adp"),
     xsp3 = BaseAreaDetector("13XSP3:", name = "D.xsp3")
 )
+D.panda = PandaDevice("192.168.1.11", name = "D.panda", ad = D.adp)
 
 [m.stage_sigs.update({"velocity": STAGE_KEEP}) for m in M.values()]
 [m.velocity.set(4.0).wait() for m in M.values()]
@@ -50,9 +50,9 @@ RE = RunEngine({})
 U = server_start(globals(), config_read())
 U.planner = ImagePlanner(U)
 U.planner.extend(MyPandaPlanner(
-    D.panda, D.adp, divs = {D.xsp3: 12216}, h5_tols = {D.xsp3: 0},
-    enc_tols = {m: 25 for m in M.values()},
-    vbas_ratios = {m: 2.0 for m in M.values()},
+    [D.panda], divs = {D.xsp3: 12216}, h5_tols = {D.xsp3: 0},
+    enc_tols = {m: 0.025 for m in D.panda.motors},
+    vbas_ratios = {m: 2.0 for m in D.panda.motors},
     configs = {D.xsp3: {"cam.trigger_mode": 3}}
 ))
 U.planner.extend(MyBuboPlanner(D.bubo,

@@ -75,10 +75,11 @@ class ProgressSimple(ProgressBase):
             if not idx % gap:
                 return i
 
-def expand_simple(nums):
-    ret = []
+def expand_simple(nums, inner = []):
+    ret = list(inner)
+    i0 = max(ret) + 1 if ret else 0
     for i, n in reversed(list(enumerate(nums))):
-        ret = ([i] + ret[1:]) * n
+        ret = ([i0 + i] + ret[1:]) * n
     return ret
 
 progressBars = {"base": ProgressBase, "simple": ProgressSimple}

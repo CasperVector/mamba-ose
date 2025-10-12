@@ -1,12 +1,12 @@
 import numpy
 from bluesky import plans, plan_stubs as bps, preprocessors as bpp
-from butils.fly import fly_dsimple, sfly_simple
+from butils.fly import fly_dgrid, sfly_grid
 from butils.plans import \
     args_snake, make_sub_step, motors_get, norm_cache, norm_snake
 from mamba.backend.planner import div_get
 from mamba.backend.planner import PandaPlanner, BuboPlanner
 
-def fly_test(panda, adp, dets, out_args, in_args,
+def fly_test(pandas, dets, out_args, in_args,
     snake_axes = True, md = None, pos_cache = None, **kwargs):
     motors = motors_get(out_args) + motors_get(in_args)
     pos_cache = norm_cache(pos_cache)
@@ -14,7 +14,7 @@ def fly_test(panda, adp, dets, out_args, in_args,
     gen = args_snake(in_args, snake_axes)
     def sub():
         yield from bps.trigger_and_read(list(dets) + motors)
-        yield from fly_dsimple(panda, adp, dets, *gen(), **kwargs,
+        yield from fly_dgrid(pandas, dets, *gen(), **kwargs,
             snake_axes = snake_axes, pos_cache = pos_cache)
     args = out_args + in_args
     nums = [args[i * 4 + 3] for i in range(len(args) // 4)]
@@ -24,7 +24,8 @@ def fly_test(panda, adp, dets, out_args, in_args,
     return bpp.stage_run_wrapper(bpp.stub_wrapper(plans.grid_scan(
         dets, *out_args, snake_axes = snake_axes,
         per_step = make_sub_step(sub), pos_cache = pos_cache
-    )), [adp] + list(dets) + motors, md = _md)
+    )), list(pandas) + [panda.ad for panda in pandas] +
+        list(dets) + motors, md = _md)
 
 def fly_stest(bubo, dets, out_args, in_args,
     snake_axes = True, md = None, pos_cache = None, **kwargs):
@@ -34,7 +35,7 @@ def fly_stest(bubo, dets, out_args, in_args,
     gen = args_snake(in_args, snake_axes)
     def sub():
         yield from bps.trigger_and_read(list(dets) + motors)
-        yield from sfly_simple(bubo, dets, *gen(), **kwargs,
+        yield from sfly_grid(bubo, dets, *gen(), **kwargs,
             snake_axes = snake_axes, pos_cache = pos_cache)
     args = out_args + in_args
     nums = [args[i * 4 + 3] for i in range(len(args) // 4)]
@@ -47,11 +48,11 @@ def fly_stest(bubo, dets, out_args, in_args,
     )), [bubo] + list(dets) + motors, md = _md)
 
 class MyPandaPlanner(PandaPlanner):
-    def __init__(self, panda, adp, divs = {}, configs = {}, **kwargs):
-        super().__init__(panda, adp, divs = divs, configs = configs, **kwargs)
+    def __init__(self, pandas, divs = {}, configs = {}, **kwargs):
+        super().__init__(pandas, divs = divs, configs = configs, **kwargs)
         self.plans["fly_test"] = lambda dets, *args, **kwargs: fly_test(
-            panda, adp, dets, *args, configs = configs,
-            div = div_get(divs, dets, args[1][-1]), **kwargs
+            pandas, dets, *args, configs = configs,
+            div = div_get(divs, dets), **kwargs
         )
 
     def check(self, plan, *args, **kwargs):
@@ -68,8 +69,7 @@ class MyBuboPlanner(BuboPlanner):
     def __init__(self, bubo, divs = {}, **kwargs):
         super().__init__(bubo, divs = divs, **kwargs)
         self.plans["fly_stest"] = lambda dets, *args, **kwargs: fly_stest(
-            bubo, dets, *args,
-            div = div_get(divs, dets, args[1][-1]), **kwargs
+            bubo, dets, *args, div = div_get(divs, dets), **kwargs
         )
 
     def callback(self, plan, *args, **kwargs):

@@ -5,6 +5,7 @@ from ophyd import select_version, Component, Device, EpicsSignalRO, \
     EpicsSignal, ADBase, ADComponent, EpicsSignalWithRBV, \
     DetectorBase, CamBase, HDF5Plugin, ADTriggerStatus
 from ophyd.device import BlueskyInterface, Staged
+from ophyd.signal import AttributeSignal
 from ophyd.status import Status
 from ophyd.areadetector.base import DDC_EpicsSignalRO
 from ophyd.areadetector.plugins import PluginBase
@@ -14,6 +15,43 @@ from ophyd.utils.errors import UnprimedPlugin
 from .ophyd import ThrottleMonitor
 
 MyHDF5Plugin = select_version(HDF5Plugin, (3, 15))
+
+class AcquireTimeout(Device):
+    timeout = Component(AttributeSignal, attr = "_timeout", kind = "config")
+    _timeout, _timer, _status = 0.0, None, None
+
+    def __init__(self, *args, acquire = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._acquire = acquire
+
+    def stage(self):
+        self._acquire.subscribe(self._acquire_changed)
+        super().stage()
+
+    def unstage(self):
+        super().unstage()
+        self._acquire.clear_sub(self._acquire_changed)
+        self._finish_status(False)
+
+    def trigger(self):
+        self._status = status = Status(self)
+        return status
+
+    def _finish_status(self, success):
+        timer, self._timer = self._timer, None
+        status, self._status = self._status, None
+        if timer:
+            timer.cancel()
+        if status:
+            status._finished(success)
+
+    def _acquire_changed(self, *, value, old_value, **kwargs):
+        if old_value == 1 and value == 0:
+            self._finish_status(True)
+        elif old_value == 0 and value == 1 and not self._timer:
+            self._timer = timer = threading.Timer(self._timeout,
+                lambda: self._finish_status(False))
+            timer.start()
 
 class MyTriggerBase(BlueskyInterface):
     _status_type = ADTriggerStatus

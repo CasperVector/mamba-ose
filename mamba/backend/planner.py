@@ -2,9 +2,10 @@ import os
 from bluesky import plans
 from bluesky.callbacks.core import CallbackBase
 from butils.data import ImageFiller, my_broker
-from butils.fly import fly_dsimple, \
-    fly_pcomp, fly_simple, sfly_simple, velo_simple
+from butils.fly import auto_velo, fly_grid, fly_dgrid, sfly_grid
 from butils.plans import motors_get, plan_fmt
+from butils.traj import fpmac_archim, fpmac_grid, \
+    fpmac_array, fpmac_list, fpmac_sarchim, fpmac_sgrid
 from .progress import ProgressReporter, progressBars
 
 class BasePlanner(object):
@@ -98,19 +99,18 @@ class AttiPlanner(ChildPlanner):
             *args, md = md
         )
 
-def div_get(divs, dets, num):
+def div_get(divs, dets):
     div = [divs[det] for det in dets if det in divs]
-    div = min(div) if div else 0
-    assert div >= num or not div
-    return div // num
+    return min(div) if div else -1
 
 def encoder_check(panda, tols, motors):
     for motor in motors:
         inp, tol = panda.motors.get(motor), tols.get(motor)
         if inp is None or tol is None:
             continue
+        tol = abs(round(tol / inp.scale.get()))
         delta = inp.calibrate(False)
-        print("%s.motor_rmp - %s.value = %d" %
+        print("%s.motor_rep - %s.value = %d" %
             (motor.vname(), inp.vname(), delta))
         if abs(delta) > tol:
             raise RuntimeError(("abs(%d) > %d; execute `%s.calibrate()'" +
@@ -121,8 +121,8 @@ def vbas_check(ratios, args, kwargs):
     ratio = ratios.get(motor)
     if ratio is None:
         return
-    velocity = velo_simple(motor, lo, hi, num, kwargs["duty"],
-        *(kwargs.get(k) for k in ["period", "velocity", "pad"]))[1][1]
+    velocity = auto_velo([motor], abs(hi - lo) / (num - 1), kwargs["duty"],
+        **{k: kwargs.get(k) for k in ["period", "atime", "velocity"]})[1][1]
     if velocity < ratio * motor.motor_vbas.get():
         raise RuntimeError("%s.velocity < %f * %s.motor_vbas" %
             (motor.vname(), ratio, motor.vname()))
@@ -160,39 +160,78 @@ class HDF5Checker(CallbackBase):
                     " %d, should be %d") % (sig.vname(), cnt, cur))
 
 class BuboPlanner(ChildPlanner):
-    def __init__(self, bubo, *, divs = {}, h5_tols = {}):
+    def __init__(self, bubo, *, divs = {}, h5_tols = {}, configs = {}):
         super().__init__()
-        self.h5_tols = h5_tols
-        self.plans["sfly_grid"] = lambda dets, *args, **kwargs: sfly_simple\
-            (bubo, dets, *args, div = div_get(divs, dets, args[-1]), **kwargs)
+        self.bubo, self.divs = bubo, divs
+        self.h5_tols, self._configs = h5_tols, configs
+        self.plans["sfly_grid"] = lambda dets, *args, **kwargs: sfly_grid(
+            self.bubo, dets, *args, div = div_get(self.divs, dets),
+            configs = self.configs("sfly_grid", dets, *args, **kwargs), **kwargs
+        )
+
+    def configs(self, plan, *args, **kwargs):
+        return self._configs.copy()
 
     def callback(self, plan, *args, **kwargs):
         return [HDF5Checker(self.h5_tols, args[0], args[-1]),
             self.U.mzcb, self.parent.progress]
 
 class PandaPlanner(ChildPlanner):
-    def __init__(self, panda, adp, *, divs = {}, h5_tols = {},
+    configs = BuboPlanner.configs
+
+    def __init__(self, pandas, *, divs = {}, h5_tols = {},
         enc_tols = {}, vbas_ratios = {}, configs = {}):
         super().__init__()
-        self.panda, self._configs = panda, configs
-        self.h5_tols, self.enc_tols, self.vbas_ratios = \
-            h5_tols, enc_tols, vbas_ratios
-        for k, f in [("fly_grid", fly_simple),
-            ("fly_dgrid", fly_dsimple), ("fly_pgrid", fly_pcomp)]:
+        self.pandas, self.divs = pandas, divs
+        self.enc_tols, self._configs = enc_tols, configs
+        self.h5_tols, self.vbas_ratios = h5_tols, vbas_ratios
+        for k, f in [("fly_grid", fly_grid), ("fly_dgrid", fly_dgrid)]:
             self.plans[k] = (lambda k, f: lambda dets, *args, **kwargs: f(
-                panda, adp, dets, *args,
-                configs = self.configs(k, dets, *args, **kwargs),
-                div = div_get(divs, dets, args[-1]), **kwargs
+                self.pandas, dets, *args, div = div_get(self.divs, dets),
+                configs = self.configs(k, dets, *args, **kwargs), **kwargs
             ))(k, f)
 
-    def configs(self, plan, *args, **kwargs):
-        return self._configs
-
     def check(self, plan, *args, **kwargs):
-        encoder_check(self.panda, self.enc_tols, motors_get(args[1:]))
+        encoder_check(self.pandas[0], self.enc_tols, motors_get(args[1:]))
         vbas_check(self.vbas_ratios, args[1:], kwargs)
 
     def callback(self, plan, *args, **kwargs):
         return [HDF5Checker(self.h5_tols, args[0], args[-1]),
             self.U.mzcb, self.parent.progress]
+
+class PmacPlanner(ChildPlanner):
+    configs = BuboPlanner.configs
+
+    def __init__(self, pandas, pmac, *, drift,
+        divs = {}, enc_tols = {}, configs = {}):
+        super().__init__()
+        self.pandas, self.pmac, self.divs = pandas, pmac, divs
+        self.drift, self.enc_tols, self._configs = drift, enc_tols, configs
+        for k, f in [
+            ("fpmac_archim", fpmac_archim), ("fpmac_grid", fpmac_grid),
+            ("fpmac_array", fpmac_array), ("fpmac_list", fpmac_list),
+            ("fpmac_sarchim", fpmac_sarchim), ("fpmac_sgrid", fpmac_sgrid),
+        ]:
+            self.plans[k] = (lambda k, f: lambda dets, *args, **kwargs: f(
+                self.pandas, self.pmac, dets, *args,
+                div = [div_get(self.divs, dets), self.drift],
+                configs = self.configs(k, dets, *args, **kwargs), **kwargs
+            ))(k, f)
+
+    def motors_get(self, plan, *args, **kwargs):
+        if plan in ["fpmac_archim", "fpmac_grid",
+            "fpmac_sarchim", "fpmac_sgrid"]:
+            return list(args[1 : 3])
+        elif plan in ["fpmac_array"]:
+            return list(args[1])
+        elif plan in ["fpmac_list"]:
+            return [arg[0] for arg in args[1:]]
+        return []
+
+    def check(self, plan, *args, **kwargs):
+        encoder_check(self.pandas[0], self.enc_tols,
+            self.motors_get(plan, *args, **kwargs))
+
+    def callback(self, plan, *args, **kwargs):
+        return [self.U.mzcb, self.parent.progress]
 

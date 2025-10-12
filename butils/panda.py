@@ -7,6 +7,7 @@ from ophyd import Component, Device, Signal, Kind
 from ophyd.utils.epics_pvs import data_type, data_shape
 from .common import fn_wait
 from .panda_client import PandABlocksClient
+from .plans import cfg_trans
 
 pandaFields = [
     ("table", [
@@ -275,7 +276,7 @@ class PandaDseqEnable(Signal):
 
 class PandaDseqPoll(Signal):
     def put(self, val):
-        if val:
+        if not self._readback and val:
             for i in range(int(self.root._poll_period[1] /
                 self.parent._poll_period)):
                 if self.root.pcap.active.value.get():
@@ -284,6 +285,17 @@ class PandaDseqPoll(Signal):
             else:
                 super().put(0)
                 return
+        super().put(1 if val else 0)
+
+class PandaDseqAcquire(Signal):
+    def put(self, val):
+        ad = self.root.ad
+        if not self._readback and val:
+            ad.configure(cfg_trans(ad, {"cam.acquire": 1}), action = True)
+            self.parent.poll.set(1).wait()
+        elif self._readback and not val:
+            ad.configure(cfg_trans(ad, {"cam.acquire": 0}), action = True)
+            self.parent.poll.set(0).wait()
         super().put(1 if val else 0)
 
 class PandaDseqTables(Signal):
@@ -308,6 +320,7 @@ class PandaDseq(Device):
     counter = Component(Signal, value = 0, kind = "normal")
     enable = Component(PandaDseqEnable, value = 0, kind = "config")
     poll = Component(PandaDseqPoll, value = 0, kind = "omitted")
+    acquire = Component(PandaDseqAcquire, value = 0, kind = "omitted")
     tables = Component(PandaDseqTables, value = "", kind = "omitted")
 
     def __init__(self, *args, fields, **kwargs):
@@ -438,10 +451,10 @@ class PandaDseq(Device):
 class PandaRoot(Device):
     _poll_period = (1.0, 0.1)
 
-    def __init__(self, client, *, name, omcs, **kwargs):
+    def __init__(self, client, *, name, ad, omcs, **kwargs):
         self._client = client
         super().__init__(name = name, **kwargs)
-        self.motors = {}
+        self.ad, self.motors = ad, {}
         self._romits, self._muxes, self._caps = \
             [[getattr(self, a) for a in l] for l in omcs]
         self._poll_active, self._poll_event = False, threading.Event()
@@ -535,6 +548,16 @@ class PandaRoot(Device):
     def configure(self, cfg, action = False, fast = True):
         return super().configure(cfg, action = action, fast = fast)
 
+    def stage(self):
+        super().stage()
+        self.dseq.enable.set(0).wait()
+        self.pcap.enable.set("ONE").wait()
+
+    def unstage(self):
+        self.pcap.enable.set("ZERO").wait()
+        self.dseq.enable.set(0).wait()
+        super().unstage()
+
 def panda_typ_fmt(s):
     return s.replace("_", "").title()
 
@@ -565,8 +588,8 @@ def panda_fclasses():
         ret[f] = cls, mode, enums, romit, tbmo
     return ret
 
-def PandaDevice(hostname = "localhost",
-    port = 8888, *, name, inherit = None, **kwargs):
+def PandaDevice(hostname = "localhost", port = 8888, *,
+    name, ad = None, inherit = None, **kwargs):
     if not inherit:
         inherit = PandaRoot,
     client = PandABlocksClient(hostname, port)
@@ -612,5 +635,5 @@ def PandaDevice(hostname = "localhost",
     return type("PandaDevice", inherit, dict(
         [(k.lower(), Component(block, k)) for k, block in blocks] +
         [("dseq", Component(PandaDseq, fields = sfields))]
-    ))(client, name = name, omcs = omcs, **kwargs)
+    ))(client, name = name, ad = ad, omcs = omcs, **kwargs)
 

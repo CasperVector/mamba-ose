@@ -1,18 +1,28 @@
-import math
+import numpy
 import re
 from bluesky import plans
 from bluesky import plan_stubs as bps, preprocessors as bpp
 from .bubo import sseq_disable
 from .panda import seq_disable, seq_outs_not
-from .plans import cfg_trans, motors_get, norm_snake
+from .plans import cfg_trans, motors_get, norm_cache, norm_snake
 
 PANDA_FREQ, DSEQ_DELAY = int(125e6), 9
 
-def split_table(table, max_rows, atom_rows = 1):
-    n = len(table["trigger"])
+def split_table(table, max_rows, atom_rows = 1, max_split = 0):
+    n, = set(len(v) for k, v in table.items())
     m = max_rows // atom_rows * atom_rows
-    return [{k: v[i * m : (i + 1) * m] for k, v in table.items()}
-        for i in range(math.ceil(n / m))]
+    n = int(numpy.ceil(n / m))
+    n = min(n, max_split + 1) if max_split else n
+    return [{k: (v[i * m : (i + 1) * m] if i + 1 < n else v[i * m:])
+        for k, v in table.items()} for i in range(n)]
+
+def auto_delay(tables):
+    for i in range(len(tables) - 1):
+        if tables[i + 1]["trigger"][0] == "Immediate":
+            assert tables[i]["repeats"][-1] == 1 and \
+                tables[i]["time2"][-1] > DSEQ_DELAY
+            tables[i]["time2"][-1] -= DSEQ_DELAY
+    return tables
 
 def encoder_monitor(panda, inp):
     if not inp.startswith("inenc"):
@@ -106,22 +116,65 @@ def seq_dwarmup():
         "dseq.tables": [table_warmup(), None]
     }
 
-def velo_simple(motor, lo, hi, num, duty,
-    period = None, atime = None, velocity = None, pad = None):
-    velos = motor.velocity.get()
+def table_slave(atime):
+    return dict(
+        [
+            ("trigger", ["BITA=1", "BITA=0"]),
+            ("time1", [atime * PANDA_FREQ, 0]),
+            ("outa1", [1, 0]), ("outb1", [1, 0])
+        ] + [(k, [1, 1]) for k in ["repeats", "time2"]] +
+        [(k, [0, 0]) for k in ["position"] + seq_outs_not(["outa1", "outb1"])]
+    )
+
+def cfg_merge(cfg1, cfg0):
+    for k, v in cfg0.items():
+        v.update(cfg1.get(k, {}))
+        if v:
+            cfg1[k] = v
+
+def cfg_seqpos(panda, motors, dseq = False):
+    inps, poss, ret = [panda.motors[motor].prefix for motor in motors], [], {}
+    for pos in "abc":
+        inp = panda.get_input("seq1.pos%s" % pos)
+        try:
+            inps.remove(inp)
+        except ValueError:
+            poss.append(pos)
+    for i, inp in enumerate(inps):
+        ret["seq1.pos%s.value" % pos[i]] = inp
+        if dseq:
+            ret["seq2.pos%s.value" % pos[i]] = inp
+    return ret
+
+def inp_seqpos(inps):
+    ret = ""
+    for inp in inps:
+        pos = [(p, inp.root.get_input("seq1.pos%s" % p)) for p in "abc"]
+        ret += [p for p, i in pos if i == inp.prefix][0].upper()
+    return ret
+
+def auto_velo(motors, step, duty, period = None, atime = None, velocity = None):
+    velo, = set(motor.velocity.get() for motor in motors)
+    vmax, = set(motor.motor_vmax.get() for motor in motors)
     if len([x for x in [period, atime, velocity] if x is not None]) > 1:
-        raise ValueError("conflicting values for period, velocity and atime")
+        raise ValueError("conflicting values for period, atime and velocity")
     elif period is not None or atime is not None:
         if atime is not None:
             period = atime / duty
-        velos = velos, abs(hi - lo) / (num - 1) / period
+        velocity = step / period
     else:
-        velos = (velos, velos) if velocity is None else (velos, velocity)
-        period = abs(hi - lo) / (num - 1) / velos[1]
-    if pad is None:
-        pad = max(0.5, 2 * motor.acceleration.get()) * velos[1]
-    assert num > 1 and period > 0.0 and velos[1] > 0.0 and pad > 0.0
-    return period, velos, pad
+        if velocity is None:
+            velocity = velo
+        period = step / velocity
+    assert period > 0.0 and velocity > 0.0
+    if vmax > 0.0:
+        assert velocity <= vmax
+        velos = vmax, velocity
+    else:
+        if velocity > velo:
+            velo = velocity
+        velos = velo, velocity
+    return period, velos
 
 def final_config_base(configs):
     cache = [(dev, {k: getattr(dev, k).get() for k in
@@ -135,41 +188,42 @@ def final_config_base(configs):
 def final_fly_motor(motor):
     return final_config_base([(motor, ["velocity"])])
 
-def make_fly_step(motor, snake, velos, name = "flying"):
+def make_grid_step(motor, snake, velos, name = "flying"):
     idx = [0]
-    def one_fly_step(detectors, step, pos_cache, take_reading =
+    def one_grid_step(detectors, step, pos_cache, take_reading =
         lambda devices: bps.trigger_and_read(devices, name = name)):
         if velos and (not snake or idx[0] < 2):
             yield from bps.configure(motor, {"velocity": velos[idx[0] % 2]})
         idx[0] += 1
         yield from bps.one_nd_step(detectors, step,
             pos_cache, take_reading = take_reading)
-    return one_fly_step
+    return one_grid_step
 
 def grid_cfg(args, div, pad, snake_axes, pos_cache, velos):
     assert not len(args) % 4
-    oaxes = len(args) // 4 - 1
-    div = [div, oaxes - 1] if isinstance(div, int) else list(div)
-    if oaxes:
-        assert div[0] >= 0 and 0 <= div[1] < oaxes
-        for i in range(div[1], oaxes - 1):
-            div[0] *= args[4 * i + 3]
+    naxes = len(args) // 4
+    div = list(div) if hasattr(div, "len") else [div, naxes - 1]
+    assert 0 <= div[1] < naxes
+    if div[0] > 0 and div[1] == naxes - 1:
+        assert div[0] >= args[-1]
+        div = [div[0] // args[-1], naxes - 2]
+    for i in range(div[1], naxes - 2):
+        div[0] *= args[4 * i + 3]
     pnums, div[1] = [], 1
-    for i in range(oaxes):
+    for i in range(naxes - 1):
         pnums.append(args[4 * i + 3])
         div[1] *= pnums[-1]
-    if not div[0]:
-        div[0] = div[1]
+    div[0] = div[1] if div[0] < 0 else max(1, div[0])
     pnums.append(2)
     points = div[1] * args[-1]
 
     lo, hi = args[-3 : -1]
-    pad1 = -pad if lo > hi else pad
+    pad = -pad if lo > hi else pad
     snake = args[-4] in norm_snake(snake_axes, motors_get(args))
     scans = plans.grid_scan(
-        [], *(args[:-3] + (lo - pad1, hi + pad1, 2)),
+        [], *(args[:-3] + (lo - pad, hi + pad, 2)),
         snake_axes = snake_axes, pos_cache = pos_cache, frag = True,
-        per_step = make_fly_step(args[-4], snake, velos)
+        per_step = make_grid_step(args[-4], snake, velos)
     )
     def scan_gen(steps):
         for i in range(steps):
@@ -177,56 +231,55 @@ def grid_cfg(args, div, pad, snake_axes, pos_cache, velos):
     return snake, div, scan_gen, \
         {"num_points": points, "hints": {"progress": ["simple"] + pnums}}
 
-def seq_simple(inp, lo, hi, num, duty, period, pad, snake):
+def seq_grid(inp, lo, hi, num, duty, period, snake):
     live, dead = duty * period * PANDA_FREQ, (1.0 - duty) * period * PANDA_FREQ
     assert live >= 1.0 and dead >= 1.0
-    if lo > hi:
-        pad *= -1
+    step = (hi - lo) / (num - 1)
+    xs = lo - step * 3 / 4, lo - step * duty / 2, \
+        hi + step * 3 / 4, hi + step * duty / 2
     scale, offset = inp.scale.get(), inp.offset.get()
-    lo, hi, pad = (lo - offset) / scale, (hi - offset) / scale, pad / scale
-    pos = [(p, inp.root.get_input("seq1.pos%s" % p)) for p in "abc"]
-    pos = [p for p, i in pos if i == inp.prefix][0].upper()
+    pos = inp_seqpos([inp])
     table = dict([
+        ("repeats", [1, num, 1, num]),
         ("trigger", ["POS%s%s=POSITION" % (pos, op)
-            for op in (">><<" if pad > 0.0 else "<<>>")]),
-        ("position", [lo, hi + pad / 2, hi, lo - pad / 2]),
-        ("time1", [live, 0, live, 0]), ("time2", [dead, 1, dead, 1]),
-        ("repeats", [num, 1, num, 1]), ("outa1", [1, 0, 1, 0])
-    ] + [(k, [0] * 4) for k in seq_outs_not(["outa1"])])
+            for op in ("<>><" if step / scale > 0.0 else "><<>")]),
+        ("position", [(x - offset) / scale for x in xs]),
+        ("time1", [0, live, 0, live]), ("time2", [1, dead, 1, dead]),
+        ("outa1", [0, 1, 0, 1]), ("outb1", [0, 1, 0, 1])
+    ] + [(k, [0] * 4) for k in seq_outs_not(["outa1", "outb1"])])
     if not snake:
-        table = dict((k, [v[0], v[3]]) for k, v in table.items())
+        table = dict((k, [v[0], v[1]]) for k, v in table.items())
     return {"seq1.repeats": 0, "seq1.table": table}
 
-def table_pcomp(inp, lo, hi, num, duty, period, pad, snake):
+def table_pgrid(inp, lo, hi, num, duty, period, snake):
     units, live = num + duty - 1.0, duty * period * PANDA_FREQ
     assert live >= 1.0 and (1.0 - duty) * period * PANDA_FREQ >= 1.0
-    if lo > hi:
-        pad *= -1
+    step = (hi - lo) / (num - 1)
+    xs = [lo - step * 3 / 4], [hi + step * 3 / 4]
+    lo, hi = lo - step * duty / 2, hi + step * duty / 2
+    xs = xs[0] + [((units - i) * lo + i * hi) / units for i in range(num)] + \
+        xs[1] + [(i * lo + (units - i) * hi) / units for i in range(num)]
     scale, offset = inp.scale.get(), inp.offset.get()
-    pos = [(p, inp.root.get_input("seq1.pos%s" % p)) for p in "abc"]
-    pos = [p for p, i in pos if i == inp.prefix][0].upper()
-    poss = [((units - x) * lo + x * hi) / units for x in range(num)], \
-        [(x * lo + (units - x) * hi) / units for x in range(num)]
-    poss = [(x - offset) / scale for x in poss[0] + [hi + pad / 2]] + \
-        [(x - offset) / scale for x in poss[1] + [lo - pad / 2]]
-    pattern = lambda l: [l[0]] * num + [l[1]] + [l[2]] * num + [l[3]]
+    pos = inp_seqpos([inp])
+    pattern = lambda l: [l[0]] + [l[1]] * num + [l[2]] + [l[3]] * num
     table = dict([
+        ("repeats", pattern([1] * 4)),
         ("trigger", pattern(["POS%s%s=POSITION" % (pos, op)
-            for op in (">><<" if pad > 0.0 else "<<>>")])),
-        ("position", poss), ("outa1", pattern([1, 0, 1, 0])),
-        ("time1", pattern([live, 0, live, 0])),
-        ("time2", pattern([1] * 4)), ("repeats", pattern([1] * 4))
-    ] + [(k, pattern([0] * 4)) for k in seq_outs_not(["outa1"])])
+            for op in ("<>><" if step / scale > 0.0 else "><<>")])),
+        ("position", [(x - offset) / scale for x in xs]),
+        ("time1", pattern([0, live, 0, live])), ("time2", pattern([1] * 4)),
+        ("outa1", pattern([0, 1, 0, 1])), ("outb1", pattern([0, 1, 0, 1]))
+    ] + [(k, pattern([0] * 4)) for k in seq_outs_not(["outa1", "outb1"])])
     if not snake:
-        table = dict((k, v[:num] + v[-1:]) for k, v in table.items())
+        table = dict((k, v[:num + 1]) for k, v in table.items())
     return table
 
-def grid_frag(seqs, num, snake, div, scan_gen):
+def grid_frag_base(seqs, num, snake, div, scan_gen):
     def points_gen():
         rev = 0
-        yield seqs[2], 0, 1
+        yield seqs[3], seqs[3], 0, 1
         frag = min(div[0], div[1])
-        yield seqs[rev], frag * num, frag * 2 - 1
+        yield seqs[rev], seqs[2], frag * num, frag * 2 - 1
         while True:
             div[1] -= frag
             if not div[1]:
@@ -234,76 +287,87 @@ def grid_frag(seqs, num, snake, div, scan_gen):
             if snake:
                 rev = (div[0] % 2) - rev
             frag = min(div[0], div[1])
-            yield seqs[rev], frag * num, frag * 2
+            yield seqs[rev], seqs[2], frag * num, frag * 2
     def frag_gen():
-        for seq, points, steps in points_gen():
-            yield seq, {"num_points": points}, scan_gen(steps)
+        for mseq, sseq, points, steps in points_gen():
+            yield mseq, sseq, {"num_points": points}, scan_gen(steps)
     return frag_gen()
 
-def frag_simple(panda, *args, pcomp, duty, div = 0, snake_axes = True,
+def grid_frag(panda, *args, pcomp, duty = 0.5, div = -1, snake_axes = True,
     period = None, atime = None, velocity = None, pad = None, pos_cache = None):
     motor, lo, hi, num = args[-4:]
-    period, velos, pad = velo_simple(motor, lo, hi, num, duty,
-        period = period, atime = atime, velocity = velocity, pad = pad)
-    pad0 = (hi - lo) / (num - 1) * duty / 2
+    assert num > 1
+    step = abs(hi - lo) / (num - 1)
+    period, velos = auto_velo([motor], step, duty,
+        period = period, atime = atime, velocity = velocity)
+    if pad is None:
+        pad = step / 2 + max(step / 2, velos[1] * motor.acceleration.get() / 2)
+    assert pad >= step
     snake, div, scan_gen, md = grid_cfg\
-        (args, div, abs(pad0) + pad, snake_axes, pos_cache, velos)
-    lo, hi = lo - pad0, hi + pad0
+        (args, div, pad, snake_axes, pos_cache, velos)
     if pcomp:
-        seqs = [table_pcomp(panda.motors[motor], l, h, num,
-            duty, period, pad, snake) for l, h in [(lo, hi), (hi, lo)]]
-        seqs.append(None)
+        seqs = [table_pgrid(panda.motors[motor], l, h, num,
+            duty, period, snake) for l, h in [(lo, hi), (hi, lo)]]
+        seqs += [table_slave(duty * period), None]
     else:
-        seqs = [seq_simple(panda.motors[motor], l, h, num,
-            duty, period, pad, snake) for l, h in [(lo, hi), (hi, lo)]]
-        seqs.append(seq_disable("seq1"))
-    return grid_frag(seqs, num, snake, div, scan_gen), md
+        seqs = [seq_grid(panda.motors[motor], l, h, num,
+            duty, period, snake) for l, h in [(lo, hi), (hi, lo)]]
+        seqs += [{"seq1.repeats": 0, "seq1.table": table_slave(duty * period)},
+            seq_disable("seq1")]
+    return grid_frag_base(seqs, num, snake, div, scan_gen), md
 
-def fly_frag(panda, adp, devs, frag_gen, fwraps = [], finals = [], md = None):
+def fly_frag(pandas, devs, frag_gen, fwraps = [], finals = [], md = None):
     if callable(fwraps):
         fwraps = [fwraps]
-    @bpp.stage_run_decorator([adp] + devs, md = md)
+    @bpp.stage_run_decorator(list(pandas) +
+        [panda.ad for panda in pandas] + devs, md = md)
     def inner():
-        yield from bps.configure(panda, {"pcap.enable": "ONE"})
-        for seq, kwargs, scan in frag_gen:
+        for mseq, sseq, kwargs, scan in frag_gen:
             def plan():
-                yield from bps.configure(panda, seq)
-                yield from bps.configure(adp, {"cam.acquire": 1}, action = True)
+                for i, panda in enumerate(pandas):
+                    yield from bps.configure(panda, sseq if i else mseq)
+                for panda in reversed(pandas):
+                    yield from bps.configure\
+                        (panda.ad, {"cam.acquire": 1}, action = True)
                 yield from scan
-                yield from bps.configure(adp, {"cam.acquire": 0}, action = True)
+                for panda in pandas:
+                    yield from bps.configure\
+                        (panda.ad, {"cam.acquire": 0}, action = True)
             plan = plan()
             for fwrap in fwraps:
                 plan = fwrap(plan, **kwargs)
             yield from plan
         for plan in finals:
             yield from plan
-        yield from bps.configure(panda, {"pcap.enable": "ZERO"})
     return inner()
 
-def fly_dfrag(panda, adp, devs, frag_gen, fwraps = [], finals = [], md = None):
+def fly_dfrag(pandas, devs, frag_gen, fwraps = [], finals = [], md = None):
     if callable(fwraps):
         fwraps = [fwraps]
-    @bpp.stage_run_decorator([adp] + devs, md = md)
+    @bpp.stage_run_decorator(list(pandas) +
+        [panda.ad for panda in pandas] + devs, md = md)
     def inner():
-        yield from bps.configure\
-            (panda, {"dseq.enable": 0, "pcap.enable": "ONE"})
-        for tables, kwargs, scan in frag_gen:
+        for mtabs, stabs, kwargs, scan in frag_gen:
             def plan():
-                yield from bps.configure(panda, {
-                    "dseq.enable": 1, "dseq.tables": tables + [None]
-                }, action = True)
-                yield from bps.configure(adp, {"cam.acquire": 1}, action = True)
-                yield from bps.configure(panda, {"dseq.poll": 1}, action = True)
+                for i, panda in enumerate(pandas):
+                    yield from bps.configure(panda, {
+                        "dseq.enable": 1,
+                        "dseq.tables": (stabs if i else mtabs) + [None]
+                    }, action = True)
+                for panda in reversed(pandas):
+                    yield from bps.configure\
+                        (panda, {"dseq.acquire": 1}, action = True)
                 yield from scan
-                yield from bps.configure(adp, {"cam.acquire": 0}, action = True)
-                yield from bps.configure(panda, {"dseq.enable": 0})
+                for panda in pandas:
+                    yield from bps.configure(panda, {
+                        "dseq.acquire": 0, "dseq.enable": 0
+                    }, action = True)
             plan = plan()
             for fwrap in fwraps:
                 plan = fwrap(plan, **kwargs)
             yield from plan
         for plan in finals:
             yield from plan
-        yield from bps.configure(panda, {"pcap.enable": "ZERO"})
     return inner()
 
 def fwrap_first(plan):
@@ -351,59 +415,63 @@ def fwrap_adtrig(ads):
 def final_adtrig(ads):
     return final_config_base([(ad, ["cam.num_images"]) for ad in ads])
 
-def fly_simple(panda, adp, dets, *args,
+def auto_shut(shutter, pos_cache):
+    if not shutter:
+        return [], []
+    return ([shutter.root],
+        [fwrap_second(bps.move_per_step({shutter: 1}, pos_cache))])
+
+def fly_grid(pandas, dets, *args, shutter = None,
     configs = {}, md = None, pos_cache = None, **kwargs):
-    frag_gen, _md = frag_simple(panda, *args,
+    motors, pos_cache = motors_get(args), norm_cache(pos_cache)
+    shut = auto_shut(shutter, pos_cache)
+    frag_gen, _md = grid_frag(pandas[0], *args,
         pcomp = False, pos_cache = pos_cache, **kwargs)
-    motors = motors_get(args)
-    devs = [panda, adp] + list(dets) + motors
+    devs = list(pandas) + [panda.ad for panda in pandas] + list(dets) + motors
+    cfg_merge(configs, {pandas[0]: cfg_seqpos(pandas[0], motors[-1:], False)})
     _md.update(md or {})
     return fly_frag(
-        panda, adp, list(dets) + motors, frag_gen,
-        [fwrap_adtrig(dets), fwrap_config(devs, configs)],
+        pandas, list(dets) + motors + shut[0], frag_gen,
+        shut[1] + [fwrap_adtrig(dets), fwrap_config(devs, configs)],
         [final_adtrig(dets), final_fly_motor(motors[-1]),
             final_config(devs, configs)], md = _md
     )
 
-def fly_dseq_simple(panda, adp, dets, *args, pcomp,
+def fly_dgrid(pandas, dets, *args, shutter = None, pcomp = False,
     configs = {}, md = None, pos_cache = None, **kwargs):
-    frag_gen, _md = frag_simple(panda, *args,
+    motors, pos_cache = motors_get(args), norm_cache(pos_cache)
+    shut = auto_shut(shutter, pos_cache)
+    frag_gen, _md = grid_frag(pandas[0], *args,
         pcomp = pcomp, pos_cache = pos_cache, **kwargs)
-    motors = motors_get(args)
-    devs = [panda, adp] + list(dets) + motors
+    devs = list(pandas) + [panda.ad for panda in pandas] + list(dets) + motors
     _md.update(md or {})
+    cfg_merge(configs, {pandas[0]: cfg_seqpos(pandas[0], motors[-1:], True)})
+    max_rows, = set(panda.dseq.max_rows() for panda in pandas)
     def dfrag_gen():
-        for seq, kwargs, scan in frag_gen:
-            if (not seq if pcomp else seq["seq1.repeats"]):
-                yield [], kwargs, scan
+        for mseq, sseq, kwargs, scan in frag_gen:
+            if (not mseq if pcomp else mseq["seq1.repeats"]):
+                yield [], [], kwargs, scan
             else:
                 if pcomp:
                     repeats = args[-1] + 1
                 else:
-                    seq, repeats = seq["seq1.table"], 2
-                repeats = kwargs["num_points"] // args[-1] * repeats, \
-                    len(seq["trigger"])
-                repeats = repeats[0] // repeats[1], repeats[0] % repeats[1]
+                    mseq, sseq = mseq["seq1.table"], sseq["seq1.table"]
+                    repeats = 2
+                repeats = kwargs["num_points"] // args[-1] * repeats
+                repeats = repeats // len(mseq["trigger"]), \
+                    repeats % len(mseq["trigger"])
                 yield split_table({
                     k: v * repeats[0] + v[:repeats[1]]
-                    for k, v in seq.items()
-                }, panda.dseq.max_rows()), kwargs, scan
+                    for k, v in mseq.items()
+                }, max_rows), split_table({
+                    k: v * kwargs["num_points"] for k, v in sseq.items()
+                }, max_rows), kwargs, scan
     return fly_dfrag(
-        panda, adp, list(dets) + motors, dfrag_gen(),
-        [fwrap_adtrig(dets), fwrap_config(devs, configs)],
+        pandas, list(dets) + motors + shut[0], dfrag_gen(),
+        shut[1] + [fwrap_adtrig(dets), fwrap_config(devs, configs)],
         [final_adtrig(dets), final_fly_motor(motors[-1]),
             final_config(devs, configs)], md = _md
     )
-
-def fly_dsimple(panda, adp, dets, *args,
-    configs = {}, md = None, pos_cache = None, **kwargs):
-    return fly_dseq_simple(panda, adp, dets, *args, pcomp = False,
-        configs = configs, md = md, pos_cache = pos_cache, **kwargs)
-
-def fly_pcomp(panda, adp, dets, *args,
-    configs = {}, md = None, pos_cache = None, **kwargs):
-    return fly_dseq_simple(panda, adp, dets, *args, pcomp = True,
-        configs = configs, md = md, pos_cache = pos_cache, **kwargs)
 
 def sseq_base(scomp):
     def seq(bubo):
@@ -413,23 +481,22 @@ def sseq_base(scomp):
                 return
     return seq
 
-def scomp_pcomp(dev, lo, hi, num, pad, snake):
-    assert num > 1 and pad >= 0.0
+def scomp_pcomp(dev, lo, hi, num, snake):
     sign = -1 if hi < lo else 1
     step = abs(hi - lo) / (num - 1)
-    state = [0, 1]
+    state = [-1, 1]
     def pcomp(msg):
         if msg[0] != "input" or msg[1] != dev:
             return False
         if state[0] >= num:
             if snake:
-                if sign * (msg[2] - hi) >= pad / 2:
+                if sign * (msg[2] - hi) >= step / 2:
                     state[0], state[1] = num - 1, -1
                 return False
             else:
                 state[0] = -1
         if state[0] < 0:
-            if sign * (lo - msg[2]) >= pad / 2:
+            if sign * (lo - msg[2]) >= step / 2:
                 state[0], state[1] = 0, 1
             return False
         if (sign * (msg[2] - lo) - state[0] * step) * state[1] >= 0:
@@ -438,18 +505,22 @@ def scomp_pcomp(dev, lo, hi, num, pad, snake):
         return False
     return pcomp
 
-def sfrag_simple(bubo, *args, div = 0,
+def grid_sfrag(bubo, *args, div = -1,
     snake_axes = True, pad = None, pos_cache = None):
     motor, lo, hi, num = args[-4:]
     bubo.inputs.set([motor.readback]).wait()
+    assert num > 1
+    step = abs(hi - lo) / (num - 1)
     if pad is None:
-        pad = max(0.5, 2 * motor.acceleration.get()) * motor.velocity.get()
+        pad = step / 2 + max(step / 2,
+            motor.velocity.get() * motor.acceleration.get() / 2)
+    assert pad >= step
     snake, div, scan_gen, md = grid_cfg\
         (args, div, pad, snake_axes, pos_cache, None)
-    seqs = [sseq_base(scomp_pcomp(motor.readback, l, h, num, pad, snake))
-        for l, h in [(lo, hi), (hi, lo)]]
-    seqs.append(sseq_disable)
-    return grid_frag(seqs, num, snake, div, scan_gen), md
+    seqs = [sseq_base(scomp_pcomp(motor.readback, l, h,
+        num, snake)) for l, h in [(lo, hi), (hi, lo)]]
+    seqs += [None, sseq_disable]
+    return grid_frag_base(seqs, num, snake, div, scan_gen), md
 
 def sfly_frag(bubo, devs, frag_gen, fwraps = [], finals = [], md = None):
     if callable(fwraps):
@@ -471,8 +542,19 @@ def sfly_frag(bubo, devs, frag_gen, fwraps = [], finals = [], md = None):
             yield from plan
     return inner()
 
-def sfly_simple(bubo, dets, *args, md = None, pos_cache = None, **kwargs):
-    frag_gen, _md = sfrag_simple(bubo, *args, pos_cache = pos_cache, **kwargs)
+def sfly_grid(bubo, dets, *args, shutter = None,
+    configs = {}, md = None, pos_cache = None, **kwargs):
+    motors, pos_cache = motors_get(args), norm_cache(pos_cache)
+    shut = auto_shut(shutter, pos_cache)
+    frag_gen, _md = grid_sfrag(bubo, *args, pos_cache = pos_cache, **kwargs)
+    devs = [bubo] + list(dets) + motors
     _md.update(md or {})
-    return sfly_frag(bubo, list(dets) + motors_get(args), frag_gen, md = _md)
+    def sfrag_gen():
+        for mseq, sseq, kwargs, scan in frag_gen:
+            yield mseq, kwargs, scan
+    return sfly_frag(
+        bubo, list(dets) + motors + shut[0], sfrag_gen(),
+        shut[1] + [fwrap_config(devs, configs)],
+        [final_config(devs, configs)], md = _md
+    )
 
