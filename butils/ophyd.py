@@ -326,7 +326,7 @@ class LinearEnergy(SerialEnergy):
 
     def _load(self, store = ""):
         store = os.path.expanduser(store) if store else self._store
-        data = json.load(open(self._store if store is None else store))
+        data = json.load(open(store))
         assert data["motors"] == [m.vname() for m in self._motors]
         self._calib_map, self._mode = data["calib_map"], data["mode"]
 
@@ -384,7 +384,7 @@ class LinearEnergy(SerialEnergy):
             return {m: m.position for m in self._motors}
         elif n == 1:
             return {m: p for m, p in zip(self._motors, emap[0][1])}
-        i = max(0, min(n - 2, self._find(emap, value) - 1), False)
+        i = max(0, min(n - 2, self._find(emap, value, False) - 1))
         x = (emap[i + 1][0] - value) / (emap[i + 1][0] - emap[i][0])
         return {m: x * p0 + (1.0 - x) * p1 for m, p0, p1 in zip
             (self._motors, emap[i][1], emap[i + 1][1])}
@@ -392,4 +392,24 @@ class LinearEnergy(SerialEnergy):
     def _move(self, value):
         pos = self._pos(value)
         self._para_move(pos, list(pos))
+
+class AttrStore(object):
+    def __init__(self, store, attrs):
+        self.store, self.attrs = os.path.expanduser(store), attrs
+        if self.store:
+            try:
+                self.load()
+            except:
+                self.save()
+
+    def load(self):
+        store = json.load(open(self.store))
+        store = [(k, store[k.vname()]) for k in self.attrs]
+        assert fn_wait([k.set(v).wait for k, v in store])
+
+    def save(self):
+        open(self.store, "w").write(json.dumps(
+            {k.vname(): k.get() for k in self.attrs},
+            sort_keys = True, indent = 1
+        ) + "\n")
 

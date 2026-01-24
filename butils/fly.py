@@ -1,3 +1,4 @@
+import collections
 import numpy
 import re
 from bluesky import plans
@@ -132,25 +133,22 @@ def cfg_merge(cfg1, cfg0):
         if v:
             cfg1[k] = v
 
-def cfg_seqpos(panda, motors, dseq = False):
-    inps, poss, ret = [panda.motors[motor].prefix for motor in motors], [], {}
+def map_seqpos(panda, inps, dseq = False):
+    inps = [inp.prefix for inp in inps]
+    poss, tmp = (inps.copy(), []), ({}, {})
     for pos in "abc":
         inp = panda.get_input("seq1.pos%s" % pos)
         try:
-            inps.remove(inp)
+            poss[0].remove(inp)
+            tmp[0][inp] = pos
         except ValueError:
-            poss.append(pos)
-    for i, inp in enumerate(inps):
-        ret["seq1.pos%s.value" % pos[i]] = inp
-        if dseq:
-            ret["seq2.pos%s.value" % pos[i]] = inp
-    return ret
-
-def inp_seqpos(inps):
-    ret = ""
-    for inp in inps:
-        pos = [(p, inp.root.get_input("seq1.pos%s" % p)) for p in "abc"]
-        ret += [p for p, i in pos if i == inp.prefix][0].upper()
+            poss[1].append(pos)
+    for i, inp in enumerate(poss[0]):
+        tmp[0][inp] = tmp[1][inp] = poss[1][i]
+    ret = "".join(tmp[0][inp] for inp in inps).upper(), \
+        {"seq1.pos%s.value" % pos: inp for inp, pos in tmp[1]}
+    if dseq:
+        ret[1].update({"seq2.pos%s.value" % pos: inp for inp, pos in tmp[1]})
     return ret
 
 def auto_velo(motors, step, duty, period = None, atime = None, velocity = None):
@@ -202,7 +200,8 @@ def make_grid_step(motor, snake, velos, name = "flying"):
 def grid_cfg(args, div, pad, snake_axes, pos_cache, velos):
     assert not len(args) % 4
     naxes = len(args) // 4
-    div = list(div) if hasattr(div, "len") else [div, naxes - 1]
+    div = list(div) if isinstance(div, collections.abc.Iterable) \
+        else [div, naxes - 1]
     assert 0 <= div[1] < naxes
     if div[0] > 0 and div[1] == naxes - 1:
         assert div[0] >= args[-1]
@@ -231,14 +230,13 @@ def grid_cfg(args, div, pad, snake_axes, pos_cache, velos):
     return snake, div, scan_gen, \
         {"num_points": points, "hints": {"progress": ["simple"] + pnums}}
 
-def seq_grid(inp, lo, hi, num, duty, period, snake):
+def seq_grid(inp, pos, lo, hi, num, duty, period, pre, snake):
     live, dead = duty * period * PANDA_FREQ, (1.0 - duty) * period * PANDA_FREQ
     assert live >= 1.0 and dead >= 1.0
     step = (hi - lo) / (num - 1)
-    xs = lo - step * 3 / 4, lo - step * duty / 2, \
-        hi + step * 3 / 4, hi + step * duty / 2
+    pre = pre if step > 0.0 else -pre
+    xs = lo - pre, lo - step * duty / 2, hi + pre, hi + step * duty / 2
     scale, offset = inp.scale.get(), inp.offset.get()
-    pos = inp_seqpos([inp])
     table = dict([
         ("repeats", [1, num, 1, num]),
         ("trigger", ["POS%s%s=POSITION" % (pos, op)
@@ -251,16 +249,16 @@ def seq_grid(inp, lo, hi, num, duty, period, snake):
         table = dict((k, [v[0], v[1]]) for k, v in table.items())
     return {"seq1.repeats": 0, "seq1.table": table}
 
-def table_pgrid(inp, lo, hi, num, duty, period, snake):
+def table_pgrid(inp, pos, lo, hi, num, duty, period, pre, snake):
     units, live = num + duty - 1.0, duty * period * PANDA_FREQ
     assert live >= 1.0 and (1.0 - duty) * period * PANDA_FREQ >= 1.0
     step = (hi - lo) / (num - 1)
-    xs = [lo - step * 3 / 4], [hi + step * 3 / 4]
+    pre = pre if step > 0.0 else -pre
+    xs = [lo - pre], [hi + pre]
     lo, hi = lo - step * duty / 2, hi + step * duty / 2
     xs = xs[0] + [((units - i) * lo + i * hi) / units for i in range(num)] + \
         xs[1] + [(i * lo + (units - i) * hi) / units for i in range(num)]
     scale, offset = inp.scale.get(), inp.offset.get()
-    pos = inp_seqpos([inp])
     pattern = lambda l: [l[0]] + [l[1]] * num + [l[2]] + [l[3]] * num
     table = dict([
         ("repeats", pattern([1] * 4)),
@@ -273,6 +271,13 @@ def table_pgrid(inp, lo, hi, num, duty, period, snake):
     if not snake:
         table = dict((k, v[:num + 1]) for k, v in table.items())
     return table
+
+def auto_spad(pad, pad0):
+    if pad is None:
+        pad = max(pad0)
+    else:
+        assert pad >= pad0[1]
+    return pad
 
 def grid_frag_base(seqs, num, snake, div, scan_gen):
     def points_gen():
@@ -293,25 +298,25 @@ def grid_frag_base(seqs, num, snake, div, scan_gen):
             yield mseq, sseq, {"num_points": points}, scan_gen(steps)
     return frag_gen()
 
-def grid_frag(panda, *args, pcomp, duty = 0.5, div = -1, snake_axes = True,
+def grid_frag(panda, pos, *args, pcomp, duty = 0.5, div = -1, snake_axes = True,
     period = None, atime = None, velocity = None, pad = None, pos_cache = None):
     motor, lo, hi, num = args[-4:]
     assert num > 1
     step = abs(hi - lo) / (num - 1)
     period, velos = auto_velo([motor], step, duty,
         period = period, atime = atime, velocity = velocity)
-    if pad is None:
-        pad = step / 2 + max(step / 2, velos[1] * motor.acceleration.get() / 2)
-    assert pad >= step
+    pre = step * duty / 2
+    pad = pre + auto_spad(pad, (step * (1.0 - duty / 2),
+        velos[1] * motor.acceleration.get() / 2))
     snake, div, scan_gen, md = grid_cfg\
         (args, div, pad, snake_axes, pos_cache, velos)
     if pcomp:
-        seqs = [table_pgrid(panda.motors[motor], l, h, num,
-            duty, period, snake) for l, h in [(lo, hi), (hi, lo)]]
+        seqs = [table_pgrid(panda.motors[motor], pos, l, h, num, duty, period,
+            (pre + pad) / 2, snake) for l, h in [(lo, hi), (hi, lo)]]
         seqs += [table_slave(duty * period), None]
     else:
-        seqs = [seq_grid(panda.motors[motor], l, h, num,
-            duty, period, snake) for l, h in [(lo, hi), (hi, lo)]]
+        seqs = [seq_grid(panda.motors[motor], pos, l, h, num, duty, period,
+            (pre + pad) / 2, snake) for l, h in [(lo, hi), (hi, lo)]]
         seqs += [{"seq1.repeats": 0, "seq1.table": table_slave(duty * period)},
             seq_disable("seq1")]
     return grid_frag_base(seqs, num, snake, div, scan_gen), md
@@ -424,11 +429,12 @@ def auto_shut(shutter, pos_cache):
 def fly_grid(pandas, dets, *args, shutter = None,
     configs = {}, md = None, pos_cache = None, **kwargs):
     motors, pos_cache = motors_get(args), norm_cache(pos_cache)
+    seqpos = map_seqpos(pandas[0], [pandas[0].motors[motors[-1]]], False)
     shut = auto_shut(shutter, pos_cache)
-    frag_gen, _md = grid_frag(pandas[0], *args,
+    frag_gen, _md = grid_frag(pandas[0], seqpos[0], *args,
         pcomp = False, pos_cache = pos_cache, **kwargs)
     devs = list(pandas) + [panda.ad for panda in pandas] + list(dets) + motors
-    cfg_merge(configs, {pandas[0]: cfg_seqpos(pandas[0], motors[-1:], False)})
+    cfg_merge(configs, {pandas[0]: seqpos[1]})
     _md.update(md or {})
     return fly_frag(
         pandas, list(dets) + motors + shut[0], frag_gen,
@@ -440,12 +446,13 @@ def fly_grid(pandas, dets, *args, shutter = None,
 def fly_dgrid(pandas, dets, *args, shutter = None, pcomp = False,
     configs = {}, md = None, pos_cache = None, **kwargs):
     motors, pos_cache = motors_get(args), norm_cache(pos_cache)
+    seqpos = map_seqpos(pandas[0], [pandas[0].motors[motors[-1]]], True)
     shut = auto_shut(shutter, pos_cache)
-    frag_gen, _md = grid_frag(pandas[0], *args,
+    frag_gen, _md = grid_frag(pandas[0], seqpos[0], *args,
         pcomp = pcomp, pos_cache = pos_cache, **kwargs)
     devs = list(pandas) + [panda.ad for panda in pandas] + list(dets) + motors
     _md.update(md or {})
-    cfg_merge(configs, {pandas[0]: cfg_seqpos(pandas[0], motors[-1:], True)})
+    cfg_merge(configs, {pandas[0]: seqpos[1]})
     max_rows, = set(panda.dseq.max_rows() for panda in pandas)
     def dfrag_gen():
         for mseq, sseq, kwargs, scan in frag_gen:
@@ -481,7 +488,7 @@ def sseq_base(scomp):
                 return
     return seq
 
-def scomp_pcomp(dev, lo, hi, num, snake):
+def scomp_pcomp(dev, lo, hi, num, pre, snake):
     sign = -1 if hi < lo else 1
     step = abs(hi - lo) / (num - 1)
     state = [-1, 1]
@@ -490,13 +497,13 @@ def scomp_pcomp(dev, lo, hi, num, snake):
             return False
         if state[0] >= num:
             if snake:
-                if sign * (msg[2] - hi) >= step / 2:
+                if sign * (msg[2] - hi) >= pre:
                     state[0], state[1] = num - 1, -1
                 return False
             else:
                 state[0] = -1
         if state[0] < 0:
-            if sign * (lo - msg[2]) >= step / 2:
+            if sign * (lo - msg[2]) >= pre:
                 state[0], state[1] = 0, 1
             return False
         if (sign * (msg[2] - lo) - state[0] * step) * state[1] >= 0:
@@ -511,14 +518,12 @@ def grid_sfrag(bubo, *args, div = -1,
     bubo.inputs.set([motor.readback]).wait()
     assert num > 1
     step = abs(hi - lo) / (num - 1)
-    if pad is None:
-        pad = step / 2 + max(step / 2,
-            motor.velocity.get() * motor.acceleration.get() / 2)
-    assert pad >= step
+    pad = auto_spad(pad, (step,
+        motor.velocity.get() * motor.acceleration.get() / 2))
     snake, div, scan_gen, md = grid_cfg\
         (args, div, pad, snake_axes, pos_cache, None)
-    seqs = [sseq_base(scomp_pcomp(motor.readback, l, h,
-        num, snake)) for l, h in [(lo, hi), (hi, lo)]]
+    seqs = [sseq_base(scomp_pcomp(motor.readback, l, h, num,
+        pad / 2, snake)) for l, h in [(lo, hi), (hi, lo)]]
     seqs += [None, sseq_disable]
     return grid_frag_base(seqs, num, snake, div, scan_gen), md
 

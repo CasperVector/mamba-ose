@@ -1,20 +1,26 @@
 import bisect
+import collections
 import numpy
-from .fly import PANDA_FREQ, seq_outs_not, split_table, table_slave
+from .fly import PANDA_FREQ, auto_spad, seq_outs_not, split_table, table_slave
 try:
     from scipy.special import wrightomega
 except ImportError:
     pass
 
 def profile_pad(velo, accl, teps):
-    assert velo > 2 * accl * teps
+    accl = min(accl, velo / teps / 2.02)
     ts = [0.0, teps, velo / accl - teps, velo / accl]
     xs = [0.0, teps ** 2 * accl / 2, 0.0, velo ** 2 / accl / 2]
     xs[2] = xs[3] + xs[1] - teps * velo
     return {"T": numpy.array(ts), "X": numpy.array(xs)}
 
+def auto_tpad(pad, velo, spad):
+    pad["X"] -= spad
+    return pad, pad["T"][-1] - pad["X"][-1] / velo
+
 def profile_seg(step, velo, accl, teps):
-    assert velo > 2 * accl * teps and step > 4 * accl * teps ** 2
+    accl = min(accl, velo / teps / 2.02)
+    assert step > 4 * accl * teps ** 2
     ts, xs = [0.0, teps], [0.0, teps ** 2 * accl / 2]
     tacc = velo / accl; sacc = tacc * velo
     if step > sacc:
@@ -89,7 +95,7 @@ archim_s2t = lambda s: numpy.sqrt\
 # The curvature at a given angle.
 archim_t2c = lambda t: (2 * numpy.pi) * (t ** 2 + 2) / (t ** 2 + 1) ** (3 / 2)
 
-def archim_txs(num, sign, tilt, st0, step, offset, smooth, trig):
+def archim_txs(num, sign, tilt, st0, step, origin, smooth, trig):
     assert smooth[0] >= 1 and smooth[1] >= 1
     idx, n0 = [st0[0]], smooth[1] / archim_t2c(archim_s2t(st0[0]))
     while True:
@@ -102,39 +108,41 @@ def archim_txs(num, sign, tilt, st0, step, offset, smooth, trig):
         idx, idx[-1] + 1 / smooth[0] * (1 + numpy.arange(
             numpy.ceil((num + st0[0] - idx[-1]) * smooth[0])))
     ))
-    ts = archim_s2t(idx)
-    rs, ts = ts / (2 * numpy.pi), (ts - st0[1]) * sign + tilt
+    ts0 = archim_s2t(idx)
+    rs, ts = ts0 / (2 * numpy.pi), (ts0 - st0[1]) * sign + tilt
     xs, ys = rs * numpy.cos(ts), rs * numpy.sin(ts)
     ret = {"T": idx, "X":
-        numpy.array((ys * step + offset[1], xs * step + offset[0])).T}
+        numpy.array((ys * step + origin[1], xs * step + origin[0])).T}
     if trig:
         ret["V"] = numpy.array((
-            numpy.sin(ts) / (2 * numpy.pi * rs) + numpy.cos(ts),
-            numpy.cos(ts) / (2 * numpy.pi * rs) - numpy.sin(ts),
+            numpy.sin(ts) / ts0 + sign * numpy.cos(ts),
+            numpy.cos(ts) / ts0 - sign * numpy.sin(ts),
         )).T
     return ret
 
-def archim_traj(rad, step, offset = (0.0, 0.0),
+def archim_traj(rad, step, origin = (0.0, 0.0),
     tilt = -numpy.pi / 2, smooth = (1, 1)):
     sign = -1 if rad < 0.0 else 1
     rad = abs(rad); assert rad >= step > 0.0
     s0 = 1 / 2; t0 = archim_s2t(s0)
     num = numpy.ceil(archim_t2s(2 * numpy.pi * (rad / step) - t0))
-    traj = archim_txs(num, sign, tilt, (s0, t0), step, offset, smooth, False)
-    return (traj, archim_txs(num - 1, sign, tilt, (s0, t0), step, offset,
+    traj = archim_txs(num, sign, tilt, (s0, t0), step, origin, smooth, False)
+    return (traj, archim_txs(num - 1, sign, tilt, (s0, t0), step, origin,
         (1, 1), True)) if smooth[0] > 1 or smooth[1] > 1 else traj["X"]
 
-def archim_frag(rad, step, offset, tilt, period, accl, teps, div):
-    velo = step / period
-    tacc = period * archim_s2t(1 / 2) / (2 * numpy.pi)
-    assert period >= 0.0 and (accl <= 0.0 or accl * tacc >= velo)
-    pad = profile_pad(velo, velo / tacc, teps); spad = step / 2
-    tpad = pad["T"][-1] + (spad - pad["X"][-1]) / velo
-    pad["X"] = period / step * (pad["X"] - spad)
+def archim_frag(rad, step, origin, tilt, period, accl, spad, teps, div):
+    # archim_t2c(archim_s2t(1 / 2)) = 3.32 and a = v ** 2 / r; this also
+    # leads to the 6.64 in the following auto_spad() call.
+    velo, accl0 = step / period, 3.32 * step / period ** 2
+    assert period >= 0.0 and (accl <= 0.0 or accl >= accl0)
+    pad = profile_pad(velo, accl0, teps)
+    spad = auto_spad(spad, (step / 2, step / 6.64))
+    pad, tpad = auto_tpad(pad, velo, spad)
+    pad["X"] *= period / step
     pad["X"] = numpy.array((pad["X"], pad["X"])).T
-    _traj, _trig = archim_traj(rad, step, offset, tilt, (3, 4))
+    _traj, _trig = archim_traj(rad, step, origin, tilt, (3, 4))
     _traj["T"] *= period; _trig["T"] *= period
-    # archim_t2c(archim_s2t(1.55)) is 2 / numpy.pi, where the perimeter
+    # archim_t2c(archim_s2t(1.55)) = numpy.pi / 2, where the perimeter
     # of the osculating circle is 4.
     tm, div = 1.55 * period, list(div)
     div[0] = _trig["T"].shape[0] if div[0] < 0 else max(1, div[0])
@@ -198,49 +206,77 @@ def archim_udrift(period, atom, duty, drift):
     return ptrig_unit(period, atom, duty), \
         int((1.0 - duty) / drift) if drift > 0.0 else -1
 
-def grid_xs(y0, y1, ny, x0, x1, nx, noise = 0.0, snake = True, seed = None):
-    assert y0 != y1 and ny > 0 and x0 != x1 and nx > 1 and 0.0 <= noise < 1.0
+def snake_lgrid(ls, snake):
+    ns = [len(l) for l in ls]
+    ret, total = [], numpy.prod(ns)
+    for i, (l, s) in enumerate(zip(ls, snake)):
+        m = int(numpy.prod(ns[:i])), int(numpy.prod(ns[i + 1:]))
+        l = numpy.repeat(l, m[1])
+        l = l, numpy.concatenate((l, l[::-1] if s else l))
+        ret.append(numpy.concatenate(
+            (numpy.tile(l[1], m[0] // 2), numpy.tile(l[0], m[0] % 2))))
+    return numpy.array(ret)
+
+def lgrid_xs(*ls, noise, snake = True, seed = None):
+    n, ns = len(ls), tuple(len(l) for l in ls)
+    if not isinstance(snake, collections.abc.Iterable):
+        snake = [snake] * n
     rng = numpy.random.default_rng(seed)
-    step = abs(x1 - x0) / (nx - 1), abs(y1 - y0) / (ny - 1)
-    sign = [1, -1][x0 > x1], [1, -1][y0 > y1]
-    xs = numpy.tile(x0 + sign[0] * step[0] * numpy.arange(nx), (ny, 1))
-    ys = numpy.tile(y0 + sign[1] * step[1] * numpy.arange(ny), (nx, 1)).T
-    if snake:
-        xs[1 :: 2] = x0 + sign[0] * step[0] * numpy.arange(nx)[::-1]
-    xs += noise * step[0] * rng.uniform(-0.5, 0.5, (ny, nx))
-    ys += noise * step[1] * rng.uniform(-0.5, 0.5, (ny, nx))
-    return numpy.array((ys, xs))
+    ret = snake_lgrid(ls, snake).reshape((n,) + ns)
+    for i, arg in enumerate(ls):
+        if noise[i]:
+            ret[i] += noise[i] * rng.uniform(-0.5, 0.5, ns)
+    return ret
+
+def grid_xs(*args, noise = 0.0, snake = True, seed = None):
+    assert not len(args) % 3
+    args = [args[i * 3 : (i + 1) * 3] for i in range(len(args) // 3)]
+    n = len(args)
+    assert all(arg[0] != arg[1] and arg[2] > 1 for arg in args)
+    if not isinstance(noise, collections.abc.Iterable):
+        noise = [0.0] * max(0, n - 2) + [noise] * min(2, n)
+    assert all(0.0 <= x < 1.0 for x in noise)
+    noise = [(arg[1] - arg[0]) / (arg[2] - 1) * x
+        for arg, x in zip(args, noise)]
+    return lgrid_xs(*[numpy.linspace(*arg) for arg in args],
+        noise = noise, snake = snake, seed = seed)
 
 def grid_ramp(ny, dy, arr):
     return numpy.tile(arr, (ny, 1)) + numpy.tile\
         (dy * numpy.arange(ny), (len(arr), 1)).T
 
 def fgrid_prep(y0, y1, ny, x0, x1, nx,
-    noise, snake, seed, duty, velo, accl, teps):
+    noise, snake, seed, duty, velo, accl, spad, teps):
     step = abs(x1 - x0) / (nx - 1), abs(y1 - y0) / (ny - 1)
     assert velo[0] > 0.0 and accl > 0.0 and teps > 0.0
     if velo[2] > 0.0:
         period = step[0] / velo[0]
+        # The constraint on v_x is needed when an alternation between
+        # step * (1 - noise) and step * (1 + noise) moves is executed
+        # with trapezoidal acceleration and deceleration; the constraint
+        # on v_y can be obtained similarly.
         smax = lambda v: period ** 2 * accl / 4 \
             if period * accl < 2 * v else period * v - v ** 2 / accl
         assert noise * step[1] <= smax(velo[2]) and \
             2 * noise * step[0] <= smax(velo[2] - (1.0 - noise) * velo[0])
     sign = [1, -1][x0 > x1], [1, -1][y0 > y1]
-    grid = grid_xs(y0, y1, ny, x0, x1, nx, noise, snake, seed)
-    grid[1, 0 :: 2] -= step[0] * duty / 2
-    grid[1, 1 :: 2] -= step[0] * duty / 2 * (-1 if snake else 1)
-    pre, pad = (1.0 - duty + noise) / 2, profile_pad(velo[0], accl, teps)
-    spad = pre * step[0] + max(step[0] / 2, pad["X"][-1])
-    tpad = pad["T"][-1] + (spad - pad["X"][-1]) / velo[0]
-    x0 = x0 - sign[0] * duty * step[0] / 2
-    x1 = x1 + sign[0] * duty * step[0] / 2
+    grid = grid_xs(y0, y1, ny, x0, x1, nx,
+        noise = noise, snake = snake, seed = seed)
+    grid[1, 0 :: 2] -= sign[0] * step[0] * duty / 2
+    grid[1, 1 :: 2] -= sign[0] * step[0] * duty / 2 * (-1 if snake else 1)
+    pre = step[0] * noise / 2
+    pad = profile_pad(velo[0], accl, teps)
+    spad = pre + auto_spad(spad, (step[0] * (1.0 - duty / 2), pad["X"][-1]))
+    pad, tpad = auto_tpad(pad, velo[0], spad)
+    x0 = x0 - sign[0] * step[0] * duty / 2
+    x1 = x1 + sign[0] * step[0] * duty / 2
     tt = step[0] / velo[0] * numpy.arange(nx)
     segx = {"T": tt, "X": min(x0, x1) + step[0] * numpy.arange(nx)}
     segx = {
         "T": numpy.concatenate((pad["T"], tpad + segx["T"],
             2 * tpad + abs(x1 - x0) / velo[0] - pad["T"][::-1])),
-        "X": numpy.concatenate((min(x0, x1) - spad + pad["X"],
-            segx["X"], max(x0, x1) + spad - pad["X"][::-1])),
+        "X": numpy.concatenate((min(x0, x1) + pad["X"],
+            segx["X"], max(x0, x1) - pad["X"][::-1])),
     }
     if sign[0] < 0:
         segx["X"] = x0 + x1 - segx["X"]
@@ -265,9 +301,10 @@ def fgrid_prep(y0, y1, ny, x0, x1, nx,
         )).T
         seg = segx, segy, segx, segy
     tseg = seg[0]["T"][-1], seg[1]["T"][-1]
-    pre = (pre + 1 / 4) * step[0]
+    pre = (pre + spad) / 2
     tt = numpy.concatenate(([tpad - pre / velo[0]], tpad + tt))
-    tt = numpy.concatenate((tt, tseg[0] + tseg[1] + tt))
+    tt = numpy.tile(tt, (ny,)) + numpy.repeat\
+        ((tseg[0] + tseg[1]) * numpy.arange(ny), nx + 1)
     xs = numpy.tile(x0 - sign[0] * pre, (ny,))
     if snake:
         xs[1 :: 2] = x1 + sign[0] * pre
@@ -290,9 +327,9 @@ def fgrid_traj(dy, ny, idx, rev, seg, trig):
         s["X"][1:, 0] for i, s in enumerate(seg)])
     l = [ny - 1] + [s["T"].shape[0] - 1 for s in seg[:2]]
     l = l[0] // 2, [l[1], 2 * l[1] + l[2]][l[0] % 2]
-    ramp = numpy.concatenate((numpy.tile(
-        numpy.arange(l[0]), tt.shape + (1,)
-    ).T.flatten(), [l[0]] * l[1]))
+    ramp = numpy.concatenate((numpy.repeat(
+        numpy.arange(l[0]), tt.shape
+    ), [l[0]] * l[1]))
     traj = {
         "T": numpy.concatenate((
             seg[0]["T"][:1], 2 * (tseg[0] + tseg[1]) * ramp +
@@ -395,9 +432,9 @@ def fgrid_ptrig(tg, cond, unit):
     return auto_stab(unit, ret)
 
 def fgrid_udprep(period, atom, duty, drift, y0, y1, ny,
-    x0, x1, nx, noise, snake, seed, velo, accl, teps):
+    x0, x1, nx, noise, snake, seed, velo, accl, spad, teps):
     seg, trig = fgrid_prep(y0, y1, ny, x0, x1, nx,
-        noise, snake, seed, duty, velo, accl, teps)
+        noise, snake, seed, duty, velo, accl, spad, teps)
     tseg = seg[0]["T"][-1] + seg[1]["T"][-1]
     drift = int((1.0 - duty) / drift * period / tseg) if drift > 0.0 else -1
     return ptrig_unit(period, atom, duty), drift, seg, trig

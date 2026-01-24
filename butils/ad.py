@@ -316,7 +316,7 @@ def make_detector(name, inherit = None, **kwargs):
             attrs[k] = v
     return type(name, inherit, attrs)
 
-def make_xsp3(name, nchan = 0, soft_trigger = True):
+def make_xsp3(name, nchan = 0, soft_trigger = False):
     ids = [i + 1 for i in range(nchan)]
     attrs = {"_default_read_attrs": ["ch%d_dtperc" % i for i in ids] + ["hdf1"]}
     attrs.update([("ch%d_dtperc" % i,
@@ -360,7 +360,7 @@ def make_qzdetector(name, nout, inherit = None):
 MyAreaDetector = make_detector("MyAreaDetector")
 BaseAreaDetector = make_detector\
     ("BaseAreaDetector", image1 = None, monitor = None)
-Xsp3Detector = lambda *args, nchan = 0, soft_trigger = True, **kwargs: \
+Xsp3Detector = lambda *args, nchan = 0, soft_trigger = False, **kwargs: \
     make_xsp3("Xsp3Detector", nchan = nchan,
         soft_trigger = soft_trigger)(*args, **kwargs)
 DxpDetector = lambda *args, nchan = 0, **kwargs: \

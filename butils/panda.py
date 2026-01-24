@@ -207,8 +207,8 @@ def panda_posout_calib(obj, setp, run):
                 (rep * obj.scale.get() + obj.offset.get())
         else:
             obj.offset.put(obj.motor.readback.get() - rep * obj.scale.get())
-    return round((obj.motor.readback.get() - obj.offset.get())
-        / obj.scale.get()) - rep
+    return obj.motor.readback.get() - \
+        (obj.offset.get() + obj.scale.get() * rep)
 
 def panda_inenc_bind(obj, motor, rep = True, rev = 1.0):
     obj.rep, obj.rev = rep, rev
@@ -291,6 +291,13 @@ class PandaDseqAcquire(Signal):
     def put(self, val):
         ad = self.root.ad
         if not self._readback and val:
+            for i in range(int(self.root._poll_period[1] /
+                self.parent._poll_period)):
+                if self.parent._end:
+                    break
+                time.sleep(self.parent._poll_period)
+            else:
+                return
             ad.configure(cfg_trans(ad, {"cam.acquire": 1}), action = True)
             self.parent.poll.set(1).wait()
         elif self._readback and not val:
@@ -428,19 +435,20 @@ class PandaDseq(Device):
 
     def _fill0(self, table):
         assert not self._end
-        if not table:
-            self._end = True
         if self._idx:
             self._q1.append(table)
         else:
             self._fill(table)
+            assert not self.root.pcap.active.value.get()
+        if not table:
+            self._end = True
 
     def _fill1(self, i):
         if i < 0:
             assert self._idx == 1
         else:
             n = self.counter.get()
-            assert i >= 0 and n % 2 == i
+            assert n % 2 == i
             Signal.put(self.counter, n + 1, force = True)
         i = self._idx % 2
         if self._max < 0:

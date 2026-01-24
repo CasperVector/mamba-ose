@@ -108,12 +108,11 @@ def encoder_check(panda, tols, motors):
         inp, tol = panda.motors.get(motor), tols.get(motor)
         if inp is None or tol is None:
             continue
-        tol = abs(round(tol / inp.scale.get()))
         delta = inp.calibrate(False)
-        print("%s.motor_rep - %s.value = %d" %
+        print("%s.motor_rep - %s.value = %.3g EGU" %
             (motor.vname(), inp.vname(), delta))
         if abs(delta) > tol:
-            raise RuntimeError(("abs(%d) > %d; execute `%s.calibrate()'" +
+            raise RuntimeError(("abs(%.3g) > %.3g; execute `%s.calibrate()'" +
                 " and inform beamline operator") % (delta, tol, inp.vname()))
 
 def vbas_check(ratios, args, kwargs):
