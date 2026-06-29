@@ -48,32 +48,31 @@ def fly_stest(bubo, dets, out_args, in_args,
     )), [bubo] + list(dets) + motors, md = _md)
 
 class MyPandaPlanner(PandaPlanner):
-    def __init__(self, pandas, divs = {}, configs = {}, **kwargs):
-        super().__init__(pandas, divs = divs, configs = configs, **kwargs)
-        self.plans["fly_test"] = lambda dets, *args, **kwargs: fly_test(
-            pandas, dets, *args, configs = configs,
-            div = div_get(divs, dets), **kwargs
-        )
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.plans["fly_test"] = self.plan_wrap("fly_test", fly_test)
+
+    def args_conv(self, plan, args):
+        if plan == "fly_test":
+            args = [args[0]] + list(args[2])
+        return args
 
     def check(self, plan, *args, **kwargs):
-        if plan == "fly_test":
-            args = [args[0]] + args[2]
-        return super().check(plan, *args, **kwargs)
+        return super().check(plan, *self.args_conv(plan, args), **kwargs)
 
     def callback(self, plan, *args, **kwargs):
-        if plan == "fly_test":
-            args = [args[0]] + args[2]
-        return super().callback(plan, *args, **kwargs)
+        return super().callback(plan, *self.args_conv(plan, args), **kwargs)
 
 class MyBuboPlanner(BuboPlanner):
-    def __init__(self, bubo, divs = {}, **kwargs):
-        super().__init__(bubo, divs = divs, **kwargs)
-        self.plans["fly_stest"] = lambda dets, *args, **kwargs: fly_stest(
-            bubo, dets, *args, div = div_get(divs, dets), **kwargs
-        )
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.plans["fly_stest"] = self.plan_wrap("fly_stest", fly_stest)
+
+    def args_conv(self, plan, args):
+        if plan == "fly_stest":
+            args = [args[0]] + list(args[2])
+        return args
 
     def callback(self, plan, *args, **kwargs):
-        if plan == "fly_stest":
-            args = [args[0]] + args[2]
-        return super().callback(plan, *args, **kwargs)
+        return super().callback(plan, *self.args_conv(plan, args), **kwargs)
 

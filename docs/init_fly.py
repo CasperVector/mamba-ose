@@ -32,7 +32,7 @@ D.panda = PandaDevice("192.168.1.11", name = "D.panda", ad = D.adp)
 [m.velocity.set(4.0).wait() for m in M.values()]
 D.panda.clear_muxes()
 D.panda.clear_capture()
-prep_dseq(D.panda, [("ttlout1.val", "a")],
+prep_dseq(D.panda, [("ttlout1.val", "b")],
     [("inenc1.val", M.m1), ("inenc2.val", M.m2)])
 D.panda.configure(seq_dwarmup(), action = True)
 D.bubo.write_dir = os.getcwd() + "/big"

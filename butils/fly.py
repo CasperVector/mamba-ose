@@ -1,8 +1,7 @@
 import collections
 import numpy
 import re
-from bluesky import plans
-from bluesky import plan_stubs as bps, preprocessors as bpp
+from bluesky import plans, plan_stubs as bps, preprocessors as bpp
 from .bubo import sseq_disable
 from .panda import seq_disable, seq_outs_not
 from .plans import cfg_trans, motors_get, norm_cache, norm_snake
@@ -58,7 +57,7 @@ def prep_simple(panda, outputs, inputs, pgate = True, **kwargs):
     if pgate:
         outputs = [("pcap.gate", "a"), ("pcap.trig", "a")] + outputs
     for out in outputs:
-        mux, out = out if isinstance(out, tuple) else (out, "a")
+        mux, out = out if isinstance(out, tuple) else (out, "b")
         cfg.update([(mux, "SEQ1.OUT" + out.upper())])
     panda.configure(cfg)
 
@@ -69,7 +68,7 @@ def prep_dseq(panda, outputs, inputs, pgate = True, **kwargs):
     if pgate:
         outputs = [("pcap.gate", "a"), ("pcap.trig", "a")] + outputs
     for out in outputs:
-        mux, out = out if isinstance(out, tuple) else (out, "a")
+        mux, out = out if isinstance(out, tuple) else (out, "b")
         luts[out] = ord(out) - ord("a") + 1
         cfg.update([(mux, "LUT%d.OUT" % luts[out])])
     for out in luts:
@@ -145,11 +144,11 @@ def map_seqpos(panda, inps, dseq = False):
             poss[1].append(pos)
     for i, inp in enumerate(poss[0]):
         tmp[0][inp] = tmp[1][inp] = poss[1][i]
-    ret = "".join(tmp[0][inp] for inp in inps).upper(), \
-        {"seq1.pos%s.value" % pos: inp for inp, pos in tmp[1]}
-    if dseq:
-        ret[1].update({"seq2.pos%s.value" % pos: inp for inp, pos in tmp[1]})
-    return ret
+    return "".join(tmp[0][inp] for inp in inps).upper(), {
+        "seq%c.pos%s.value" % (c, pos): inp
+        for c in ("12" if dseq else "1")
+        for inp, pos in tmp[1].items()
+    }
 
 def auto_velo(motors, step, duty, period = None, atime = None, velocity = None):
     velo, = set(motor.velocity.get() for motor in motors)
@@ -186,15 +185,19 @@ def final_config_base(configs):
 def final_fly_motor(motor):
     return final_config_base([(motor, ["velocity"])])
 
-def make_grid_step(motor, snake, velos, name = "flying"):
+def fly_reading(devices, name = "flying"):
+    return bps.trigger_and_read(devices, name)
+
+def one_fly_step(detectors, step, pos_cache, take_reading = fly_reading):
+    return bps.one_nd_step(detectors, step, pos_cache, take_reading)
+
+def make_grid_step(motor, snake, velos):
     idx = [0]
-    def one_grid_step(detectors, step, pos_cache, take_reading =
-        lambda devices: bps.trigger_and_read(devices, name = name)):
+    def one_grid_step(detectors, step, pos_cache, take_reading = fly_reading):
         if velos and (not snake or idx[0] < 2):
             yield from bps.configure(motor, {"velocity": velos[idx[0] % 2]})
         idx[0] += 1
-        yield from bps.one_nd_step(detectors, step,
-            pos_cache, take_reading = take_reading)
+        yield from bps.one_nd_step(detectors, step, pos_cache, take_reading)
     return one_grid_step
 
 def grid_cfg(args, div, pad, snake_axes, pos_cache, velos):
@@ -421,10 +424,13 @@ def final_adtrig(ads):
     return final_config_base([(ad, ["cam.num_images"]) for ad in ads])
 
 def auto_shut(shutter, pos_cache):
-    if not shutter:
-        return [], []
-    return ([shutter.root],
-        [fwrap_second(bps.move_per_step({shutter: 1}, pos_cache))])
+    def fwrap(scan, *, num_points, **kwargs):
+        if num_points:
+            yield from bps.move_per_step({shutter: 1}, pos_cache)
+        yield from scan
+        if num_points:
+            yield from bps.move_per_step({shutter: 0}, pos_cache)
+    return ([shutter], [fwrap]) if shutter else ([], [])
 
 def fly_grid(pandas, dets, *args, shutter = None,
     configs = {}, md = None, pos_cache = None, **kwargs):
@@ -434,8 +440,7 @@ def fly_grid(pandas, dets, *args, shutter = None,
     frag_gen, _md = grid_frag(pandas[0], seqpos[0], *args,
         pcomp = False, pos_cache = pos_cache, **kwargs)
     devs = list(pandas) + [panda.ad for panda in pandas] + list(dets) + motors
-    cfg_merge(configs, {pandas[0]: seqpos[1]})
-    _md.update(md or {})
+    _md.update(md or {}); cfg_merge(configs, {pandas[0]: seqpos[1]})
     return fly_frag(
         pandas, list(dets) + motors + shut[0], frag_gen,
         shut[1] + [fwrap_adtrig(dets), fwrap_config(devs, configs)],
@@ -451,8 +456,7 @@ def fly_dgrid(pandas, dets, *args, shutter = None, pcomp = False,
     frag_gen, _md = grid_frag(pandas[0], seqpos[0], *args,
         pcomp = pcomp, pos_cache = pos_cache, **kwargs)
     devs = list(pandas) + [panda.ad for panda in pandas] + list(dets) + motors
-    _md.update(md or {})
-    cfg_merge(configs, {pandas[0]: seqpos[1]})
+    _md.update(md or {}); cfg_merge(configs, {pandas[0]: seqpos[1]})
     max_rows, = set(panda.dseq.max_rows() for panda in pandas)
     def dfrag_gen():
         for mseq, sseq, kwargs, scan in frag_gen:

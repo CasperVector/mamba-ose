@@ -3,8 +3,8 @@ from bluesky import plan_stubs as bps
 from bluesky.utils import short_uid
 from ophyd import Component, Device, EpicsSignal, EpicsSignalRO, Signal
 from ophyd.status import Status
-from .fly import auto_delay, auto_shut, auto_velo, \
-    cfg_merge, final_adtrig, final_config, fly_dfrag, \
+from .fly import auto_delay, auto_shut, auto_velo, cfg_merge, \
+    final_adtrig, final_config, fly_dfrag, fly_reading, \
     fwrap_adtrig, fwrap_config, map_seqpos, split_table
 from .fpvt import ptrig_cond, archim_traj, grid_xs, \
     archim_frag, archim_ptrig, archim_udrift, fgrid_cond, fgrid_frag, \
@@ -57,8 +57,7 @@ class PmacTrajBase(Device):
     num_build = Component(EpicsSignal, "ProfilePointsToBuild_RBV",
         write_pv = "ProfilePointsToBuild", kind = "normal")
     time_array = Component(EpicsSignal, "ProfileTimeArray", kind = "normal")
-    cs_name = Component(EpicsSignal, "ProfileCsName_RBV",
-        write_pv = "ProfileCsName", string = True, kind = "config")
+    profile_abort = Component(EpicsSignal, "ProfileAbort", kind = "omitted")
     buf_enable = Component(PmacBufEnable, value = 0, kind = "config")
     buf_tables = Component(PmacBufTables, value = "", kind = "omitted")
 
@@ -80,7 +79,11 @@ class PmacTrajBase(Device):
                 return
             if old_value and not value:
                 self._op_states[op][0] = None
-                status._finished(getattr(self, op + "_status").get() == 1)
+                if getattr(self, op + "_status").get() == 1:
+                    status.set_finished()
+                else:
+                    status.set_exception\
+                        (RuntimeError(getattr(self, op + "_message").get()))
         return cb
 
     def do_traj(self, op):
@@ -89,7 +92,7 @@ class PmacTrajBase(Device):
         return status
 
     def do_abort(self):
-        getattr(self, self.cs_name.get().lower() + "_abort").put(1)
+        self.profile_abort.put(1, use_complete = True)
 
     def trigger(self):
         return self.do_traj("execute")
@@ -102,7 +105,7 @@ class PmacTrajBase(Device):
         self.buf_enable.set(0).wait()
         super().unstage()
 
-def PmacTraj(prefix, *, name, cses = ["CS1"], inherit = None, **kwargs):
+def PmacTraj(prefix, *, name, inherit = None, **kwargs):
     if not inherit:
         inherit = PmacTrajBase,
     return type("PmacTraj", inherit, dict(sum([[
@@ -112,15 +115,14 @@ def PmacTraj(prefix, *, name, cses = ["CS1"], inherit = None, **kwargs):
             "Profile%sState_RBV" % op, kind = "omitted", auto_monitor = True)),
         ("%s_status" % op.lower(), Component(EpicsSignalRO,
             "Profile%sStatus_RBV" % op, kind = "omitted")),
+        ("%s_message" % op.lower(), Component(EpicsSignalRO,
+            "Profile%sMessage_RBV" % op, string = True, kind = "omitted")),
     ] for op in ["Build", "Append", "Execute"]], []) + sum([[
-        ("%s_use_axis" % ax.lower(), Component(EpicsSignal,
-            "%s:UseAxis" % ax, kind = "config")),
-        ("%s_positions" % ax.lower(), Component(EpicsSignal,
-            "%s:Positions" % ax, kind = "normal")),
-    ] for ax in "ABCUVWXYZ"], []) + sum([[
-        ("%s_abort" % cs.lower(), Component(EpicsSignal,
-            "%s:Abort" % cs, kind = "omitted")),
-    ] for cs in cses], [])))(prefix, name = name, **kwargs)
+        ("%s_use_axis" % ax, Component(EpicsSignal,
+            "%s:UseAxis" % ax.upper(), kind = "config")),
+        ("%s_positions" % ax, Component(EpicsSignal,
+            "%s:Positions" % ax.upper(), kind = "normal")),
+    ] for ax in "abcuvwxyz"], [])))(prefix, name = name, **kwargs)
 
 def auto_accl(motors, acceleration):
     if acceleration is not None:
@@ -166,21 +168,19 @@ def fly_pmac(pandas, pmac, dets, motors, traj, trig, shutter,
         [pmac] + list(dets) + list(motors)
     if pos_cache["super_step"] is None:
         pos_cache["super_step"] = {}
-    take_reading = lambda devices: \
-        bps.trigger_and_read(devices, name = "flying")
     def frag_gen():
         tj = None
         for tj, (mtab, stab), kw in zip(traj, trig, kwargs):
             pos_cache["super_step"].update(zip(motors,
                 [tj["%s_positions" % ax][0] for ax in tj["_cs_axes"]]))
             yield [], [], {"num_points": 0}, bps.one_nd_step\
-                ([], {}, pos_cache, take_reading = take_reading)
+                ([], {}, pos_cache, take_reading = fly_reading)
             yield mtab, stab, kw, move_pmac(pmac, tj)
         if tj:
             pos_cache["super_step"].update(zip(motors,
                 [tj["%s_positions" % ax][-1] for ax in tj["_cs_axes"]]))
             yield [], [], {"num_points": 0}, bps.one_nd_step\
-                ([], {}, pos_cache, take_reading = take_reading)
+                ([], {}, pos_cache, take_reading = fly_reading)
     return fly_dfrag(
         pandas, [pmac] + list(dets) + motors + shut[0], frag_gen(),
         shut[1] + [fwrap_adtrig(dets), fwrap_config(devs, configs)],
@@ -282,8 +282,7 @@ def fpmac_sarchim(pandas, pmac, dets, m2, m1, rad, step,
 
 def fpmac_sgrid(pandas, pmac, dets, m2, m1, y0, y1, ny, x0, x1, nx,
     noise = 0.0, *, snake_axes = True, seed = None, **kwargs):
-    xs = grid_xs(y0, y1, ny, x0, x1, nx,
-        noise = noise, snake = snake_axes, seed = seed)
-    xs = xs.reshape((2, -1)).T
+    xs = grid_xs(y0, y1, ny, x0, x1, nx, noise = noise,
+        snake = snake_axes, seed = seed).reshape((2, -1)).T
     return fpmac_array(pandas, pmac, dets, [m2, m1], xs, **kwargs)
 

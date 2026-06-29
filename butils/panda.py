@@ -431,6 +431,10 @@ class PandaDseq(Device):
         i = self._idx % 2
         getattr(self.root, "srgate%d" % (1 + i)).force_rst.value.put("")
         getattr(self.root, "seq%d" % (1 + i)).table.value.put(table)
+        if self._idx:
+            assert getattr(self.root, "seq%d" % (2 - i)).active.value.get()
+        else:
+            assert not self.root.pcap.active.value.get()
         self._idx += 1
 
     def _fill0(self, table):
@@ -439,7 +443,6 @@ class PandaDseq(Device):
             self._q1.append(table)
         else:
             self._fill(table)
-            assert not self.root.pcap.active.value.get()
         if not table:
             self._end = True
 
@@ -450,11 +453,8 @@ class PandaDseq(Device):
             n = self.counter.get()
             assert n % 2 == i
             Signal.put(self.counter, n + 1, force = True)
-        i = self._idx % 2
         if self._max < 0:
             self._fill(self._q1.popleft())
-        if self._max < 0 or self.counter.get() < self._max - 1:
-            assert getattr(self.root, "seq%d" % (2 - i)).active.value.get()
 
 class PandaRoot(Device):
     _poll_period = (1.0, 0.1)

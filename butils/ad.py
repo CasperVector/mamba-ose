@@ -199,7 +199,7 @@ class MyImagePlugin(ThrottleMonitor, PluginBase):
     array_size, array_data = DDC_EpicsSignalRO(
         ("depth", "ArraySize2_RBV"), ("height", "ArraySize1_RBV"),
         ("width", "ArraySize0_RBV"), doc = "The array size", auto_monitor = True
-    ), Component(EpicsSignalRO, "ArrayData")
+    ), ADComponent(EpicsSignalRO, "ArrayData")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -225,6 +225,12 @@ class MyImagePlugin(ThrottleMonitor, PluginBase):
         return self.array_data.subscribe(cb, run = False)
 
 class MyCam(CamBase):
+    max_size_x = ADComponent(EpicsSignalRO, "MaxSizeX_RBV")
+    max_size_y = ADComponent(EpicsSignalRO, "MaxSizeY_RBV")
+    _default_configuration_attrs = CamBase._default_configuration_attrs + (
+        "bin_x", "bin_y", "min_x", "min_y",
+        "size.size_x", "size.size_y", "max_size_x", "max_size_y",
+    )
     warmup_sleep = 1.0, 1.0
 
     def warmup(self, sleep = None):
@@ -307,7 +313,7 @@ def make_detector(name, inherit = None, **kwargs):
         "cam": Component(MyCam, "cam1:"),
         "hdf1": Component(CptHDF5, "HDF1:", write_path_template = "/"),
         "image1": Component(MyImagePlugin, "image1:"),
-        "warmup": warmup, "monitor": monitor
+        "warmup": warmup, "monitor": monitor,
     }
     for k, v in kwargs.items():
         if v is None:
@@ -350,8 +356,12 @@ def make_dxp(name, cam, nchan = 0):
 def make_qzdetector(name, nout, inherit = None):
     if not inherit:
         inherit = (QSoftTrigger, Device)
-    attrs = {"acquire": Component(EpicsSignal, "acquire", kind = "omitted"),
-        "num_images": Component(EpicsSignal, "num_images", kind = "config")}
+    attrs = {
+        "acquire": Component(EpicsSignal, "acquire", kind = "omitted"),
+        "num_images": Component(EpicsSignal, "num_images", kind = "config"),
+        "num_images_counter":
+            Component(EpicsSignal, "num_images_counter", kind = "omitted"),
+    }
     attrs.update({"output%d" % i: Component(
         EpicsSignal, "output%d" % i, string = True, kind = "config"
     ) for i in range(nout)})

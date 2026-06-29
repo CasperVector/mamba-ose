@@ -18,7 +18,7 @@ from mamba.backend.mzserver import config_read, server_start
 def my_gauss(x):
     return numpy.power(2, -4 * x ** 2)
 
-class MyCam(Device):
+class SimCam(Device):
     atime_ratio = 1e3
     temperature_actual = Component(SynSignal, func = lambda: -25.0)
     acquire_time = Component(AttributeSignal,
@@ -33,7 +33,7 @@ class MyCam(Device):
 class MySimImage(SimMotorImage):
     dim, gauss, lam = (2048, 2048), (400, 25), (1400, 0.66)
     origin, pos0, shift, fade = None, None, 10, (numpy.pi / 3, 1.0, 1.0)
-    cam = Component(MyCam, "")
+    cam = Component(SimCam, "")
     def bind(self, motors):
         self.motors = motors
     def func(self):

@@ -155,6 +155,8 @@ class BuboDevice(Device):
 
     def __init__(self, **kwargs):
         self._bubo = BuboBubo()
+        if "write_dir" in kwargs:
+            self.write_dir = kwargs.pop("write_dir")
         super().__init__(**kwargs)
 
     def stage(self):

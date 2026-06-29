@@ -8,10 +8,14 @@ except ImportError:
     pass
 
 def profile_pad(velo, accl, teps):
-    accl = min(accl, velo / teps / 2.02)
-    ts = [0.0, teps, velo / accl - teps, velo / accl]
-    xs = [0.0, teps ** 2 * accl / 2, 0.0, velo ** 2 / accl / 2]
-    xs[2] = xs[3] + xs[1] - teps * velo
+    accl = min(accl, velo / teps / 2)
+    if velo / accl < 3 * teps:
+        ts = [0.0, velo / accl / 2, velo / accl]
+        xs = [0.0, ts[1] ** 2 * accl / 2, velo ** 2 / accl / 2]
+    else:
+        ts = [0.0, teps, velo / accl - teps, velo / accl]
+        xs = [0.0, teps ** 2 * accl / 2, 0.0, velo ** 2 / accl / 2]
+        xs[2] = xs[3] + xs[1] - teps * velo
     return {"T": numpy.array(ts), "X": numpy.array(xs)}
 
 def auto_tpad(pad, velo, spad):
@@ -19,21 +23,31 @@ def auto_tpad(pad, velo, spad):
     return pad, pad["T"][-1] - pad["X"][-1] / velo
 
 def profile_seg(step, velo, accl, teps):
-    accl = min(accl, velo / teps / 2.02)
-    assert step > 4 * accl * teps ** 2
-    ts, xs = [0.0, teps], [0.0, teps ** 2 * accl / 2]
+    accl = min(accl, velo / teps / 2)
+    assert step >= 4 * accl * teps ** 2
     tacc = velo / accl; sacc = tacc * velo
-    if step > sacc:
-        thalf = tacc + (step - sacc) / velo / 2
-        ts += [tacc - teps, tacc]
-        xs += [sacc / 2 + xs[1] - teps * velo, sacc / 2]
-    else:
+    if step <= sacc:
         thalf = numpy.sqrt(step / accl)
-        ts += [thalf - teps]
-        xs += [step / 2 + xs[1] - teps * thalf * accl]
+        if thalf < 3 * teps:
+            ts, xs = [0.0, thalf / 2], [0.0, step / 8]
+        else:
+            ts, xs = [0.0, teps, thalf - teps], [0.0, teps ** 2 * accl / 2]
+            xs += [step / 2 + xs[1] - teps * thalf * accl]
+    else:
+        thalf = tacc + (step - sacc) / velo / 2
+        if tacc < 3 * teps:
+            ts, xs = [0.0, tacc / 2, tacc], [0.0, sacc / 8, sacc / 2]
+        else:
+            ts, xs = [0.0, teps, tacc - teps, tacc], [0.0, teps ** 2 * accl / 2]
+            xs += [sacc / 2 + xs[1] - teps * velo, sacc / 2]
     ts, xs = numpy.array(ts), numpy.array(xs)
-    return {"T": numpy.concatenate((ts, thalf * 2 - ts[::-1])),
-        "X": numpy.concatenate((xs, step - xs[::-1]))}
+    if thalf - ts[-1] < teps / 2:
+        ts, xs = ts[:-1], xs[:-1]
+        return {"T": numpy.concatenate((ts, [thalf], thalf * 2 - ts[::-1])),
+            "X": numpy.concatenate((xs, [step / 2], step - xs[::-1]))}
+    else:
+        return {"T": numpy.concatenate((ts, thalf * 2 - ts[::-1])),
+            "X": numpy.concatenate((xs, step - xs[::-1]))}
 
 def ptrig_unit(period, atom, duty):
     ticks = period * PANDA_FREQ
@@ -221,7 +235,8 @@ def lgrid_xs(*ls, noise, snake = True, seed = None):
     n, ns = len(ls), tuple(len(l) for l in ls)
     if not isinstance(snake, collections.abc.Iterable):
         snake = [snake] * n
-    rng = numpy.random.default_rng(seed)
+    rng = seed if isinstance(seed, numpy.random.Generator) \
+        else numpy.random.default_rng(seed)
     ret = snake_lgrid(ls, snake).reshape((n,) + ns)
     for i, arg in enumerate(ls):
         if noise[i]:
@@ -441,7 +456,7 @@ def fgrid_udprep(period, atom, duty, drift, y0, y1, ny,
 
 def farray_traj(xs, period, velo, accl, teps):
     ds = xs[1:] - xs[:-1]; ms = numpy.abs(ds).max(1); dim = ds.shape
-    seg = [profile_seg(m, velo, accl, teps) for m in ms]
+    seg, damp = [profile_seg(m, velo, accl, teps) for m in ms], []
     tseg = numpy.array([0.0] + [s["T"][-1] for s in seg])
     trig = {
         "T": tseg[:-1].cumsum() + period * numpy.arange(dim[0]),
@@ -451,15 +466,17 @@ def farray_traj(xs, period, velo, accl, teps):
         seg[i] = {
             "T": trig["T"][i] + seg[i]["T"],
             "X": numpy.tile(xs[i], (seg[i]["T"].shape[0], 1)) + \
-                trig["V"][i] * numpy.tile(seg[i]["X"], (dim[1], 1)).T
+                trig["V"][i] * numpy.tile(seg[i]["X"], (dim[1], 1)).T,
         }
-    seg.append({"T": seg[-1]["T"][-1:] + period, "X": seg[-1]["X"][-1:]})
+        damp.append\
+            ({"T": seg[i]["T"][-1:] + (period - teps), "X": seg[i]["X"][-1:]})
     trig["T"] += trig["S"]
+    seg = sum([[s, d] for s, d in zip(seg, damp)], [])
     return {k: numpy.concatenate([s[k] for s in seg]) for k in seg[0]}, trig
 
 def farray_frag(xs, period, velo, accl, teps, div):
     assert velo > 0.0 and accl > 0.0 and \
-        teps > 0.0 and period > 0.0 and xs.shape[0] > 1
+        teps > 0.0 and period >= 2 * teps and xs.shape[0] > 1
     div = list(div)
     div[0] = xs.shape[0] if div[0] < 0 else max(1, div[0])
     traj, trig = [], []

@@ -13,10 +13,6 @@ from ophyd.utils.epics_pvs import AlarmSeverity, \
    data_shape, data_type, raise_if_disconnected
 from .common import AttrDict, fn_wait, masked_attr
 
-class HomeEnum(str, Enum):
-    forward, reverse, fwdlimit, revlimit = \
-        "forward", "reverse", "fwdlimit", "revlimit"
-
 def cpt_to_dev(cpt, name):
     return cpt.cls(name = name, **cpt.kwargs) if cpt.suffix is None \
         else cpt.cls(cpt.suffix, name = name, **cpt.kwargs)
@@ -57,6 +53,10 @@ class MyEpicsMotor(MonitorMotor, EpicsMotor):
         kind = "omitted", auto_monitor = True)
     jog_forward, jog_reverse = [Component(EpicsSignal, suffix,
         kind = "omitted", auto_monitor = True) for suffix in [".JOGF", ".JOGR"]]
+    _home_directions = {
+        "forward": "home_forward", "reverse": "home_reverse",
+        "fwdlimit": "jog_forward", "revlimit": "jog_reverse",
+    }
     _homing_direction, _homing_directions = "", ("fwdlimit", "revlimit")
 
     def _move_changed_base(self, timestamp, done, **kwargs):
@@ -116,12 +116,7 @@ class MyEpicsMotor(MonitorMotor, EpicsMotor):
 
     @raise_if_disconnected
     def home(self, direction, wait = True, **kwargs):
-        sig = getattr(self, {
-            HomeEnum.forward: "home_forward",
-            HomeEnum.reverse: "home_reverse",
-            HomeEnum.fwdlimit: "jog_forward",
-            HomeEnum.revlimit: "jog_reverse",
-        }[HomeEnum(direction)])
+        sig = getattr(self, self._home_directions[direction])
         self._started_moving, self._homing_direction = False, \
             direction if direction in self._homing_directions else ""
         position = (self.low_limit + self.high_limit) / 2
@@ -201,19 +196,24 @@ class QueueMotor(MonitorMotor, ErrorPositioner):
         super().__init__(*args, **kwargs)
         self.readback.name = self.name
 
-class MonoEnergy(PVPositionerPC):
-    setpoint = Component(EpicsSignal, "EAO")
-    readback = Component(EpicsSignalRO, "ERdbkAO",
+class MonoTheta(PVPositionerPC):
+    setpoint = Component(EpicsSignal, "ThetaAO")
+    readback = Component(EpicsSignalRO, "ThetaRdbkAO",
         kind = "hinted", auto_monitor = True)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.readback.name = self.name
 
+class MonoEnergy(MonoTheta):
+    setpoint = Component(EpicsSignal, "EAO")
+    readback = Component(EpicsSignalRO, "ERdbkAO",
+        kind = "hinted", auto_monitor = True)
+
 class HREnergy(MonoEnergy):
     auto = Component(EpicsSignal, "ModeBO", kind = "omitted")
 
-    def __init__(self, prefix = "", *, name, resetter,
+    def __init__(self, prefix = "", *, name, resetter = None,
         delta = (1.0, 1e-5), settle_time = None, timeout = None, **kwargs):
         super().__init__(prefix = prefix, name = name,
             settle_time = settle_time, timeout = timeout, **kwargs)

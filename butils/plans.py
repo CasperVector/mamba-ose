@@ -1,4 +1,5 @@
 import collections
+import numpy
 import re
 from ophyd.ophydobj import OphydObject
 from bluesky import plan_stubs as bps, preprocessors as bpp
@@ -56,7 +57,7 @@ def args_snake(args, snake_axes, use_list = False):
     if use_list:
         snaking = snaking[0], [len(l) for l in snaking[1]]
     snaking = [ax in snake_axes and num % 2 for ax, num in
-        zip(snaking[0], [1] + snaking[1][:-1])]
+        zip(snaking[0], numpy.cumprod([1] + snaking[1][:-1]))]
     def args_gen():
         cur = args.copy()
         for i in range(len(args) // unit):
@@ -65,8 +66,8 @@ def args_snake(args, snake_axes, use_list = False):
             elif use_list:
                 args[i * 2 + 1] = args[i * 2 + 1][::-1]
             else:
-                args[i * 2 + 1], args[i * 2 + 2] = \
-                    args[i * 2 + 2], args[i * 2 + 1]
+                args[i * 4 + 1], args[i * 4 + 2] = \
+                    args[i * 4 + 2], args[i * 4 + 1]
         return cur
     return args_gen
 

@@ -4,7 +4,7 @@ from bluesky.callbacks.core import CallbackBase
 from butils.data import ImageFiller, my_broker
 from butils.fly import auto_velo, fly_grid, fly_dgrid, sfly_grid
 from butils.plans import motors_get, plan_fmt
-from butils.traj import fpmac_archim, fpmac_grid, \
+from butils.traj import auto_atom, fpmac_archim, fpmac_grid, \
     fpmac_array, fpmac_list, fpmac_sarchim, fpmac_sgrid
 from .progress import ProgressReporter, progressBars
 
@@ -23,14 +23,17 @@ class BasePlanner(object):
     def md_gen(self, plan, *args, **kwargs):
         return kwargs["md"]
 
+    def args_gen(self, plan, *args, **kwargs):
+        md = self.md_gen(plan, *args,
+            md = kwargs.pop("md", None) or {}, **kwargs)
+        kwargs["md"] = {"plan_cmd": plan_fmt(("P." + plan, args, kwargs))}
+        return plan, args, kwargs, md
+
     def run(self, plan, *args, **kwargs):
         self.check(plan, *args, **kwargs)
         cb = self.callback(plan, *args, **kwargs)
-        md = self.md_gen(plan, *args,
-            md = kwargs.pop("md", None) or {}, **kwargs)
-        return self.U.RE(self.plans[plan](*args, **kwargs, md = {
-            "plan_cmd": plan_fmt(("P." + plan, args, kwargs))
-        }), cb, md = md)
+        plan, args, kwargs, md = self.args_gen(plan, *args, **kwargs)
+        return self.U.RE(self.plans[plan](*args, **kwargs), cb, md = md)
 
 class ChildPlanner(BasePlanner):
     parent = None
@@ -145,9 +148,9 @@ class HDF5Checker(CallbackBase):
             self.idx[1] += 1
             return
         self.idx[0] += 1
-        if self.idx[0] % 2:
+        cur = self.cur_get()
+        if cur is None:
             return
-        cur = self.idx[0] // 2 * self.num + self.idx[1]
         for det in self.dets:
             tol = self.tols.get(det)
             if tol is None:
@@ -158,14 +161,22 @@ class HDF5Checker(CallbackBase):
                 raise RuntimeError(("Unexpected value of %s:" +
                     " %d, should be %d") % (sig.vname(), cnt, cur))
 
+    def cur_get(self):
+        if self.idx[0] % 2:
+            return None
+        return self.idx[0] // 2 * self.num + self.idx[1]
+
 class BuboPlanner(ChildPlanner):
     def __init__(self, bubo, *, divs = {}, h5_tols = {}, configs = {}):
         super().__init__()
         self.bubo, self.divs = bubo, divs
         self.h5_tols, self._configs = h5_tols, configs
-        self.plans["sfly_grid"] = lambda dets, *args, **kwargs: sfly_grid(
-            self.bubo, dets, *args, div = div_get(self.divs, dets),
-            configs = self.configs("sfly_grid", dets, *args, **kwargs), **kwargs
+        self.plans["sfly_grid"] = self.plan_wrap("sfly_grid", sfly_grid)
+
+    def plan_wrap(self, k, f):
+        return lambda *args, **kwargs: f(
+            self.bubo, *args, div = div_get(self.divs, args[0]),
+            configs = self.configs(k, *args, **kwargs), **kwargs
         )
 
     def configs(self, plan, *args, **kwargs):
@@ -182,16 +193,27 @@ class PandaPlanner(ChildPlanner):
         enc_tols = {}, vbas_ratios = {}, configs = {}):
         super().__init__()
         self.pandas, self.divs = pandas, divs
-        self.enc_tols, self._configs = enc_tols, configs
-        self.h5_tols, self.vbas_ratios = h5_tols, vbas_ratios
+        self.h5_tols, self.enc_tols = h5_tols, enc_tols
+        self.vbas_ratios, self._configs = vbas_ratios, configs
         for k, f in [("fly_grid", fly_grid), ("fly_dgrid", fly_dgrid)]:
-            self.plans[k] = (lambda k, f: lambda dets, *args, **kwargs: f(
-                self.pandas, dets, *args, div = div_get(self.divs, dets),
-                configs = self.configs(k, dets, *args, **kwargs), **kwargs
-            ))(k, f)
+            self.plans[k] = self.plan_wrap(k, f)
+
+    def plan_wrap(self, k, f):
+        return lambda *args, **kwargs: f(
+            self.pandas, *args, div = div_get(self.divs, args[0]),
+            configs = self.configs(k, *args, **kwargs), **kwargs
+        )
+
+    def fly_params(self, plan, *args, **kwargs):
+        motor, lo, hi, num = args[-4:]
+        period = auto_velo(
+            [motor], abs(hi - lo) / (num - 1), kwargs["duty"], **\
+            {k: kwargs.get(k) for k in ["period", "atime", "velocity"]}
+        )[0]
+        return period * kwargs["duty"], period
 
     def check(self, plan, *args, **kwargs):
-        encoder_check(self.pandas[0], self.enc_tols, motors_get(args[1:]))
+        encoder_check(self.pandas[0], self.enc_tols, motors_get(args[1:])[-1:])
         vbas_check(self.vbas_ratios, args[1:], kwargs)
 
     def callback(self, plan, *args, **kwargs):
@@ -204,18 +226,34 @@ class PmacPlanner(ChildPlanner):
     def __init__(self, pandas, pmac, *, drift,
         divs = {}, enc_tols = {}, configs = {}):
         super().__init__()
-        self.pandas, self.pmac, self.divs = pandas, pmac, divs
-        self.drift, self.enc_tols, self._configs = drift, enc_tols, configs
+        self.pandas, self.pmac, self.drift = pandas, pmac, drift
+        self.divs, self.enc_tols, self._configs = divs, enc_tols, configs
         for k, f in [
             ("fpmac_archim", fpmac_archim), ("fpmac_grid", fpmac_grid),
             ("fpmac_array", fpmac_array), ("fpmac_list", fpmac_list),
             ("fpmac_sarchim", fpmac_sarchim), ("fpmac_sgrid", fpmac_sgrid),
         ]:
-            self.plans[k] = (lambda k, f: lambda dets, *args, **kwargs: f(
-                self.pandas, self.pmac, dets, *args,
-                div = [div_get(self.divs, dets), self.drift],
-                configs = self.configs(k, dets, *args, **kwargs), **kwargs
-            ))(k, f)
+            self.plans[k] = self.plan_wrap(k, f)
+
+    def plan_wrap(self, k, f):
+        return lambda *args, **kwargs: f(
+            self.pandas, self.pmac, *args,
+            div = [div_get(self.divs, args[0]), self.drift],
+            configs = self.configs(k, *args, **kwargs), **kwargs
+        )
+
+    def fly_params(self, plan, *args, **kwargs):
+        if plan not in ["fpmac_archim", "fpmac_grid"]:
+            return kwargs["period"][1], sum(kwargs["period"])
+        duty = auto_atom(kwargs.get("atom"), kwargs.get("duty"))[1]
+        period = auto_velo(
+            list(args[1 : 3]),
+            args[4] if plan == "fpmac_archim" else
+                abs(args[7] - args[6]) / (args[8] - 1),
+            duty, *[kwargs.get(k) for k in
+                ["period", "atime", "velocity"]]
+        )[0]
+        return duty * period, period
 
     def motors_get(self, plan, *args, **kwargs):
         if plan in ["fpmac_archim", "fpmac_grid",
