@@ -18,8 +18,7 @@ pandaFields = [
     ]), ("time", [
         ("", "rw", "float", "config"),
         ("units", "rw", "enum", "config"),
-        ("raw", "rw", "uint", "omitted"),
-        ("min", "r", "float", "omitted")
+        ("raw", "rw", "uint", "omitted")
     ]), ("bit_mux", [
         ("", "rw", "enum", "config"),
         ("delay", "rw", "uint", "config"),
@@ -465,12 +464,21 @@ class PandaRoot(Device):
         self.ad, self.motors = ad, {}
         self._romits, self._muxes, self._caps = \
             [[getattr(self, a) for a in l] for l in omcs]
-        self._poll_active, self._poll_event = False, threading.Event()
+        self._poller, self._poll_event = None, threading.Event()
         self.pcap.active.value.subscribe(lambda *, value, old_value, **kwargs:
             value and not old_value and self._poll_event.set())
         self._update()
         self._update_romits()
         self._start_poll()
+
+    def destroy(self):
+        self._destroyed = True
+        self._poll_event.set()
+        poller = self._poller
+        if poller:
+            poller.join()
+        self._client.stop()
+        super().destroy()
 
     def _update(self):
         for k, v in self._client.get_changes():
@@ -488,17 +496,16 @@ class PandaRoot(Device):
 
     def _start_poll(self):
         def poll():
-            self._poll_active = True
-            while True:
-                try:
+            try:
+                while not self._destroyed:
                     self._poll_event.wait\
                         (self._poll_period[self.pcap.active.value._readback])
                     self._poll_event.clear()
                     self._update()
-                except:
-                    self._poll_active = False
-                    raise
-        threading.Thread(target = poll, daemon = True).start()
+            finally:
+                self._poller = None
+        self._poller = threading.Thread(target = poll, daemon = True)
+        self._poller.start()
 
     def clear_muxes(self, keep = {}):
         keep = {getattr(self, k): keep[k] for k in keep}

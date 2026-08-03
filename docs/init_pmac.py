@@ -9,6 +9,7 @@ from butils.ad import make_qzdetector
 from butils.common import AttrDict
 from butils.fly import prep_dseq
 from butils.panda import PandaDevice
+from butils.plans import ctrans_reg
 from butils.traj import PmacMotor, PmacTraj
 from mamba.backend.mzserver import config_read, server_start
 from mamba.backend.planner import MambaPlanner, PandaPlanner, PmacPlanner
@@ -17,7 +18,8 @@ QZDetector2 = make_qzdetector("QZDetector", 2)
 M = AttrDict([
     ("brick1_" + s, PmacMotor("BRICK1:%s" % s.upper(),
         name = "M.brick1_%s" % s)) for s in ["m2", "m3", "m4"]
-] + [("pmac", PmacTraj("BRICK1:", name = "M.pmac"))])
+] + [("brick1_pmac", PmacTraj("BRICK1:", name = "M.brick1_pmac"))])
+M.brick1_pmac.motors = [M["brick1_" + s for s in ["m2", "m3", "m4"]]]
 D = AttrDict(
     qdp1 = QZDetector2("panda1:", name = "D.qdp1"),
     qdp2 = QZDetector2("panda2:", name = "D.qdp2")
@@ -41,16 +43,17 @@ prep_dseq(D.panda2, [("ttlout1.val", "b")], [
     ("inenc1.val", None), ("inenc2.val", None),
     ("inenc3.val", None), ("inenc4.val", None),
 ])
-D.panda2.configure({"seq1.bita": "TTLIN1.VAL", "seq2.bita": "TTLIN1.VAL"})
+D.panda2.configure({"seq%s.bita" % c: "TTLIN1.VAL" for c in "12"})
 D.qdp1.configure({"num_images": 0})
 D.qdp2.configure({"num_images": 0})
 
+ctrans_reg()
 RE = RunEngine({})
 U = server_start(globals(), config_read())
 U.planner = MambaPlanner(U)
-U.planner.extend(PandaPlanner([D.panda1],
+U.planner.extend(PandaPlanner([(D.panda1, D.panda2)],
     enc_tols = {m: 0.5 for m in D.panda1.motors}))
-U.planner.extend(PmacPlanner([D.panda1, D.panda2], M.pmac,
+U.planner.extend(PmacPlanner([(D.panda1, D.panda2)], [M.brick1_pmac],
     drift = 1e6, enc_tols = {m: 0.5 for m in D.panda1.motors}))
 P = U.planner.make_plans()
 

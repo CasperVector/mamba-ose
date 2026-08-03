@@ -432,7 +432,7 @@ def auto_shut(shutter, pos_cache):
             yield from bps.move_per_step({shutter: 0}, pos_cache)
     return ([shutter], [fwrap]) if shutter else ([], [])
 
-def fly_grid(pandas, dets, *args, shutter = None,
+def fly_sgrid(pandas, dets, *args, shutter = None,
     configs = {}, md = None, pos_cache = None, **kwargs):
     motors, pos_cache = motors_get(args), norm_cache(pos_cache)
     seqpos = map_seqpos(pandas[0], [pandas[0].motors[motors[-1]]], False)
@@ -483,6 +483,10 @@ def fly_dgrid(pandas, dets, *args, shutter = None, pcomp = False,
         [final_adtrig(dets), final_fly_motor(motors[-1]),
             final_config(devs, configs)], md = _md
     )
+
+def fly_grid(pandas, *args, **kwargs):
+    return {"PCAP.ACTIVE": fly_sgrid, "SRGATE1.OUT": fly_dgrid}\
+        [pandas[0].seq1.enable.value.get()](pandas, *args, **kwargs)
 
 def sseq_base(scomp):
     def seq(bubo):

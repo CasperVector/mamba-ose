@@ -8,7 +8,7 @@ from PIL import Image
 from PyQt5 import QtCore, QtWidgets
 from butils.gutils import MambaModel, MambaView
 from butils.pgitems import AlignedLines, MyROI, ProjectImage
-from .fxbpm import FxBpmServer, fmt_pos, fmt_time, roi_crop, xywh2roi
+from .fxbpm import FxBpmServer, fmt_pos, fmt_size, fmt_time, roi_crop, xywh2roi
 
 class FxBpmPlot(MambaView, pyqtgraph.GraphicsView):
     def __init__(self, model, titles, parent = None, mtyps = ({}, {})):
@@ -71,22 +71,26 @@ class FxBpmImage(MambaView, pyqtgraph.GraphicsView):
         self.submit("hover", (i, j))
 
 class FxBpmView(MambaView, QtWidgets.QMainWindow):
-    def __init__(self, model, parent = None):
+    def __init__(self, model, prefix, parent = None):
         super().__init__(parent)
-        self.setWindowTitle("Fluorescent screen BPM")
+        self.setWindowTitle("Fluorescent screen BPM - %s" % prefix)
         self.bpm, self.hover, self.buttons = [], [], []
+        self.bpm_fmts = 2 * [fmt_pos, fmt_pos, fmt_size, fmt_size] + [fmt_pos]
+        self.hover_fmts = 5 * [fmt_pos]
         layout1, layout0 = QtWidgets.QGridLayout(), QtWidgets.QVBoxLayout()
         for i, j, desc in [
             (0, 1, "px"), (0, 2, "um"),
             (1, 0, "Centre X"), (2, 0, "Centre Y"),
             (3, 0, "Mouse X"), (4, 0, "Mouse Y"),
-            (5, 1, "HM-ROI mean"), (5, 2, "At mouse"),
-            (6, 0, "Intensity")
+            (5, 0, "HM width"), (6, 0, "HM height"),
+            (7, 1, "HM-ROI mean"), (7, 2, "At mouse"),
+            (8, 0, "Intensity")
         ]:
             layout1.addWidget(QtWidgets.QLabel(desc), i, j)
         for group, ijs in [
-            (self.bpm, [(1, 1), (2, 1), (1, 2), (2, 2), (6, 1)]),
-            (self.hover, [(3, 1), (4, 1), (3, 2), (4, 2), (6, 2)])
+            (self.bpm, [(1, 1), (2, 1), (5, 1), (6, 1),
+                (1, 2), (2, 2), (5, 2), (6, 2), (8, 1)]),
+            (self.hover, [(3, 1), (4, 1), (3, 2), (4, 2), (8, 2)])
         ]:
             for i, j in ijs:
                 group.append(QtWidgets.QLineEdit(self))
@@ -135,16 +139,17 @@ class FxBpmView(MambaView, QtWidgets.QMainWindow):
         self.buttons[3].setEnabled(self.mode != "closed")
         self.buttons[2].setText("Stop" if self.mode == "acquiring" else "Start")
 
-    on_bpm = lambda self, ijxyc: [widget.setText(fmt_pos(val))
-        for widget, val in zip(self.bpm, ijxyc)]
-    on_hover = lambda self, ijxyc: [widget.setText(fmt_pos(val))
-        for widget, val in zip(self.hover, ijxyc)]
+    on_bpm = lambda self, vals: [widget.setText(fmt(val))
+        for widget, fmt, val in zip(self.bpm, self.bpm_fmts, vals)]
+    on_hover = lambda self, vals: [widget.setText(fmt(val))
+        for widget, fmt, val in zip(self.hover, self.hover_fmts, vals)]
 
 class FxBpmModel(MambaModel):
-    def __init__(self):
+    def __init__(self, *argv):
         super().__init__()
         pyqtgraph.setConfigOptions(background = "w", foreground = "k")
-        self.app, self.view = QtWidgets.QApplication([]), FxBpmView(self)
+        self.app = QtWidgets.QApplication([])
+        self.view = FxBpmView(self, argv[0])
         self.server, self.idle = FxBpmServer(self.submit), [False, False]
         self.app.aboutToQuit.connect(lambda: self.submit("exit"))
         self.sbind(["err", "exit", "update", "roi", "start", "stop",
@@ -244,7 +249,7 @@ def main(argv):
     for i in [1, 3]:
         if len(argv) > i:
             argv[i] = float(argv[i])
-    model = FxBpmModel()
+    model = FxBpmModel(*argv)
     return model.run(*argv)
 
 if __name__ == "__main__":

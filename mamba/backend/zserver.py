@@ -1,10 +1,10 @@
-import json
 import queue
 import re
 import threading
 import traceback
 import uuid
 import zmq
+from butils.common import cbor_dump_numpy, cbor_load_numpy
 
 class ZError(Exception): pass
 
@@ -97,7 +97,7 @@ class ZServer(object):
 
     def notify(self, msg):
         with self.nlock:
-            return self.nsock.send_json(msg)
+            return self.nsock.send(cbor_dump_numpy(msg))
 
     def start(self):
         self.handles = {typ: getattr(self, "do_" + typ) for typ in self.handles}
@@ -106,7 +106,7 @@ class ZServer(object):
     def loop(self):
         while True:
             try:
-                req = self.rsock.recv_json()
+                req = cbor_load_numpy(self.rsock.recv())
                 req["typ"] = req["typ"].split("/")
                 typ = req["typ"][0]
             except:
@@ -118,10 +118,10 @@ class ZServer(object):
             except (Exception, KeyboardInterrupt) as e:
                 rep = zsv_err_rep(e)
             try:
-                rep = json.dumps(rep).encode("UTF-8")
+                rep = cbor_dump_numpy(rep)
             except:
-                rep = b'{"err": "json", ' + \
-                    b'"desc": "error encoding ZServer response"}'
+                rep = cbor_dump_numpy({"err": "cbor",
+                    "desc": "error encoding ZServer response"})
             try:
                 self.rsock.send(rep)
             except: pass
@@ -141,8 +141,9 @@ class ZServer(object):
             raise_syntax(req)
         if doq:
             self.q = queue.Queue()
-        self.lsock.send(cmd)
-        assert not self.lsock.recv()
+        if cmd:
+            self.lsock.send(cmd)
+            assert not self.lsock.recv()
         if doq:
             ret = self.q.get()
             self.q = None
@@ -181,7 +182,7 @@ class ZnClient(object):
     def loop(self):
         while True:
             try:
-                msg = self.nsock.recv_json()
+                msg = cbor_load_numpy(self.nsock.recv())
                 msg["typ"] = msg["typ"].split("/")
                 typ = msg["typ"][0]
             except:
@@ -247,8 +248,8 @@ class ZrClient(object):
         req = {"typ": typ}
         req.update(kwargs)
         with self.rlock:
-            self.rsock.send_json(req)
-            return self.rsock.recv_json()
+            self.rsock.send(cbor_dump_numpy(req))
+            return cbor_load_numpy(self.rsock.recv())
 
     def req_rep(self, typ, **kwargs):
         return zsv_rep_chk(self.req_rep_base(typ, **kwargs))

@@ -25,14 +25,18 @@ class SimImage(ThrottleMonitor):
         return self.image.trigger()
 
     def monitor(self, dnotify, typ = "image"):
-        _timestamp = [0.0]
-        def cb(*, value, timestamp, **kwargs):
-            if value is not None and self.maybe_monitor(_timestamp, timestamp):
-                dnotify("monitor/" + typ, {
-                    "data": {self.image.name: value},
-                    "timestamps": {self.image.name: timestamp}
-                })
-        return self.image.subscribe(cb)
+        if not hasattr(self, "_monitor_cb"):
+            _timestamp = [0.0]
+            def cb(*, value, timestamp, **kwargs):
+                if value is not None and \
+                    self.maybe_monitor(_timestamp, timestamp):
+                    dnotify("monitor/" + typ, {
+                        "data": {self.image.name: value},
+                        "timestamps": {self.image.name: timestamp}
+                    })
+            self._monitor_cb = cb
+        self.image.clear_sub(self._monitor_cb)
+        return self.image.subscribe(self._monitor_cb)
 
 class SimMotorImage(SimImage):
     _lock = None
@@ -46,25 +50,31 @@ class SimMotorImage(SimImage):
             return self.image.trigger()
 
     def mbind(self, motors):
-        _timestamp = [0.0]
-        def cb(*, value, timestamp, **kwargs):
-            if value is None or not self._lock.acquire():
-                return
-            try:
-                if self.maybe_monitor(_timestamp, timestamp):
-                    self.image.trigger().wait()
-            finally:
-                self._lock.release()
-        return [m.subscribe(cb) for m in motors]
+        if not hasattr(self, "_mbind_cb"):
+            _timestamp = [0.0]
+            def cb(*, value, timestamp, **kwargs):
+                if value is None or not self._lock.acquire():
+                    return
+                try:
+                    if self.maybe_monitor(_timestamp, timestamp):
+                        self.image.trigger().wait()
+                finally:
+                    self._lock.release()
+            self._mbind_cb = cb
+        [m.clear_sub(self._mbind_cb) for m in motors]
+        return [m.subscribe(self._mbind_cb) for m in motors]
 
     def monitor(self, dnotify, typ = "image"):
-        def cb(*, value, timestamp, **kwargs):
-            if value is not None:
-                dnotify("monitor/" + typ, {
-                    "data": {self.image.name: value},
-                    "timestamps": {self.image.name: timestamp}
-                })
-        return self.image.subscribe(cb)
+        if not hasattr(self, "_monitor_cb"):
+            def cb(*, value, timestamp, **kwargs):
+                if value is not None:
+                    dnotify("monitor/" + typ, {
+                        "data": {self.image.name: value},
+                        "timestamps": {self.image.name: timestamp}
+                    })
+            self._monitor_cb = cb
+        self.image.clear_sub(self._monitor_cb)
+        return self.image.subscribe(self._monitor_cb)
 
 class SimCounterImage(SimImage):
     src = dataset = counter = None

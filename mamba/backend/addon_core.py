@@ -1,5 +1,3 @@
-import base64
-import pickle
 import time
 from .zserver import ZError, raise_syntax, unary_op, znc_handle_gen
 
@@ -48,23 +46,13 @@ def mzs_scan(self, req):
 
 addonMzs = {"dev": mzs_dev, "scan": mzs_scan}
 
-def doc_handle_gen(typ):
-    def handler(self, msg):
-        msg["doc"] = pickle.loads(base64.b64decode(msg["doc"].encode("UTF-8")))
-        [sub(msg) for sub in self.subs[typ].values()]
-    return handler
-
 addonMnc = {
-    "doc": doc_handle_gen("doc"),
-    "monitor": doc_handle_gen("monitor"),
+    "doc": znc_handle_gen("doc"),
+    "monitor": znc_handle_gen("monitor"),
     "scan": znc_handle_gen("scan")
 }
 
-def doc_notify(notify):
-    return lambda typ, doc: notify({"typ": typ, "doc":
-        base64.b64encode(pickle.dumps(doc)).decode("UTF-8")})
-
-def lossy_notify(periods, dnotify):
+def lossy_notify(periods, notify):
     timestamps, caches = {}, {}
     def lnotify(typ, doc):
         caches.setdefault(typ, {})
@@ -78,22 +66,22 @@ def lossy_notify(periods, dnotify):
             return
         timestamps[typ] = timestamp
         doc, caches[typ] = caches[typ], {}
-        dnotify(typ, doc)
+        notify({"typ": typ, "doc": doc})
     return lnotify
 
-def mzserver_callback(notify, dnotify):
+def mzserver_callback(notify):
     def cb(name, doc):
         if name == "start":
             notify({"typ": "scan/start", "id": doc["scan_id"]})
-        dnotify("doc/" + name, doc)
+        notify({"typ": "doc/" + name, "doc": doc})
         if name == "stop":
             notify({"typ": "scan/stop"})
     return cb
 
 def state_build(U, config):
-    U.dnotify, U.monitor_periods = doc_notify(U.mzs.notify), {}
-    U.lnotify = lossy_notify(U.monitor_periods, U.dnotify)
-    U.mzcb = mzserver_callback(U.mzs.notify, U.dnotify)
+    U.monitor_periods = {}
+    U.lnotify = lossy_notify(U.monitor_periods, U.mzs.notify)
+    U.mzcb = mzserver_callback(U.mzs.notify)
 
 saddon_core = lambda arg: {"mzs": addonMzs, "state": state_build}
 caddon_core = lambda arg: {"mnc": addonMnc}

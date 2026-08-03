@@ -1,6 +1,6 @@
 import numpy
 from bluesky import plans, plan_stubs as bps, preprocessors as bpp
-from butils.fly import fly_dgrid, sfly_grid
+from butils.fly import fly_grid, sfly_grid
 from butils.plans import \
     args_snake, make_sub_step, motors_get, norm_cache, norm_snake
 from mamba.backend.planner import div_get
@@ -14,7 +14,7 @@ def fly_test(pandas, dets, out_args, in_args,
     gen = args_snake(in_args, snake_axes)
     def sub():
         yield from bps.trigger_and_read(list(dets) + motors)
-        yield from fly_dgrid(pandas, dets, *gen(), **kwargs,
+        yield from fly_grid(pandas, dets, *gen(), **kwargs,
             snake_axes = snake_axes, pos_cache = pos_cache)
     args = out_args + in_args
     nums = [args[i * 4 + 3] for i in range(len(args) // 4)]
@@ -56,6 +56,13 @@ class MyPandaPlanner(PandaPlanner):
         if plan == "fly_test":
             args = [args[0]] + list(args[2])
         return args
+
+    def plan_wrap(self, k, f):
+        return lambda *args, **kwargs: f(
+            self.motors_map(motors_get(self.args_conv(k, args)[1:])[-1:]),
+            *args, div = div_get(self.divs, args[0]),
+            configs = self.configs(k, *args, **kwargs), **kwargs
+        )
 
     def check(self, plan, *args, **kwargs):
         return super().check(plan, *self.args_conv(plan, args), **kwargs)

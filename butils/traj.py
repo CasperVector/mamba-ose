@@ -131,9 +131,10 @@ def auto_accl(motors, acceleration):
         for motor in motors)
     return accl
 
-def auto_axes(panda, pmac, motors, configs):
+def auto_axes(panda, pmac, motors, configs, trigs = None):
     axes = "".join(motor.cs_axis.get() for motor in motors).lower()
-    inps = [panda.motors[motor] for motor in motors]
+    inps = [panda.motors[motors[i]] for i in
+        (range(len(motors)) if trigs is None else trigs)]
     seqpos = map_seqpos(panda, inps, True)
     if pmac:
         pmac.use_axes(axes)
@@ -249,7 +250,7 @@ def fpmac_grid(
 def fpmac_array(
     pandas, pmac, dets, motors, xs, *, shutter = None,
     period, div = (-1, 1e6), velocity = None, acceleration = None,
-    configs = {}, md = None, pos_cache = None
+    trig_axes = None, configs = {}, md = None, pos_cache = None
 ):
     velo, = set(motor.velocity.get() for motor in motors)
     vmax, = set(motor.motor_vmax.get() for motor in motors)
@@ -259,11 +260,17 @@ def fpmac_array(
         if vmax > 0.0:
             assert velocity <= vmax
     assert velocity > 0.0
+    if trig_axes is None:
+        trig_axes = tuple(range(len(motors)))
     accl = auto_accl(motors, acceleration)
     drift = farray_drift(period, div[1], PMAC_EPS)
     traj, trig = farray_frag\
         (xs, sum(period), velocity, accl, PMAC_EPS, (div[0], 0.0))
-    axes, inps, poss, pcfg = auto_axes(pandas[0], pmac, motors, configs)
+    axes, inps, poss, pcfg = auto_axes\
+        (pandas[0], pmac, motors, configs, trig_axes)
+    for tg in trig:
+        tg["X"] = tg["X"][:,trig_axes]
+        tg["V"] = tg["V"][:,trig_axes]
     cond = [ptrig_cond(tg["X"], tg["V"], inps, poss) for tg in trig]
     trig = [farray_ptrig(tg, c, period) for tg, c in zip(trig, cond)]
     traj, trig, kwargs, md = auto_fpmac(pandas, traj, trig, axes, md, (1, 2))

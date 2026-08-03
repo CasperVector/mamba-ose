@@ -39,14 +39,18 @@ class SimpleDet(Device):
 
 class MonitorMotor(ThrottleMonitor):
     def monitor(self, dnotify):
-        _timestamp = [0.0]
-        def cb(*, value, timestamp, **kwargs):
-            if value is not None and self.maybe_monitor(_timestamp, timestamp):
-                dnotify("monitor/position", {
-                    "data": {self.name: value},
-                    "timestamps": {self.name: timestamp}
-                })
-        return self.subscribe(cb)
+        if not hasattr(self, "_monitor_cb"):
+            _timestamp = [0.0]
+            def cb(*, value, timestamp, **kwargs):
+                if value is not None and \
+                    self.maybe_monitor(_timestamp, timestamp):
+                    dnotify("monitor/position", {
+                        "data": {self.name: value},
+                        "timestamps": {self.name: timestamp}
+                    })
+            self._monitor_cb = cb
+        self.clear_sub(self._monitor_cb)
+        return self.subscribe(self._monitor_cb)
 
 class MyEpicsMotor(MonitorMotor, EpicsMotor):
     motor_done_move = Component(EpicsSignalRO, ".DMOV",
@@ -293,8 +297,8 @@ class SerialEnergy(PositionerBase):
         status = super().move(value, timeout = timeout, moved_cb = moved_cb)
         self._run_subs(sub_type = self.SUB_START, timestamp = time.time())
         self._moving, self._stopping = True, False
-        threading.Thread(daemon = True,
-            target = self._move_base, args = (value,)).start()
+        threading.Thread(target = self._move_base,
+            args = (value,), daemon = True).start()
         try:
             if wait:
                 status_wait(status)

@@ -1,4 +1,5 @@
 bluesky
+cbor2
 h5py
 numpy
 ophyd

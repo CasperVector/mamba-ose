@@ -3,7 +3,14 @@ import glob
 import os
 import queue
 import re
+import sys
 import threading
+from collections.abc import Sequence
+try:
+    import cbor2
+    import numpy
+except ImportError:
+    pass
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
@@ -72,4 +79,57 @@ def input_gen(argv):
         def end_input():
             pass
     return my_input, end_input
+
+cbor_decoder_types = {
+    64: "u1", 65: ">u2", 66: ">u4", 67: ">u8", 68: "u1", 69: "<u2",
+    70: "<u4", 71: "<u8", 72: "i1", 73: ">i2", 74: ">i4", 75: ">i8",
+    77: "<i2", 78: "<i4", 79: "<i8", 80: ">f2", 81: ">f4",
+    82: ">f8", 83: ">f16", 84: "<f2", 85: "<f4", 86: "<f8", 87: "<f16",
+}
+cbor_encoder_types = {cbor_decoder_types[v]: v
+    for v in cbor_decoder_types if v != 68}
+
+def tag_decoder_numpy(decoder, tag):
+    if isinstance(tag, bool):
+        tag = decoder
+    if tag.tag in cbor_decoder_types:
+        return numpy.frombuffer(tag.value, dtype = cbor_decoder_types[tag.tag])
+    if tag.tag in [40, 1040]:
+        assert (
+            isinstance(tag.value, Sequence) and len(tag.value) == 2 and
+            isinstance(tag.value[0], Sequence) and
+            isinstance(tag.value[1], numpy.ndarray)
+        ), tag.value
+        return tag.value[1].reshape\
+            (tag.value[0], order = "C" if tag.tag == 40 else "F")
+    return tag
+
+# <https://github.com/gsmecher/tuberd/blob/master/tuber/codecs.py>
+
+def default_encoder_numpy(encoder, obj):
+    if isinstance(obj, (numpy.number, numpy.bool_)):
+        return encoder.encode(obj.item())
+    assert isinstance(obj, numpy.ndarray), obj
+    dtype, flags = obj.dtype, obj.flags
+    assert flags.c_contiguous or flags.f_contiguous, obj
+    dtype = dtype.byteorder, dtype.kind, dtype.itemsize
+    dtype = cbor_encoder_types["%s%s%d" % ((
+        "" if dtype[2] == 1 else
+        (dtype[0] if dtype[0] in "<>" else
+        "<>"[sys.byteorder == "big"]),
+    ) + dtype[1:])]
+    encoder.encode_length(6, 40 if flags.c_contiguous else 1040)
+    encoder.encode_length(4, 2)
+    encoder.encode_length(4, len(obj.shape))
+    for n in obj.shape:
+        encoder.encode_int(n)
+    encoder.encode_length(6, dtype)
+    encoder.encode_length(2, obj.nbytes)
+    encoder.fp.write(obj.data)
+
+def cbor_load_numpy(buf):
+    return cbor2.loads(buf, tag_hook = tag_decoder_numpy)
+
+def cbor_dump_numpy(obj):
+    return cbor2.dumps(obj, default = default_encoder_numpy)
 

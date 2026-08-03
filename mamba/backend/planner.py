@@ -2,7 +2,7 @@ import os
 from bluesky import plans
 from bluesky.callbacks.core import CallbackBase
 from butils.data import ImageFiller, my_broker
-from butils.fly import auto_velo, fly_grid, fly_dgrid, sfly_grid
+from butils.fly import auto_velo, fly_sgrid, fly_dgrid, fly_grid, sfly_grid
 from butils.plans import motors_get, plan_fmt
 from butils.traj import auto_atom, fpmac_archim, fpmac_grid, \
     fpmac_array, fpmac_list, fpmac_sarchim, fpmac_sgrid
@@ -192,15 +192,17 @@ class PandaPlanner(ChildPlanner):
     def __init__(self, pandas, *, divs = {}, h5_tols = {},
         enc_tols = {}, vbas_ratios = {}, configs = {}):
         super().__init__()
-        self.pandas, self.divs = pandas, divs
-        self.h5_tols, self.enc_tols = h5_tols, enc_tols
+        self.divs, self.h5_tols, self.enc_tols = divs, h5_tols, enc_tols
         self.vbas_ratios, self._configs = vbas_ratios, configs
-        for k, f in [("fly_grid", fly_grid), ("fly_dgrid", fly_dgrid)]:
+        self.motors = self.motors_prep(pandas)
+        for k, f in [("fly_sgrid", fly_sgrid),
+            ("fly_dgrid", fly_dgrid), ("fly_grid", fly_grid)]:
             self.plans[k] = self.plan_wrap(k, f)
 
     def plan_wrap(self, k, f):
         return lambda *args, **kwargs: f(
-            self.pandas, *args, div = div_get(self.divs, args[0]),
+            self.motors_map(motors_get(args[1:])[-1:]),
+            *args, div = div_get(self.divs, args[0]),
             configs = self.configs(k, *args, **kwargs), **kwargs
         )
 
@@ -212,8 +214,20 @@ class PandaPlanner(ChildPlanner):
         )[0]
         return period * kwargs["duty"], period
 
+    def motors_prep(self, pandas):
+        motorl = [(m, tuple(ps)) for ps in pandas for m in ps[0].motors]
+        motord = dict(motorl)
+        assert len(motord) == len(motorl)
+        return motord
+
+    def motors_map(self, motors):
+        pandas, = set(self.motors[m] for m in motors)
+        return pandas
+
     def check(self, plan, *args, **kwargs):
-        encoder_check(self.pandas[0], self.enc_tols, motors_get(args[1:])[-1:])
+        motors = motors_get(args[1:])[-1:]
+        pandas = self.motors_map(motors)
+        encoder_check(pandas[0], self.enc_tols, motors)
         vbas_check(self.vbas_ratios, args[1:], kwargs)
 
     def callback(self, plan, *args, **kwargs):
@@ -223,11 +237,12 @@ class PandaPlanner(ChildPlanner):
 class PmacPlanner(ChildPlanner):
     configs = BuboPlanner.configs
 
-    def __init__(self, pandas, pmac, *, drift,
+    def __init__(self, pandas, pmacs, *, drift,
         divs = {}, enc_tols = {}, configs = {}):
         super().__init__()
-        self.pandas, self.pmac, self.drift = pandas, pmac, drift
-        self.divs, self.enc_tols, self._configs = divs, enc_tols, configs
+        self.drift, self.divs = drift, divs
+        self.enc_tols, self._configs = enc_tols, configs
+        self.motors = self.motors_prep(pandas, pmacs)
         for k, f in [
             ("fpmac_archim", fpmac_archim), ("fpmac_grid", fpmac_grid),
             ("fpmac_array", fpmac_array), ("fpmac_list", fpmac_list),
@@ -237,7 +252,7 @@ class PmacPlanner(ChildPlanner):
 
     def plan_wrap(self, k, f):
         return lambda *args, **kwargs: f(
-            self.pandas, self.pmac, *args,
+            *(self.motors_map(self.motors_get(k, *args, **kwargs)) + args),
             div = [div_get(self.divs, args[0]), self.drift],
             configs = self.configs(k, *args, **kwargs), **kwargs
         )
@@ -255,6 +270,19 @@ class PmacPlanner(ChildPlanner):
         )[0]
         return duty * period, period
 
+    def motors_prep(self, pandas, pmacs):
+        motorl = [(m, tuple(ps)) for ps in pandas for m in ps[0].motors], \
+            [(m, p) for p in pmacs for m in p.motors]
+        motord = dict(motorl[0]), dict(motorl[1])
+        assert len(motord[0]) == len(motorl[0]) and \
+            len(motord[1]) == len(motorl[1])
+        return {m: (motord[0][m], motord[1][m])
+            for m in set(motord[0]) & set(motord[1])}
+
+    def motors_map(self, motors):
+        (pandas, pmac), = set(self.motors[m] for m in motors)
+        return pandas, pmac
+
     def motors_get(self, plan, *args, **kwargs):
         if plan in ["fpmac_archim", "fpmac_grid",
             "fpmac_sarchim", "fpmac_sgrid"]:
@@ -266,8 +294,9 @@ class PmacPlanner(ChildPlanner):
         return []
 
     def check(self, plan, *args, **kwargs):
-        encoder_check(self.pandas[0], self.enc_tols,
-            self.motors_get(plan, *args, **kwargs))
+        motors = self.motors_get(plan, *args, **kwargs)
+        pandas, pmac = self.motors_map(motors)
+        encoder_check(pandas[0], self.enc_tols, motors)
 
     def callback(self, plan, *args, **kwargs):
         return [self.U.mzcb, self.parent.progress]

@@ -50,7 +50,7 @@ RE = RunEngine({})
 U = server_start(globals(), config_read())
 U.planner = ImagePlanner(U)
 U.planner.extend(MyPandaPlanner(
-    [D.panda], divs = {D.xsp3: 12216}, h5_tols = {D.xsp3: 0},
+    [(D.panda,)], divs = {D.xsp3: 12216}, h5_tols = {D.xsp3: 0},
     enc_tols = {m: 0.025 for m in D.panda.motors},
     vbas_ratios = {m: 2.0 for m in D.panda.motors},
     configs = {D.xsp3: {"cam.trigger_mode": 3}}

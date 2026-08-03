@@ -17,25 +17,30 @@ def auto_roi(img, ratio = (2.5, 5.0)):
         if pos < lohi[1]:
             ratios += (img.shape[1 - i] - 1 - pos) / (lohi[1] - pos),
         roi += tuple(pos - (pos - v) * max(ratio[0], min(ratios)) for v in lohi)
-    return norm_roi(roi, *img.shape[::-1])
+    return norm_roi(numpy.round(roi).astype("int"), *img.shape[::-1])
 
 def img_bpm(img, roi):
     crop = roi_crop(img, roi)
-    (x, y), (total, area) = img_bary(crop), img_peak(crop)[2]
-    return roi[0] + x, roi[2] + y, (total / area if area else 0.0)
-
-def fmt_pos(x):
-    return "%.5g" % x
+    (x, y), hmroi, (total, area) = (img_bary(crop),) + img_peak(crop)[1:]
+    return (roi[0] + x, roi[0] + hmroi[0], roi[0] + hmroi[1]), \
+        (roi[2] + y, roi[2] + hmroi[2], roi[2] + hmroi[3]), \
+        (total / area if area else 0.0)
 
 def fmt_time(t):
     return datetime.datetime.utcfromtimestamp(t).\
         strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
+def fmt_pos(x):
+    return "%.5g" % x
+
+def fmt_size(x):
+    return "%.4g" % x
+
 class FxBpmServer(QueueServer):
     pv = record = psize = span = None
     push = False
 
-    def open(self, prefix, psize, record = "record.txt", span = 250.0):
+    def open(self, prefix, psize, record = "", span = 250.0):
         assert not self.pv
         epics.caput(prefix + "cam1:ImageMode", "Continuous")
         epics.caput(prefix + "cam1:ArrayCallbacks", 1)
@@ -48,7 +53,8 @@ class FxBpmServer(QueueServer):
             self.pv = epics.PV(prefix + "image1:ArrayData",
                 count = self.shape[0] * self.shape[1], auto_monitor = True)
             self.pv.add_callback(self.icb)
-            self.record = open(record, "a")
+            if record:
+                self.record = open(record, "a")
         except:
             self.close()
             raise
@@ -78,14 +84,18 @@ class FxBpmServer(QueueServer):
         return ij + (x, y)
 
     def bpm(self, img, roi, time, plot):
-        i, j, c = img_bpm(img, roi)
-        x, y = self.ijxy((i, j))[2:]
-        self.record.write\
-            (" ".join([fmt_time(time), fmt_pos(x), fmt_pos(y)]) + "\n")
+        (i, i0, i1), (j, j0, j1), c = img_bpm(img, roi)
+        (x, y), pw, ph = self.ijxy((i, j))[2:], i1 - i0, j1 - j0
+        w, h = self.psize * pw, self.psize * ph
+        if self.record:
+            self.record.write(" ".join([
+                fmt_time(time), fmt_pos(x), fmt_pos(y),
+                fmt_size(w), fmt_size(h),
+            ]) + "\n")
         plot.append((time, x, y))
         while plot[0][0] < time - self.span:
             plot.popleft()
-        return (i, j, x, y, c), numpy.array(plot).T
+        return (i, j, pw, ph, x, y, w, h, c), numpy.array(plot).T
 
     def serve(self):
         img, time, roi, plot = None, None, None, collections.deque()
