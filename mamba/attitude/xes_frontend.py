@@ -234,10 +234,9 @@ class XesModel(MambaZModel):
         if self.mode == "staged":
             self.mrc_cmd("U.%s.refresh(mode = '')\n" % self.name)
 
-def main(arg = ""):
-    name = arg or "atti_xes"
+def main(name = "atti_xes"):
     sys.exit(XesModel(name).run())
 
 if __name__ == "__main__":
-    main()
+    main(*sys.argv[1:])
 

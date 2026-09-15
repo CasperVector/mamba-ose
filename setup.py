@@ -7,7 +7,7 @@ with open("requirements.txt") as reqs:
 
 setup(
     name="mamba",
-    version="0.1a1",
+    version="0.6.0",
     packages=find_packages(),
     author="Yanda Geng, Yu Liu",
     author_email="gengyanda16@smail.nju.edu.cn, liuyu91@ihep.ac.cn",

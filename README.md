@@ -26,22 +26,20 @@ Mamba is the experimental control framework-to-be of HEPS. It aims to provide
 
 * Before first use (customise the config after this):
     ```sh
-    $ mkdir -p ~/.mamba
-    $ cp docs/config_gengyd.yaml ~/.mamba/config.yaml
-    $ cp docs/init_sim.py ~/.mamba/init.py
+    $ mkdir -p mamba_site  # For real installation, use ~/mamba_site.
+    $ cp docs/config_gengyd.py mamba_site/config.py
+    $ cp docs/init_sim.py mamba_site/init.py
     ```
 
 * Routine use, starting the backend first:
     ```sh
-    $ mamba-cli  # After real installation; otherwise see below.
-    $ cd /path/to/mamba
-    $ python3 -m mamba.backend.mamba_cli
+    $ cd ~ && mamba-cli  # After real installation; otherwise see below.
+    $ cd /path/to/mamba && python3 -m mamba.backend.mamba_cli
     ```
 
 * Routine use, starting the frontend in another terminal:
     ```sh
-    $ mamba-gui  # After real installation; otherwise see below.
-    $ cd /path/to/mamba
-    $ python3 -m mamba.frontend.mamba_gui
+    $ cd ~ && mamba-gui  # After real installation; otherwise see below.
+    $ cd /path/to/mamba && python3 -m mamba.frontend.mamba_gui
     ```
 

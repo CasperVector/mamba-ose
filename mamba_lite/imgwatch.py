@@ -4,6 +4,7 @@ import epics
 import pyqtgraph
 import sys
 from PyQt5 import QtCore, QtWidgets
+from butils.common import unsign
 from butils.gutils import MambaModel, MambaView
 from butils.pgitems import MyImageView, gv_wrap
 
@@ -71,7 +72,7 @@ class ImgWatchModel(MambaModel):
             )(key))
         self.img = epics.PV(prefix + "image1:ArrayData", auto_monitor = True)
         self.img.add_callback\
-            (lambda *, value, **kwargs: self.submit("img", value))
+            (lambda *, value, **kwargs: self.submit("img", unsign(value)))
         self.sbind(["reshape", "img", "idle"])
 
     def run(self, *argv):

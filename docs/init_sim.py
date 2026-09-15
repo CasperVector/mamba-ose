@@ -1,31 +1,45 @@
-# Usage: python3 -m mamba.backend.zspawn 5678 \
-#            ipython3 -i docs/example_init.py docs/example_config.yaml
-
-print("Example beamline init script loading...")
-
 import numpy
 from bluesky import RunEngine
 from ophyd.sim import SynAxis, SynGauss, DirectImage
 from butils.common import AttrDict
-from mamba.backend.mzserver import config_read, server_start
+from butils.ophyd import CptLoad
+from mamba.backend.addon_core import sextend_core
+from mamba.backend.mzserver import server_build
 from mamba.backend.planner import MambaPlanner
+from mamba.gengyd.auth_mdg import sextend_gydauthmdg
 
-M = AttrDict(
-    motor1 = SynAxis(name = "M.motor1", labels = {"motors"}),
-    motor2 = SynAxis(name = "M.motor2", labels = {"motors"})
-)
+def make_devs():
+    C = AttrDict(l = CptLoad)
+    M = AttrDict(
+        motor1 = C.l(SynAxis, labels = {"motors"}),
+        motor2 = C.l(SynAxis, labels = {"motors"})
+    )
+    D = AttrDict(
+        image = C.l(DirectImage, labels = {"detectors"},
+            func = lambda: numpy.array(numpy.ones((10, 10))))
+    )
+    return C, M, D
 
-D = AttrDict(
-    det = SynGauss("D.det", M.motor1, "M_motor1",
-        center = 0, Imax = 1, sigma = 1, labels = {"detectors"}),
-    image = DirectImage(func = lambda: numpy.array(numpy.ones((10, 10))),
-        name = "D.image", labels = {"detectors"})
-)
+def proc_load(globals, added, removed):
+    M, D, U = globals["M"], globals["D"], globals["U"]
+    if "det" in D:
+        D.pop("det").destroy()
+    if "motor" in M:
+        D.det = SynGauss("D.det", M.motor1, "M_motor1",
+            center = 0, Imax = 1, sigma = 1, labels = {"detectors"})
+    U.planner = MambaPlanner(U)
+    globals["P"] = U.planner.make_plans()
+    return []
 
-RE = RunEngine({})
-U = server_start(globals(), config_read())
-U.planner = MambaPlanner(U)
-P = U.planner.make_plans()
-
-print("Beamline init script loaded.")
+def init(globals, config):
+    print("Beamline init script loading...")
+    globals["C"], globals["M"], globals["D"] = make_devs()
+    globals["RE"] = RunEngine({})
+    globals["U"] = U = server_build(globals, config)
+    sextend_core(U, globals, config)
+    sextend_gydauthmdg(U, config)
+    U.proc_load = lambda *args: proc_load(globals, *args)
+    print("Failed devices:", U.proc_load(*U.loader.auto_load()))
+    U.mzs.start()
+    print("Beamline init script loaded.")
 

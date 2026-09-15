@@ -1,5 +1,5 @@
 import os
-import yaml
+import json
 from datetime import datetime, timedelta
 from collections import namedtuple
 
@@ -39,12 +39,12 @@ class ScanManager(object):
             os.mkdir(self.plan_dir)
             return
 
-        files = filter(lambda s: s.endswith(".yaml") and s.startswith("plan_"),
+        files = filter(lambda s: s.endswith(".json") and s.startswith("plan_"),
                        os.listdir(self.plan_dir))
         for file in files:
             try:
                 with open(os.path.join(self.plan_dir, file), "r") as f:
-                    plan_dic = yaml.safe_load(f)
+                    plan_dic = json.load(f)
                     motors = [MotorScanInstruction(
                         name=mot['name'],
                         start=float(mot['start']),
@@ -59,7 +59,7 @@ class ScanManager(object):
                 continue
 
     def save_plan(self, name, instruction):
-        file = "plan_" + name + ".yaml"
+        file = "plan_" + name + ".json"
         with open(os.path.join(self.plan_dir, file), "w") as f:
             plan_dic = {
                 'name': name,
@@ -73,7 +73,7 @@ class ScanManager(object):
                      } for mot in instruction.motors
                 ]
             }
-            yaml.safe_dump(plan_dic, f)
+            json.dump(plan_dic, f)
 
     @staticmethod
     def generate_scan_command(plan):
@@ -116,7 +116,7 @@ class ScanMechanismWidget(QWidget):
     def __init__(self, mrc, mnc, config):
         super().__init__()
         self.scan_manager = ScanManager(mrc,
-            os.path.expanduser(config['scan']['plans']))
+            os.path.expanduser(config.plandir))
         self.mrc = mrc
         self.mnc = mnc
 

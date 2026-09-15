@@ -1,19 +1,15 @@
-# Usage: python3 -m mamba.backend.zspawn 5678 \
-#            ipython3 -i docs/example_init.py docs/example_config.yaml
-
-print("Example beamline init script loading...")
-
 import numpy
-import time
 from bluesky import RunEngine
-from butils.common import AttrDict
-from butils.ophyd import MyEpicsMotor
-from butils.sim import SimMotorImage
 from ophyd import Component, Device
 from ophyd.signal import AttributeSignal
 from ophyd.sim import SynSignal
+from butils.common import AttrDict
+from butils.ophyd import CptLoad, EMotorLoad, MyEpicsMotor
+from butils.sim import SimMotorImage
 from mamba.attitude.common import img_polar
-from mamba.backend.mzserver import config_read, server_start
+from mamba.attitude.xes_backend import sextend_xes
+from mamba.backend.addon_core import sextend_core
+from mamba.backend.mzserver import server_build
 
 def my_gauss(x):
     return numpy.power(2, -4 * x ** 2)
@@ -51,19 +47,32 @@ class MySimImage(SimMotorImage):
         ret = self.lam[1] + (1 - self.lam[1]) * ret
         return numpy.random.poisson(self.lam[0] * ret).astype("uint16")
 
-M = AttrDict((k, MyEpicsMotor("IOC:" + k, name = "M." + k))
-    for k in ["m1", "m2"])
-D = AttrDict(ad = MySimImage(name = "D.ad"))
-time.sleep(1.0)
-D.ad.origin = tuple((1024, 1024) + 100 * numpy.random.normal(size = (2,)))
-D.ad.pos0 = tuple(0.75 * numpy.random.normal(size = (2,)))
-D.ad.bind([M.m1, M.m2])
-D.ad.trigger().wait()
+def make_devs():
+    C = AttrDict(l = CptLoad, m = EMotorLoad)
+    M = AttrDict((k, C.m(MyEpicsMotor, "IOC:" + k)) for k in ["m1", "m2"])
+    D = AttrDict(ad = C.l(MySimImage))
+    return C, M, D
 
-RE = RunEngine({})
-U = server_start(globals(), config_read())
-U.atti_xes.configure(D.ad, [M.m1, M.m2])
-U.atti_xes.origin_tol = 0.01; U.atti_xes.xatol = 0.01
+def proc_load(globals, added, removed):
+    M, D, U = globals["M"], globals["D"], globals["U"]
+    D.ad.origin = tuple((1024, 1024) + 100 * numpy.random.normal(size = (2,)))
+    D.ad.pos0 = tuple(0.75 * numpy.random.normal(size = (2,)))
+    U.atti_xes.origin_tol, U.atti_xes.xatol = 0.01, 0.01
+    if "m1" in M and "m2" in M:
+        D.ad.bind([M.m1, M.m2])
+        D.ad.trigger().wait()
+        U.atti_xes.bind(D.ad, [M.m1, M.m2])
+    return []
 
-print("Beamline init script loaded.")
+def init(globals, config):
+    print("Beamline init script loading...")
+    globals["C"], globals["M"], globals["D"] = make_devs()
+    globals["RE"] = RunEngine({})
+    globals["U"] = U = server_build(globals, config)
+    sextend_core(U, globals, config)
+    sextend_xes(U)
+    U.proc_load = lambda *args: proc_load(globals, *args)
+    print("Failed devices:", U.proc_load(*U.loader.auto_load()))
+    U.mzs.start()
+    print("Beamline init script loaded.")
 

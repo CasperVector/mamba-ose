@@ -3,12 +3,12 @@ from scipy import optimize
 from bluesky import plans
 from butils.data import ProcessorCallback
 from mamba.attitude.common import \
-    img_peak, make_saddon, random_simplex, AttiOptim
+    img_peak, make_sextend, random_simplex, AttiOptim
 from mamba.backend.planner import MambaPlanner
 
 class AttiTomo(AttiOptim):
-    def configure(self, dets, pitch_rolls, yaws, P):
-        super().configure(dets, pitch_rolls)
+    def bind(self, dets, pitch_rolls, yaws, P):
+        super().bind(dets, pitch_rolls)
         self.yaws = {m.vname(): m for m in yaws}
         self.P, self.pitch_rolls = P, self.motors
 
@@ -36,7 +36,7 @@ class AttiTomo(AttiOptim):
         data["meta"] = {"x": [m.replace(".", "_") for m in pitch_roll], "y":
             [ad_name + s for s in ["_shift", "_shift_pitch", "_shift_roll"]]}
         self.P.grid_scan([self.dets[ad]], self.yaws[yaw],
-            0.0, 270.0, 4, atti_out = atti_out)
+            0.0, 270.0, 4, md = {"atti_out": atti_out})
         data["aeval"] = atti_out
         data["eval"] = [x ** 2 for x in atti_out[:2]]
         data["eval"] = [sum(data["eval"])] + data["eval"]
@@ -83,31 +83,24 @@ class AttiTomo(AttiOptim):
 class MyMambaPlanner(MambaPlanner):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for plan in ["grid_scan", "list_grid_scan"]:
-            self.plans[plan] = self.atti_deco(getattr(plans, plan))
         #import matplotlib.pyplot; matplotlib.pyplot.ion()
         #from butils.data import MyLiveImage
         #self.liveimg = MyLiveImage("D_ad_image")
 
-    def atti_deco(self, inner):
-        def plan(*args, **kwargs):
-            kwargs.pop("atti_out", None)
-            return inner(*args, **kwargs)
-        return plan
-
     def callback(self, plan, *args, **kwargs):
-        if "atti_out" not in kwargs:
+        md = kwargs.get("md", {})
+        if "atti_out" not in md:
             return super().callback(plan, *args, **kwargs)
-        #if kwargs["atti_out"] is None:
+        #if md["atti_out"] is None:
         #    return [self.liveimg] + super().callback(plan, *args, **kwargs)
         ad, = args[0]
         preproc = lambda doc: self.U.atti_tomo.preproc_tomo(doc, ad.name)
         postproc = lambda xs, ys: \
-            self.U.atti_tomo.postproc_tomo(xs, ys, kwargs["atti_out"])
+            self.U.atti_tomo.postproc_tomo(xs, ys, md["atti_out"])
         return [ProcessorCallback(
             [ad.name + "_spot_" + s for s in ["x", "y"]], postproc, preproc
-        ), self.U.mzcb] #self.liveimg
+        )] + super().callback(plan, *args, **kwargs) #self.liveimg
 
-saddon_tomo = make_saddon("atti_tomo", AttiTomo,
+sextend_tomo = make_sextend("atti_tomo", AttiTomo,
     ["D_ad_shift", "D_ad_shift_pitch", "D_ad_shift_roll"])
 

@@ -73,7 +73,8 @@ class MambaPlanner(ParentPlanner):
         return [self.U.mzcb, self.progress]
 
     def md_gen(self, plan, *args, **kwargs):
-        md = self.U.mdg.read_advance() if hasattr(self.U, "mdg") else {}
+        md = self.U.auth_mdg.md_gen(plan, *args, **kwargs) \
+            if hasattr(self.U, "auth_mdg") else {}
         md.update(kwargs["md"])
         return md
 

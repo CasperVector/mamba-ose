@@ -1,0 +1,17 @@
+lport = 5678
+guis = [("mamba.gengyd.gengyd_gui", (), "Main")]
+
+authserver = "ldap://202.122.39.69:389"
+proposalserver = "http://hepsweb.ihep.ac.cn/a/beamtime"
+plandir = "mamba_site/plans"
+
+def server_init(globals, config):
+    from mamba_site.init import init
+    init(globals, config)
+
+def client_build(config):
+    from mamba.backend.mzserver import client_build_base
+    from mamba.backend.addon_core import cextend_core
+    mrc = cextend_core(client_build_base(config))
+    return mrc, mrc.znc
+

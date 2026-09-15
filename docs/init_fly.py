@@ -1,63 +1,77 @@
-# Usage: python3 -m mamba.backend.zspawn 5678 \
-#            ipython3 -i docs/example_init.py docs/example_config.yaml
-
-print("Example beamline init script loading...")
-
 import os
 from bluesky import RunEngine
 from ophyd.device import STAGE_KEEP
-from butils.ad import BaseAreaDetector
+from butils.ad import ADPandABlocks, ADXspress3
 from butils.bubo import BuboDevice
-from butils.common import AttrDict, fn_wait
+from butils.common import AttrDict, fill_elems, fill_keys, fill_vals, fn_wait
 from butils.fly import prep_dseq, seq_dwarmup
-from butils.ophyd import MyEpicsMotor
+from butils.ophyd import CptLoad, EMotorLoad, \
+    ADetLoad, PandaLoad, MyEpicsMotor
 from butils.panda import PandaDevice
-from mamba.backend.mzserver import config_read, server_start
+from mamba.backend.addon_core import sextend_core
+from mamba.backend.mzserver import server_build
 from mamba.backend.planner import ImagePlanner
-from lib_fly import MyPandaPlanner, MyBuboPlanner
+from mamba_site.lib_fly import MyPandaPlanner, MyBuboPlanner
 
-M = AttrDict(
-    m1 = MyEpicsMotor("kohzu:m1", name = "M.m1"),
-    m2 = MyEpicsMotor("kohzu:m2", name = "M.m2"),
-    m3 = MyEpicsMotor("kohzu:m3", name = "M.m3")
-)
-D = AttrDict(
-    bubo = BuboDevice(name = "D.bubo"),
-    adp = BaseAreaDetector("PANDA1:", name = "D.adp"),
-    xsp3 = BaseAreaDetector("13XSP3:", name = "D.xsp3")
-)
-D.panda = PandaDevice("192.168.1.11", name = "D.panda", ad = D.adp)
+def make_devs():
+    C = AttrDict(l = CptLoad, m = EMotorLoad, ad = ADetLoad, pl = PandaLoad)
+    M = AttrDict(
+        m1 = C.m(MyEpicsMotor, "kohzu:m1"),
+        m2 = C.m(MyEpicsMotor, "kohzu:m2"),
+        m3 = C.m(MyEpicsMotor, "kohzu:m3")
+    )
+    D = AttrDict(
+        xsp3 = C.ad(ADXspress3, "13XSP3:", hdf5_dir = os.getcwd() + "/big"),
+        adp = C.ad(ADPandABlocks, "PANDA1:", hdf5_dir = os.getcwd() + "/big"),
+        panda = C.pl(PandaDevice, "192.168.1.11"),
+        bubo = C.l(BuboDevice, write_dir = os.getcwd() + "/big")
+    )
+    return C, M, D
 
-[m.stage_sigs.update({"velocity": STAGE_KEEP}) for m in M.values()]
-[m.velocity.set(4.0).wait() for m in M.values()]
-D.panda.clear_muxes()
-D.panda.clear_capture()
-prep_dseq(D.panda, [("ttlout1.val", "b")],
-    [("inenc1.val", M.m1), ("inenc2.val", M.m2)])
-D.panda.configure(seq_dwarmup(), action = True)
-D.bubo.write_dir = os.getcwd() + "/big"
-D.adp.hdf1.write_path_template = os.getcwd() + "/big"
-D.adp.cam.configure({"image_mode": 1, "num_images": 1})
-D.xsp3.hdf1.write_path_template = os.getcwd() + "/big"
-D.xsp3.stage_sigs.update\
-    ({"cam.trigger_mode": STAGE_KEEP, "cam.num_images": STAGE_KEEP})
-D.xsp3.cam.configure({"trigger_mode": 1, "num_images": 1, "acquire_time": 0.1})
-assert fn_wait([D[det].warmup for det in ["adp", "xsp3"]])
+def proc_load(globals, added, removed):
+    M, D, U = globals["M"], globals["D"], globals["U"]
+    for m in M.values():
+        m.stage_sigs.update({"velocity": STAGE_KEEP})
+        m.velocity.set(4.0).wait()
+    if "panda" in D:
+        D.panda.ad = D.get("adp")
+        D.panda.clear_muxes()
+        D.panda.clear_capture()
+        prep_dseq(D.panda, [("ttlout1.val", "b")],
+            fill_vals(M, [("inenc1.val", "m1"), ("inenc2.val", "m2")]))
+        D.panda.configure(seq_dwarmup(), action = True)
+    ret = [d for d in D.values() if hasattr(d, "warmup")]
+    ret = ret, fn_wait([d.warmup for d in ret])[1]
+    ret = [d.vname() for d, s in zip(ret[0], ret[1]) if s]
+    U.loader.unload(ret)
+    if "panda" in D:
+        D.panda.configure({"dseq.enable": 0, "pcap.enable": "ZERO"})
+    U.planner = ImagePlanner(U)
+    pandas = [(p,) for p in fill_elems(D, ["panda"])]
+    pmotors = [m for ps in pandas for m in ps[0].motors]
+    divs = dict(fill_keys(D, [("xsp3", 12216)]))
+    h5_tols = {d: 0 for d in D.values() if hasattr(d, "config_fly")},
+    U.planner.extend(MyPandaPlanner(
+        pandas, divs = divs, h5_tols = h5_tols,
+        enc_tols = {m: 0.025 for m in pmotors},
+        vbas_ratios = {m: 2.0 for m in pmotors},
+        configs = {d: d.config_fly() for d in fill_elems(D, ["xsp3"])}
+    ))
+    U.planner.extend(MyBuboPlanner(D.bubo, divs = divs, h5_tols = h5_tols))
+    globals["P"] = U.planner.make_plans()
+    return ret
 
-D.panda.configure({"dseq.enable": 0, "pcap.enable": "ZERO"})
-D.adp.cam.image_mode.set(2).wait()
-RE = RunEngine({})
-U = server_start(globals(), config_read())
-U.planner = ImagePlanner(U)
-U.planner.extend(MyPandaPlanner(
-    [(D.panda,)], divs = {D.xsp3: 12216}, h5_tols = {D.xsp3: 0},
-    enc_tols = {m: 0.025 for m in D.panda.motors},
-    vbas_ratios = {m: 2.0 for m in D.panda.motors},
-    configs = {D.xsp3: {"cam.trigger_mode": 3}}
-))
-U.planner.extend(MyBuboPlanner(D.bubo,
-    divs = {D.xsp3: 12216}, h5_tols = {D.xsp3: 0}))
-P = U.planner.make_plans()
-
-print("Beamline init script loaded.")
+def init(globals, config):
+    print("Beamline init script loading...")
+    #from concurrent import futures
+    #from butils.common import threadpool_shutdown
+    #futures.ThreadPoolExecutor.shutdown = threadpool_shutdown
+    globals["C"], globals["M"], globals["D"] = make_devs()
+    globals["RE"] = RunEngine({})
+    globals["U"] = U = server_build(globals, config)
+    sextend_core(U, globals, config)
+    U.proc_load = lambda *args: proc_load(globals, *args)
+    print("Failed devices:", U.proc_load(*U.loader.auto_load()))
+    U.mzs.start()
+    print("Beamline init script loaded.")
 

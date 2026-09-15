@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from ..backend.mzserver import config_read, client_build
+from mamba.backend.mzserver import config_read, client_build
 from PyQt5.QtWidgets import QApplication, QAction
 from PyQt5.QtCore import Qt, QCoreApplication
 
@@ -18,7 +18,7 @@ def action_button(parent, txt, f):
     button.triggered.connect(f)
     return button
 
-def main(arg = ""):
+def main():
     config = config_read()
     mrc, mnc = client_build(config)
     QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)

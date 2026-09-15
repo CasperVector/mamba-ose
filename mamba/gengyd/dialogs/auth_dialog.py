@@ -24,9 +24,10 @@ class LoginDialog(QDialog):
         self.setLayout(layout)
 
     def check_login(self):
-        self.mrc.req_rep("auth/pw", pw = self.login_pwd.text())
+        self.mrc.req_rep("auth_mdg/pw", pw = self.login_pwd.text())
         try:
-            self.mrc.do_cmd("U.auth.login(%r)\n" % self.login_username.text())
+            self.mrc.do_cmd("U.auth_mdg.login(%r)\n" %
+                self.login_username.text())
         except ZError as e:
             return QMessageBox.warning(self, "Error", zsv_err_fmt(e))
         return QMessageBox.about(self, "Success", "Logged in.")
@@ -49,7 +50,7 @@ class LogoutDialog(QDialog):
 
     def check_logout(self):
         try:
-            self.mrc.do_cmd("U.auth.logout()\n")
+            self.mrc.do_cmd("U.auth_mdg.logout()\n")
         except ZError as e:
             return QMessageBox.warning(self, "Error", zsv_err_fmt(e))
         return QMessageBox.about(self, "Success", "Logged out.")

@@ -410,10 +410,9 @@ class RamanModel(MambaZModel):
         if err:
             self.do_err("Warning", "Focusing failed for analysers %r." % err)
 
-def main(arg = ""):
-    name = arg or "atti_raman"
+def main(name = "atti_raman"):
     sys.exit(RamanModel(name).run())
 
 if __name__ == "__main__":
-    main()
+    main(*sys.argv[1:])
 

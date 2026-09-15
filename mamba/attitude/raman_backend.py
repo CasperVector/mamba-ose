@@ -1,8 +1,9 @@
 import numpy
-from mamba.backend.zserver import raise_syntax, unary_op
+from butils.common import unsign
+from mamba.backend.zserver import ZChildHandler, raise_syntax, unary_op
 from .common import roi_crop, norm_roi, roi2xywh, \
-    bg_bad, auto_contours, img_peak, max_parascan, perm_diffmax, \
-    ad_dim, stage_wrap, make_state, AttiOptim
+    bg_bad, auto_contours, img_peak, max_parascan, \
+    perm_diffmax, ad_dim, stage_wrap, AttiOptim
 
 def focus_eval(info, threshold):
     total, area = info[2]
@@ -21,7 +22,7 @@ class AttiRaman(AttiOptim):
     def focus_eval(self, img):
         return focus_eval(img_peak(img), self.eval_threshold)
 
-    def configure(self, ad, motors, bounds = None):
+    def bind(self, ad, motors, bounds = None):
         self.dim = ad_dim(ad)
         assert len(self.dim) == 2
         if ad.vname() in self.ad_rois:
@@ -33,7 +34,7 @@ class AttiRaman(AttiOptim):
                 for m in motors]
             bounds = [(0.9 * lo + 0.1 * hi, 0.1 * lo + 0.9 * hi)
                 for lo, hi in bounds]
-        super().configure([ad], motors)
+        super().bind([ad], motors)
         self.ad, self.img_name = ad, ad.name + "_image"
         self.bounds, self.rois = numpy.array(bounds).reshape((-1, 3, 2)), None
         self.groups = [list(range(i, len(self.bounds), self.focus_groups))
@@ -65,8 +66,8 @@ class AttiRaman(AttiOptim):
         if i >= 0:
             self.put_x(x, [3 * i + 1, 3 * i + 2])
         doc = self.get_y()
-        img = bg_bad(doc["data"][self.img_name].copy(),
-            self.bg_threshold, self.bad_threshold)
+        img = unsign(doc["data"][self.img_name].copy())
+        img = bg_bad(img, self.bg_threshold, self.bad_threshold)
         y = numpy.array([img_peak(roi_crop(img, roi))[0] for roi in self.rois])
         if i < 0:
             y0 = y
@@ -116,16 +117,21 @@ class AttiRaman(AttiOptim):
             err += group if ret is None else [group[j] for j in ret]
         return sorted(err)
 
-def mzs_raman(self, req):
-    op, state = unary_op(req), self.get_state(req)
-    if op == "rois":
-        return {"err": "", "ret": [roi2xywh(roi) for roi in state.rois]}
-    elif op == "names":
-        return {"err": "", "ret": {"dim": state.dim,
-            "dets": list(state.dets), "motors": list(state.motors)}}
-    raise_syntax(req)
+class RamanZsHandler(ZChildHandler):
+    def __init__(self, name):
+        self.handles = [name]
+        setattr(self, "do_" + name, self._do_raman)
 
-def saddon_raman(arg):
-    name = arg or "atti_raman"
-    return {"mzs": {name: mzs_raman}, "state": make_state(name, AttiRaman)}
+    def _do_raman(self, req):
+        op, state = unary_op(req), self.parent.get_state(req)
+        if op == "rois":
+            return {"err": "", "ret": [roi2xywh(roi) for roi in state.rois]}
+        elif op == "names":
+            return {"err": "", "ret": {"dim": state.dim,
+                "dets": list(state.dets), "motors": list(state.motors)}}
+        raise_syntax(req)
+
+def sextend_raman(U, name = "atti_raman"):
+    U.mzs.extend(RamanZsHandler(name))
+    setattr(U, name, AttiRaman(U.mzcb))
 

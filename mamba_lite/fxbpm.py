@@ -2,6 +2,7 @@ import collections
 import datetime
 import epics
 import numpy
+from butils.common import unsign
 from butils.gutils import QueueServer, err_state
 from mamba.attitude.common import roi_crop, \
     norm_roi, roi2xywh, xywh2roi, proj_peak, img_peak, img_bary
@@ -75,7 +76,7 @@ class FxBpmServer(QueueServer):
     def icb(self, *, value, timestamp, **kwargs):
         if self.push:
             self.push = False
-            img = value.reshape(self.shape)
+            img = unsign(value.reshape(self.shape))
             self.request("_data", img, timestamp)
 
     def ijxy(self, ij):

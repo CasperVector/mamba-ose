@@ -24,9 +24,7 @@ def cfg_trans(dev, cfg):
     return _cfg_trans[0](dev, cfg)
 
 def ctrans_base(dev, cfg):
-    if not hasattr(dev, "cam"):
-        cfg = {re.sub(r"^cam\.", "", k): v for k, v in cfg.items()}
-    return cfg
+    return dev.cfg_trans(dev, cfg) if hasattr(dev, "cfg_trans") else cfg
 
 def ctrans_reg(ctrans = ctrans_base):
     _cfg_trans[0] = ctrans

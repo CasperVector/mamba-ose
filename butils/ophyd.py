@@ -1,11 +1,12 @@
 import json
 import os
+import socket
 import threading
 import time
 import traceback
 from enum import Enum
 from ophyd import Device, Component, EpicsSignal, EpicsSignalRO, \
-    EpicsMotor, PositionerBase, PVPositioner, PVPositionerPC
+    EpicsMotor, PositionerBase, PVPositioner, PVPositionerPC, get_cl
 from ophyd.device import required_for_connection
 from ophyd.signal import AttributeSignal
 from ophyd.status import wait as status_wait
@@ -13,16 +14,134 @@ from ophyd.utils.epics_pvs import AlarmSeverity, \
    data_shape, data_type, raise_if_disconnected
 from .common import AttrDict, fn_wait, masked_attr
 
-def cpt_to_dev(cpt, name):
-    return cpt.cls(name = name, **cpt.kwargs) if cpt.suffix is None \
-        else cpt.cls(cpt.suffix, name = name, **cpt.kwargs)
-
 def para_move(mposs):
     try:
-        assert fn_wait([m.set(p).wait for m, p in mposs.items()])
+        assert not any(fn_wait([m.set(p).wait
+            for m, p in mposs.items()], abort = True)[1])
     except KeyboardInterrupt:
-        assert fn_wait([m.stop for m in mposs], abort = False)
+        assert not any(fn_wait([m.stop for m in mposs])[1])
         raise
+
+class CptLoad(Component):
+    ping_suffix = None
+
+    @classmethod
+    def new_suffix(cls, ping_suffix):
+        return type(cls.__name__, (cls,), {"ping_suffix": ping_suffix})
+
+    def __init__(self, *args, **kwargs):
+        if "ping_suffix" in kwargs:
+            self.ping_suffix = kwargs.pop("ping_suffix")
+        super().__init__(*args, **kwargs)
+
+    def load(self, name):
+        return self.cls(name = name, **self.kwargs) if self.suffix is None \
+            else self.cls(self.suffix, name = name, **self.kwargs)
+
+    def ping(self, timeout = 1.0):
+        return True
+
+class EpicsLoad(CptLoad):
+    def ping(self, timeout = 1.0):
+        try:
+            pv = get_cl().get_pv((self.suffix or "") + (self.ping_suffix or ""))
+            return pv.wait_for_connection(timeout = timeout)
+        except:
+            return False
+
+EMotorLoad = EpicsLoad.new_suffix(".DMOV")
+QMotorLoad = EpicsLoad.new_suffix("dmov")
+ADetLoad = EpicsLoad.new_suffix("cam1:Acquire_RBV")
+QDetLoad = EpicsLoad.new_suffix("acquire")
+QScanLoad = EpicsLoad.new_suffix("scan")
+
+class TcpLoad(CptLoad):
+    def ping(self, timeout = 1.0):
+        with socket.socket(socket.AF_INET) as sock:
+            sock.settimeout(timeout)
+            try:
+                sock.connect((self.suffix, self.ping_suffix))
+                return True
+            except:
+                return False
+
+PandaLoad = TcpLoad.new_suffix(8888)
+
+class DeviceLoader(object):
+    _timeout = 1.0, 2.0
+
+    def __init__(self, devs = None):
+        if devs is not None:
+            self.bind(devs)
+
+    def bind(self, devs):
+        self.cpts, self.devs = {}, {d: AttrDict() for d in devs}
+        for d in sorted(devs):
+            for k, v in sorted(devs[d].items()):
+                if isinstance(v, CptLoad):
+                    self.cpts[d + "." + k] = v
+                else:
+                    self.devs[d][k] = v
+        return self.cpts, list(self.devs.values())
+
+    def ping(self, cpts = None, timeout = None, jobs = None):
+        if timeout is None:
+            timeout = self._timeout[0]
+        if cpts is None:
+            cpts = list(self.cpts)
+        ss = fn_wait([(lambda cpt: lambda: cpt.ping(timeout))\
+            (self.cpts[cpt]) for cpt in cpts], jobs = jobs)
+        return [cpt for cpt, s in zip(cpts, ss[0]) if s]
+
+    def unload(self, cpts):
+        for cpt in cpts:
+            d, k = cpt.split(".", 1)
+            self.devs[d].pop(k).destroy()
+        return [], cpts
+
+    def load(self, cpts, timeout = None, jobs = None):
+        if timeout is None:
+            timeout = self._timeout[1]
+        for cpt in cpts:
+            d, k = cpt.split(".", 1)
+            self.devs[d][k] = self.cpts[cpt].load(cpt)
+        fs = []
+        for cpt in cpts:
+            d, k = cpt.split(".", 1)
+            obj = self.devs[d][k]
+            kwargs = {"all_signals": True} if isinstance(obj, Device) else {}
+            fs.append((lambda obj, kwargs: lambda: obj.wait_for_connection\
+                (timeout = timeout, **kwargs))(obj, kwargs))
+        ss = fn_wait(fs, jobs = jobs)
+        self.unload([cpt for cpt, s in zip(cpts, ss[1]) if s])
+        return [cpt for cpt, s in zip(cpts, ss[1]) if not s], []
+
+    def reload(self, cpts, timeout = None, jobs = None):
+        if timeout is None:
+            timeout = self._timeout[1]
+        self.unload(cpts)
+        return self.load(cpts, timeout, jobs)[0], cpts
+
+    def adapt(self, cpts, reload = True, timeout = None, jobs = None):
+        if timeout is None:
+            timeout = self._timeout[1]
+        cpts0 = set(d + "." + k for d, ks in self.devs.items() for k in ks)
+        cpts0, cpts1 = cpts0 & set(self.cpts), set(cpts)
+        add, remove = (sorted(cpts1 - cpts0), sorted(cpts0 - cpts1)) \
+            if reload else (sorted(cpts1), sorted(cpts0))
+        self.unload(remove)
+        return self.load(add, timeout, jobs)[0], remove
+
+    def auto_load(self, cpts = None,
+        reload = True, timeout = None, jobs = None):
+        if timeout is None:
+            timeout = self._timeout
+        cpts0 = list(self.cpts) if cpts is None else cpts
+        cpts = self.ping(cpts0, timeout[0], jobs)
+        ret = self.adapt(cpts, reload, timeout[1], jobs)
+        cpts1 = set(d + "." + k for d, ks in self.devs.items() for k in ks)
+        print("Offline devices:", sorted(set(cpts0) - set(cpts1)))
+        return ret
 
 class ThrottleMonitor(Device):
     monitor_period, _monitor_period = Component(AttributeSignal,
@@ -36,6 +155,9 @@ class ThrottleMonitor(Device):
 
 class SimpleDet(Device):
     value = Component(EpicsSignalRO, "")
+
+class SimpleDev(Device):
+    value = Component(EpicsSignal, "")
 
 class MonitorMotor(ThrottleMonitor):
     def monitor(self, dnotify):
@@ -261,19 +383,19 @@ class SerialEnergy(PositionerBase):
 
     def stop(self, *, success = False):
         self._stopping = True
-        assert fn_wait([
+        assert not any(fn_wait([
             (lambda m: lambda: m.stop(success = success))(m)
             for m in self._motors
-        ], abort = False)
+        ])[1])
 
     def _para_move(self, pos, motors):
         def waiter(m):
             m = self._name_map.get(m, m)
             assert hasattr(m, "move"), m
             return lambda: m.move(pos[m])
-        assert fn_wait([waiter(m) for m in motors])
-        if self._stopping:
-            raise StopIteration()
+        ss = fn_wait([waiter(m) for m in motors], abort = True)
+        assert not any(ss[1]), [m for m, s in zip(motors, ss[1]) if s]
+        assert not self._stopping
 
     def _move(self, value):
         pass

@@ -3,10 +3,11 @@ import os
 import re
 from PIL import Image
 from scipy import optimize
-from mamba.backend.zserver import raise_syntax, unary_op
+from butils.common import unsign
+from mamba.backend.zserver import ZChildHandler, raise_syntax, unary_op
 from .common import roi_crop, norm_roi, norm_origin, roi2xywh, \
-    random_simplex, bg_bad, auto_contours, img_phist, proj_peak, \
-    angular_vis, ad_dim, stage_wrap, make_state, AttiOptim
+    random_simplex, bg_bad, auto_contours, img_phist, \
+    proj_peak, angular_vis, ad_dim, stage_wrap, AttiOptim
 
 RADIAL_BINS, ANGULAR_BINS = 1000, 360
 
@@ -38,9 +39,9 @@ class AttiXes(AttiOptim):
     bad_threshold, origin_rad, origin_tol = 0, 1.0, 1.0
     init_rad, maxfev, xatol, fatol = 0.1, 25, 1e-2, (20, 5e-4)
 
-    def configure(self, ad, motors):
+    def bind(self, ad, motors):
         assert len(ad_dim(ad)) == 2
-        super().configure([ad], motors)
+        super().bind([ad], motors)
         self.roi = self.origin = self.cache = None
         self.ad, self.img_name = ad, ad.name + "_image"
 
@@ -69,7 +70,8 @@ class AttiXes(AttiOptim):
             ), fmt = "%g")
 
     def proc(self, doc, output = "", mode = 0):
-        img = bg_bad(doc["data"][self.img_name].copy(), 0, self.bad_threshold)
+        img = unsign(doc["data"][self.img_name].copy())
+        img = bg_bad(img, 0, self.bad_threshold)
         doc["data"]["meta"] = {"x":
             [m.replace(".", "_") for m in self.motors]}
         ev = img_eval(img, self.roi, self.origin, self.bg_threshold)
@@ -154,16 +156,21 @@ class AttiXes(AttiOptim):
             method = "nelder-mead", options = options, callback = self.callback
         )
 
-def mzs_xes(self, req):
-    op, state = unary_op(req), self.get_state(req)
-    if op == "roi_origin":
-        return {"err": "", "ret": (roi2xywh(state.roi), state.origin)}
-    elif op == "names":
-        return {"err": "", "ret": {"atime_ratio": state.atime_ratio,
-            "dets": list(state.dets), "motors": list(state.motors)}}
-    raise_syntax(req)
+class XesZsHandler(ZChildHandler):
+    def __init__(self, name):
+        self.handles = [name]
+        setattr(self, "do_" + name, self._do_xes)
 
-def saddon_xes(arg):
-    name = arg or "atti_xes"
-    return {"mzs": {name: mzs_xes}, "state": make_state(name, AttiXes)}
+    def _do_xes(self, req):
+        op, state = unary_op(req), self.parent.get_state(req)
+        if op == "roi_origin":
+            return {"err": "", "ret": (roi2xywh(state.roi), state.origin)}
+        elif op == "names":
+            return {"err": "", "ret": {"atime_ratio": state.atime_ratio,
+                "dets": list(state.dets), "motors": list(state.motors)}}
+        raise_syntax(req)
+
+def sextend_xes(U, name = "atti_xes"):
+    U.mzs.extend(XesZsHandler(name))
+    setattr(U, name, AttiXes(U.mzcb))
 

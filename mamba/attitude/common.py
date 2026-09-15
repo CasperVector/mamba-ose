@@ -2,12 +2,9 @@ import h5py
 import numpy
 import os
 from butils.ophyd import para_move
+from mamba.backend.zserver import ZChildHandler, raise_syntax, unary_op
 try:
     import cv2
-except ImportError:
-    pass
-try:
-    from ..backend.zserver import raise_syntax, unary_op
 except ImportError:
     pass
 
@@ -242,7 +239,7 @@ class AttiOptim(object):
         self.send_event = lambda doc: mzcb("event", doc)
         self.stopped = False
 
-    def configure(self, dets, motors):
+    def bind(self, dets, motors):
         self.dets = {d.vname(): d for d in dets}
         self.motors = {m.vname(): m for m in motors}
         self.ads = {d.vname(): None for d in dets if hasattr(d, "hdf1")}
@@ -314,23 +311,22 @@ class AttiOptim(object):
             return y
         return f
 
-def make_mzs(outputs = None):
-    def mzs(self, req):
-        op, state = unary_op(req), self.get_state(req)
+class AttiZsHandler(ZChildHandler):
+    def __init__(self, name, outputs):
+        self.handles, self.outputs = [name], outputs
+        setattr(self, "do_" + name, self._do_atti)
+
+    def _do_atti(self, req):
+        op, state = unary_op(req), self.parent.get_state(req)
         if op == "names":
-            ret = {} if outputs is None else {"outputs": outputs}
+            ret = {} if self.outputs is None else {"outputs": self.outputs}
             ret.update({"dets": list(state.dets), "motors": list(state.motors)})
             return {"err": "", "ret": ret}
         raise_syntax(req)
-    return mzs
 
-def make_state(name, cls):
-    return lambda U, config: setattr(U, name, cls(U.mzcb))
-
-def make_saddon(atti, cls, outputs = None):
-    def saddon(arg):
-        name = arg or atti
-        return {"mzs": {name: make_mzs(outputs)},
-            "state": make_state(name, cls)}
-    return saddon
+def make_sextend(atti, cls, outputs = None):
+    def sextend(U, name = atti):
+        U.mzs.extend(AttiZsHandler(name, outputs))
+        setattr(U, name, cls(U.mzcb))
+    return sextend
 

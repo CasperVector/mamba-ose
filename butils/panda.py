@@ -128,7 +128,7 @@ def panda_table_parse(ss):
 class PandaAttr(Signal):
     def __init__(self, target, *, mode, typ, **kwargs):
         if typ == "float":
-            kwargs["rtolerance"] = 1e-9
+            kwargs["rtolerance"] = 1e-6
         super().__init__(**kwargs)
         self._client = self.root._client
         self._block, self._field = target.split(".", 1)
@@ -492,7 +492,7 @@ class PandaRoot(Device):
             getattr(self, ".".join(k))._update(v)
 
     def _update_romits(self):
-        assert fn_wait([a.get for a in self._romits])
+        assert not any(fn_wait([a.get for a in self._romits], abort = True)[1])
 
     def _start_poll(self):
         def poll():
@@ -515,8 +515,8 @@ class PandaRoot(Device):
                     a.put(keep[a])
             else:
                 a.put("ZERO")
-        assert fn_wait([(lambda a: lambda: reset(a))(a)
-            for a in self._muxes], abort = False)
+        assert not any(fn_wait([(lambda a: lambda: reset(a))(a)
+            for a in self._muxes])[1])
 
     def clear_capture(self):
         assert self._client.send_recv("*CAPTURE=\n") == "OK"

@@ -235,10 +235,9 @@ class CapiModel(MambaZModel):
             self.axes[ax] = i
         self.on_idle(2)
 
-def main(arg = ""):
-    name = arg or "atti_capi"
+def main(name = "atti_capi"):
     sys.exit(CapiModel(name).run())
 
 if __name__ == "__main__":
-    main()
+    main(*sys.argv[1:])
 

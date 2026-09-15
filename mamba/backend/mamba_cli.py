@@ -1,16 +1,23 @@
 #!/usr/bin/python3
 
-import os
-import sys
-from .mzserver import config_read
+def init():
+    from IPython import get_ipython
+    from .mzserver import config_read
+    if not get_ipython():
+        return main()
+    config = config_read()
+    config.server_init(globals(), config)
 
 def main():
-    config = config_read()["backend"]
-    args = ["--"] + sys.argv[1:] if len(sys.argv) > 1 else []
-    os.execlp("python3", "python3", "-m",
-        "mamba.backend.zspawn", str(config["lport"]),
-        "ipython3", "-i", os.path.expanduser(config["init"]), *args)
+    import os, sys
+    from .mzserver import config_read
+    os.execlp(
+        "python3",
+        "python3", "-m", "mamba.backend.zspawn", "%d" % config_read().lport,
+        "ipython3", "-i", "-m", "mamba.backend.mamba_cli", *sys.argv[1:]
+    )
 
 if __name__ == "__main__":
-    main()
+    init()
+    del init, main
 

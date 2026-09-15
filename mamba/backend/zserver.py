@@ -8,6 +8,31 @@ from butils.common import cbor_dump_numpy, cbor_load_numpy
 
 class ZError(Exception): pass
 
+class ZBaseHandler(object):
+    handles = []
+
+class ZChildHandler(ZBaseHandler):
+    parent = None
+
+class ZParentHandler(ZBaseHandler):
+    def __init__(self):
+        self.origins = [self]
+
+    def extend(self, child):
+        child.parent = self
+        self.origins.append(child)
+        self.make_handles()
+
+    def make_handles(self):
+        self._handles = {}
+        # Insertion order preserved by dict() since Python 3.6.
+        for obj in self.origins:
+            self._handles.update\
+                ({typ: getattr(obj, "do_" + typ) for typ in obj.handles})
+
+    def start(self):
+        threading.Thread(target = self.loop, daemon = True).start()
+
 def non_fatal(f):
     def g(*args, **kwargs):
         try:
@@ -45,10 +70,11 @@ def zsv_rep_chk(rep):
 def zsv_err_fmt(e):
     return "[%s]" % e.args[0] + (e.args[1] and (" %s" % e.args[1]))
 
-class ZServer(object):
+class ZServer(ZParentHandler):
     handles = ["cmd"]
 
     def __init__(self, lport, state, globals, ctx = None):
+        super().__init__()
         if not ctx:
             ctx = zmq.Context()
         self.lsock = ctx.socket(zmq.REQ)
@@ -60,8 +86,12 @@ class ZServer(object):
         self.nsock.bind("tcp://127.0.0.1:%d" % (lport + 2))
         self.state, self.ipy = state, False
         self.q = self.uid = None
+        self.make_handles()
 
-        if "get_ipython" in globals:
+        from IPython import get_ipython
+        ipython = get_ipython()
+        if ipython:
+            from IPython.core.magic import register_line_cell_magic
             self.ipy = True
             def putter(result):
                 rep = {"ret": result.result, "err":
@@ -74,8 +104,7 @@ class ZServer(object):
                         zsv_err_rep(rep["err"]) if rep["err"]
                         else {"err": "", "ret": rep["ret"]}
                     )})
-            globals["get_ipython"]().events.register("post_run_cell", putter)
-            from IPython.core.magic import register_line_cell_magic
+            ipython.events.register("post_run_cell", putter)
             @register_line_cell_magic
             def go(line, cell = None):
                 if cell:
@@ -99,10 +128,6 @@ class ZServer(object):
         with self.nlock:
             return self.nsock.send(cbor_dump_numpy(msg))
 
-    def start(self):
-        self.handles = {typ: getattr(self, "do_" + typ) for typ in self.handles}
-        threading.Thread(target = self.loop, daemon = True).start()
-
     def loop(self):
         while True:
             try:
@@ -112,7 +137,7 @@ class ZServer(object):
             except:
                 typ = None
             try:
-                hdl = self.handles.get(typ)
+                hdl = self._handles.get(typ)
                 rep = hdl(req) if hdl else \
                     {"err": "syntax", "desc": "invalid ZServer RPC"}
             except (Exception, KeyboardInterrupt) as e:
@@ -160,24 +185,27 @@ class ZServer(object):
         return ret
 
 def znc_handle_gen(typ):
-    return lambda self, msg: [sub(msg) for sub in self.subs[typ].values()]
+    return lambda self, msg: \
+        [sub(msg) for sub in self.parent.subs[typ].values()]
 
-class ZnClient(object):
+class ZnClient(ZParentHandler):
     handles = ["go"]
 
     def __init__(self, lport, ctx = None):
+        super().__init__()
         if not ctx:
             ctx = zmq.Context()
         self.nsock = ctx.socket(zmq.SUB)
         self.nsock.subscribe("")
         self.nsock.connect("tcp://127.0.0.1:%d" % (lport + 2))
-        # Insertion order preserved by dict() since Python 3.6.
-        self.subs = {typ: {} for typ in self.handles}
-        self.ids = {typ: -1 for typ in self.handles}
+        self.subs, self.ids = {}, {}
+        self.make_handles()
 
-    def start(self):
-        self.handles = {typ: getattr(self, "do_" + typ) for typ in self.handles}
-        threading.Thread(target = self.loop, daemon = True).start()
+    def make_handles(self):
+        super().make_handles()
+        for typ in self._handles:
+            self.subs.setdefault(typ, {})
+            self.ids.setdefault(typ, -1)
 
     def loop(self):
         while True:
@@ -187,7 +215,7 @@ class ZnClient(object):
                 typ = msg["typ"][0]
             except:
                 typ = None
-            hdl = self.handles.get(typ)
+            hdl = self._handles.get(typ)
             if hdl:
                 hdl(msg)
 
@@ -200,7 +228,7 @@ class ZnClient(object):
     def unsubscribe(self, typ, i):
         self.subs[typ].pop(i)
 
-    do_go = znc_handle_gen("go")
+    do_go = lambda self, msg: [sub(msg) for sub in self.subs["go"].values()]
 
 class ZStatus(object):
     def __init__(self, zrc, uid):
@@ -230,9 +258,9 @@ class ZStatus(object):
 
 class ZrClient(object):
     def __init__(self, lport, znc = None, ctx = None):
+        self.znc = znc
         if znc:
-            self.status, self.znc = {}, znc
-            self.slock = threading.Lock()
+            self.status, self.slock = {}, threading.Lock()
             def sub(msg):
                 st = self.status.get(uuid.UUID(msg["uid"]))
                 if st:
@@ -259,17 +287,9 @@ class ZrClient(object):
             go = bool(re.match(r"%%?go\b", cmd))
         if not go:
             return self.req_rep("cmd", cmd = cmd)
-        assert isinstance(self.znc.handles, dict)
+        assert self.znc
         uid = uuid.uuid4()
         status = ZStatus(self, uid)
         self.req_rep("cmd", cmd = cmd, go = str(uid))
         return status
-
-def zcompose(name, parent, addon):
-    if hasattr(parent, "handles"):
-        handles = parent.handles + list(addon.keys())
-    addon = {"do_" + k: v for k, v in addon.items()}
-    if hasattr(parent, "handles"):
-        addon["handles"] = handles
-    return type(name, (parent,), addon)
 

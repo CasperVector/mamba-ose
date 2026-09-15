@@ -1,17 +1,12 @@
-# Usage: python3 -m mamba.backend.zspawn 5678 \
-#            ipython3 -i docs/example_init.py docs/example_config.yaml
-
-print("Example beamline init script loading...")
-
 import numpy
-import time
 from bluesky import RunEngine
 from butils.common import AttrDict
-from butils.ophyd import MyEpicsMotor
+from butils.ophyd import CptLoad, EMotorLoad, MyEpicsMotor
 from butils.sim import SimMotorImage
-from mamba.backend.mzserver import config_read, server_start
+from mamba.backend.addon_core import sextend_core
+from mamba.backend.mzserver import server_build
 from mamba.backend.planner import MambaPlanner
-from lib_capi import CapiPlanner
+from mamba_site.lib_capi import CapiPlanner, sextend_capi
 
 def rosenbrock(x):
     return (100.0 * (x[1:] - x[:-1] ** 2.0) ** 2.0 + (1 - x[:-1]) ** 2.0).sum(0)
@@ -28,24 +23,40 @@ class MySimImage(SimMotorImage):
     def func(self):
         return self.obj(numpy.array([m.position for m in self.motors]))
 
-M = AttrDict([
-    (k, MyEpicsMotor("IOC:" + k, name = "M." + k))
-    for k in ["m1", "m2", "m3", "m4"]
-])
-D = AttrDict([
-    ("rosen1", MySimImage(name = "D.rosen1")),
-    ("rosen2", MySimImage(name = "D.rosen2")),
-])
-time.sleep(1.0)
-D.rosen1.bind(test_obj1, [M.m1, M.m2, M.m3])
-D.rosen2.bind(test_obj2, [M.m1, M.m2, M.m4])
+def make_devs():
+    C = AttrDict(l = CptLoad, m = EMotorLoad)
+    M = AttrDict([
+        (k, C.m(MyEpicsMotor, "IOC:" + k))
+        for k in ["m1", "m2", "m3", "m4"]
+    ])
+    D = AttrDict(
+        rosen1 = C.l(MySimImage),
+        rosen2 = C.l(MySimImage)
+    )
+    return C, M, D
 
-RE = RunEngine({})
-U = server_start(globals(), config_read())
-U.atti_capi.configure(list(D.values()), list(M.values()))
-U.planner = MambaPlanner(U)
-U.planner.extend(CapiPlanner(U.atti_capi, M.values()))
-P = U.planner.make_plans()
+def proc_load(globals, added, removed):
+    M, D, U = globals["M"], globals["D"], globals["U"]
+    if all(k in M for k in ["m1", "m2", "m3", "m4"]):
+        D.rosen1.bind(test_obj1, [M.m1, M.m2, M.m3])
+        D.rosen2.bind(test_obj2, [M.m1, M.m2, M.m4])
+        D.rosen1.trigger().wait()
+        D.rosen2.trigger().wait()
+    U.atti_capi.bind(list(D.values()), list(M.values()))
+    U.planner = MambaPlanner(U)
+    U.planner.extend(CapiPlanner(U.atti_capi, M.values()))
+    globals["P"] = U.planner.make_plans()
+    return []
 
-print("Beamline init script loaded.")
+def init(globals, config):
+    print("Beamline init script loading...")
+    globals["C"], globals["M"], globals["D"] = make_devs()
+    globals["RE"] = RunEngine({})
+    globals["U"] = U = server_build(globals, config)
+    sextend_core(U, globals, config)
+    sextend_capi(U)
+    U.proc_load = lambda *args: proc_load(globals, *args)
+    print("Failed devices:", U.proc_load(*U.loader.auto_load()))
+    U.mzs.start()
+    print("Beamline init script loaded.")
 

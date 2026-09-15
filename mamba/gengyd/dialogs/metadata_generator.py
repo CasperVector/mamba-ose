@@ -47,7 +47,7 @@ class MetadataGenerator(QDialog):
 
     def read(self):
         try:
-            ret = self.mrc.req_rep("mdg/read")["ret"]
+            ret = self.mrc.req_rep("auth_mdg/read")["ret"]
         except ZError as e:
             return QMessageBox.warning(self, "Error", zsv_err_fmt(e))
         for k, v in ret.items():
@@ -57,7 +57,7 @@ class MetadataGenerator(QDialog):
 
     def submit(self):
         try:
-            self.mrc.do_cmd("U.mdg.set(%r)\n" %
+            self.mrc.do_cmd("U.auth_mdg.update(%r)\n" %
                 {k: v.text() for k, v in self.widgets.items()})
         except ZError as e:
             return QMessageBox.warning(self, "Error", zsv_err_fmt(e))

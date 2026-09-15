@@ -1,5 +1,5 @@
 from scipy import optimize
-from mamba.attitude.common import stage_wrap, make_saddon, AttiOptim
+from mamba.attitude.common import stage_wrap, make_sextend, AttiOptim
 from mamba.backend.planner import AttiPlanner
 
 class AttiCapi(AttiOptim):
@@ -45,5 +45,5 @@ class CapiPlanner(AttiPlanner):
             self.atti.proc(doc, det.name, [m.name for m in motors])
         return [proc, self.U.mzcb]
 
-saddon_capi = make_saddon("atti_capi", AttiCapi, ["D_rosen1", "D_rosen2"])
+sextend_capi = make_sextend("atti_capi", AttiCapi, ["D_rosen1", "D_rosen2"])
 

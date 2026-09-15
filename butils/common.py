@@ -5,12 +5,32 @@ import queue
 import re
 import sys
 import threading
+import traceback
 from collections.abc import Sequence
+from concurrent import futures
 try:
     import cbor2
+except ImportError:
+    pass
+try:
     import numpy
 except ImportError:
     pass
+
+def partition(f, l):
+    ret = [], []
+    for x in l:
+        ret[not f(x)].append(x)
+    return ret
+
+def fill_elems(d, l):
+    return [d[k] for k in l if k in d]
+
+def fill_keys(d, l):
+    return [(d[k], v) for k, v in l if k in d]
+
+def fill_vals(d, l):
+    return [(k, d[v]) for k, v in l if v in d]
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
@@ -43,25 +63,41 @@ def user_glob(*ss):
     return sorted(sum([glob.glob(os.path.expanduser(s))
         for s in ss], []), key = strverskey)
 
-def fn_wait(fs, abort = True):
-    q, ret = queue.Queue(), [None] * len(fs)
+# Backported from Python 3.9.
+def threadpool_shutdown(obj, wait = True, *, cancel_futures = False):
+    with obj._shutdown_lock:
+        obj._shutdown = True
+        if cancel_futures:
+            while True:
+                try:
+                    work_item = obj._work_queue.get_nowait()
+                except queue.Empty:
+                    break
+                if work_item is not None:
+                    work_item.future.cancel()
+        obj._work_queue.put(None)
+    if wait:
+        for t in obj._threads:
+            t.join()
+
+def fn_wait(fs, abort = False, jobs = None):
+    ret = [None] * len(fs), [None] * len(fs)
+    lock = threading.Lock()
     def wrap(i, f):
         try:
-            q.put((i, f()))
+            ret[0][i] = f()
+            return 0
         except Exception as e:
-            q.put((e, None))
-            raise
-    ts = [threading.Thread(target = wrap, args = (i, f), daemon = True)
-        for i, f in enumerate(fs)]
-    [t.start() for t in ts]
-    for f in fs:
-        msg = q.get()
-        if isinstance(msg[0], Exception):
-            if not abort:
-                [t.join() for t in ts]
-            return
-        ret[msg[0]] = msg[1]
-    [t.join() for t in ts]
+            ret[1][i] = e
+            with lock:
+                traceback.print_exc()
+            return 1
+    executor = futures.ThreadPoolExecutor(max_workers = jobs)
+    ss = [executor.submit(wrap, i, f) for i, f in enumerate(fs)]
+    for s in futures.as_completed(ss):
+        if s.result() and abort:
+            break
+    executor.shutdown(wait = False, cancel_futures = True)
     return ret
 
 def input_gen(argv):
@@ -79,6 +115,12 @@ def input_gen(argv):
         def end_input():
             pass
     return my_input, end_input
+
+unsign_map = {numpy.dtype(k): numpy.dtype(k.replace("i", "u"))
+    for k in ["i1", ">i2", ">i4", ">i8", "<i2", "<i4", "<i8"]}
+
+def unsign(img):
+    return img.view(unsign_map.get(img.dtype, img.dtype))
 
 cbor_decoder_types = {
     64: "u1", 65: ">u2", 66: ">u4", 67: ">u8", 68: "u1", 69: "<u2",

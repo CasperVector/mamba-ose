@@ -2,20 +2,18 @@ import re
 import time
 import numpy
 import threading
-from ophyd import select_version, Component, Device, EpicsSignalRO, \
-    EpicsSignal, ADBase, ADComponent, EpicsSignalWithRBV, \
-    DetectorBase, CamBase, HDF5Plugin, ADTriggerStatus
-from ophyd.device import BlueskyInterface, DynamicDeviceComponent, Staged
+from ophyd import Component, Device, EpicsSignal, EpicsSignalRO, \
+    ADBase, ADComponent, EpicsSignalWithRBV, DetectorBase, ADTriggerStatus
+from ophyd.device import BlueskyInterface, DynamicDeviceComponent, \
+    GenerateDatumInterface, Staged, STAGE_KEEP
 from ophyd.signal import AttributeSignal
 from ophyd.status import Status
 from ophyd.areadetector.base import ad_group
-from ophyd.areadetector.plugins import PluginBase
 from ophyd.areadetector.filestore_mixins import \
     FileStoreHDF5, FileStoreIterativeWrite
+from ophyd.areadetector.paths import EpicsPathSignal
 from ophyd.utils.errors import UnprimedPlugin
 from .ophyd import ThrottleMonitor
-
-MyHDF5Plugin = select_version(HDF5Plugin, (3, 15))
 
 class AcquireTimeout(Device):
     timeout = Component(AttributeSignal, attr = "_timeout", kind = "config")
@@ -83,7 +81,7 @@ class SoftTrigger(MyTriggerBase):
         self._orig_acquire = self._acquire.get()
         stage_acquire = int(self._acquisition_signal != self._acquire)
         if self._orig_acquire == stage_acquire == 1:
-            self._acquire.set(0).wait()
+            self._acquire.set(0, timeout = 10.0).wait()
         if not self._counter_signal:
             self._acquisition_signal.subscribe(self._acquire_changed)
         elif self._trigger_delay is None:
@@ -98,7 +96,7 @@ class SoftTrigger(MyTriggerBase):
             self._counter_signal.clear_sub(self._acquire_changed)
         stage_acquire = int(self._acquisition_signal != self._acquire)
         if self._orig_acquire == stage_acquire == 1:
-            self._acquire.set(1).wait()
+            self._acquire.set(1, timeout = 10.0).wait()
 
     def trigger(self):
         assert self._staged == Staged.yes
@@ -144,6 +142,43 @@ class MyDetectorBase(DetectorBase):
             self.hdf1.read_path_template = "/dev/null"
         self.hdf1.write_path_template = path
 
+class MyPluginBase(ADBase):
+    enable, array_counter, blocking_callbacks = [
+        Component(EpicsSignalWithRBV, suffix, kind = "config")
+        for suffix in ["EnableCallbacks", "ArrayCounter", "BlockingCallbacks"]
+    ]
+    array_size = DynamicDeviceComponent(ad_group(EpicsSignalRO, (
+        ("depth", "ArraySize2_RBV"), ("height", "ArraySize1_RBV"),
+        ("width", "ArraySize0_RBV"),
+    )))
+
+class MyFileBase(Device):
+    capture, file_number = [
+        Component(EpicsSignalWithRBV, suffix)
+        for suffix in ["Capture", "FileNumber"]
+    ]
+    num_capture, auto_increment, auto_save, file_write_mode = [
+        Component(EpicsSignalWithRBV, suffix, kind = "config") for suffix in
+        ["NumCapture", "AutoIncrement", "AutoSave", "FileWriteMode"]
+    ]
+    file_template, file_name = [
+        Component(EpicsSignalWithRBV, suffix, string = True, kind = "config")
+        for suffix in ["FileTemplate", "FileName"]
+    ]
+    file_path_exists = Component(EpicsSignalRO,
+        "FilePathExists_RBV", kind = "config")
+    full_file_name = Component(EpicsSignalRO,
+        "FullFileName_RBV", string = True, kind = "config")
+    file_path = Component(EpicsPathSignal, "FilePath",
+        string = True, path_semantics = "posix", kind = "config")
+
+class MyHDF5Plugin(MyPluginBase, MyFileBase, GenerateDatumInterface):
+    swmr_mode = ADComponent(EpicsSignalWithRBV, "SWMRMode")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stage_sigs.update({"blocking_callbacks": 1, "enable": 1})
+
 class CptHDF5(MyHDF5Plugin, FileStoreHDF5, FileStoreIterativeWrite):
     def get_frames_per_point(self):
         parent = self.parent
@@ -156,18 +191,16 @@ class CptHDF5(MyHDF5Plugin, FileStoreHDF5, FileStoreIterativeWrite):
     def warmup(self):
         self.configure({"swmr_mode": 1}, action = True)
 
-class MyImagePlugin(ThrottleMonitor, PluginBase):
-    _plugin_type = "NDPluginStdArrays"
+class MyImagePlugin(ThrottleMonitor, MyPluginBase):
+    array_data = ADComponent(EpicsSignalRO, "ArrayData")
     array_size = DynamicDeviceComponent(ad_group(EpicsSignalRO, (
         ("depth", "ArraySize2_RBV"), ("height", "ArraySize1_RBV"),
         ("width", "ArraySize0_RBV"),
     ), auto_monitor = True))
-    array_data = ADComponent(EpicsSignalRO, "ArrayData")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.disable_on_stage()
-        self.ensure_nonblocking()
+        self.stage_sigs.update({"blocking_callbacks": 0, "enable": 0})
 
     def monitor(self, dnotify):
         if not hasattr(self, "_monitor_cb"):
@@ -192,39 +225,61 @@ class MyImagePlugin(ThrottleMonitor, PluginBase):
         self.array_data.clear_sub(self._monitor_cb)
         return self.array_data.subscribe(self._monitor_cb, run = False)
 
-class MyCam(CamBase):
-    max_size_x = ADComponent(EpicsSignalRO, "MaxSizeX_RBV")
-    max_size_y = ADComponent(EpicsSignalRO, "MaxSizeY_RBV")
-    _default_configuration_attrs = CamBase._default_configuration_attrs + (
-        "bin_x", "bin_y", "min_x", "min_y",
-        "size.size_x", "size.size_y", "max_size_x", "max_size_y",
+class MyCamBase(ADBase):
+    array_callbacks, array_counter = [
+        Component(EpicsSignalWithRBV, suffix)
+        for suffix in ["ArrayCallbacks", "ArrayCounter"]
+    ]
+    array_size = DynamicDeviceComponent(ad_group(EpicsSignalRO, (
+        ("array_size_z", "ArraySizeZ_RBV"), ("array_size_y", "ArraySizeY_RBV"),
+        ("array_size_x", "ArraySizeX_RBV"),
+    )))
+
+class MyCam(MyCamBase):
+    acquire, trigger_mode, image_mode, num_images, \
+        acquire_time, acquire_period, bin_x, bin_y, min_x, min_y = [
+        Component(EpicsSignalWithRBV, suffix) for suffix in [
+            "Acquire", "TriggerMode", "ImageMode", "NumImages",
+            "AcquireTime", "AcquirePeriod", "BinX", "BinY", "MinX", "MinY",
+        ]
+    ]
+    num_images_counter, max_size_x, max_size_y = [
+        Component(EpicsSignalRO, suffix) for suffix in
+        ["NumImagesCounter_RBV", "MaxSizeX_RBV", "MaxSizeY_RBV"]
+    ]
+    size = DynamicDeviceComponent(ad_group(EpicsSignalWithRBV,
+        (("size_x", "SizeX"), ("size_y", "SizeY"))))
+    _default_configuration_attrs = MyCamBase._default_configuration_attrs + (
+        "trigger_mode", "image_mode", "num_images", "acquire_time",
+        "acquire_period", "bin_x", "bin_y", "min_x", "min_y",
+        "max_size_x", "max_size_y", "size.size_x", "size.size_y",
     )
-    warmup_sleep = 1.0, 1.0
+    _warmup_sleep = 1.0, 1.0
 
     def warmup(self):
-        sigs = [(self.array_callbacks, 1), (self.acquire, 1)]
+        sigs = [(self.acquire, 1)]
         orig_vals = [(sig, sig.get()) for sig, val in sigs]
-
+        self.array_callbacks.put(1)
         for sig, val in sigs:
             sig.put(val)
             time.sleep(0.1)
-        for i in range(int(self.warmup_sleep[0] / 0.1)):
+        for i in range(int(self._warmup_sleep[0] / 0.1)):
             if self.acquire.get():
                 break
             time.sleep(0.1)
-        for i in range(int(self.warmup_sleep[1] / 0.1)):
+        for i in range(int(self._warmup_sleep[1] / 0.1)):
             if not self.acquire.get():
                 break
             time.sleep(0.1)
         for sig, val in reversed(orig_vals):
-            sig.set(val).wait()
+            sig.set(val, timeout = 10.0).wait()
 
 def make_detector(name, inherit = (SoftTrigger, MyDetectorBase), **kwargs):
     def warmup(obj):
-        obj.hdf1.enable.set(1).wait()
+        obj.hdf1.enable.set(1, timeout = 10.0).wait()
         obj.hdf1.warmup()
         obj.cam.warmup()
-        obj.hdf1.enable.set(0).wait()
+        obj.hdf1.enable.set(0, timeout = 10.0).wait()
         if not sum(obj.hdf1.array_size.get()):
             raise UnprimedPlugin("%s failed to warm up" % obj.hdf1.vname())
     def monitor(obj, dnotify):
@@ -243,12 +298,17 @@ def make_detector(name, inherit = (SoftTrigger, MyDetectorBase), **kwargs):
             attrs[k] = v
     return type(name, inherit, attrs)
 
-def make_qzdetector(name, nout = 1, inherit = (QSoftTrigger, Device)):
+class QDetectorBase(Device):
+    def cfg_trans(self, dev, cfg):
+        return {re.sub(r"^cam\.", "", k): v for k, v in cfg.items()}
+
+def make_qdetector(name, nout = 1, inherit = (QSoftTrigger, QDetectorBase)):
     attrs = {
         "acquire": Component(EpicsSignal, "acquire", kind = "omitted"),
         "num_images": Component(EpicsSignal, "num_images", kind = "config"),
         "num_images_counter":
             Component(EpicsSignal, "num_images_counter", kind = "omitted"),
+        "warmup": (lambda obj: None),
     }
     attrs.update({"output%d" % i: Component(
         EpicsSignal, "output%d" % i, string = True, kind = "config"
@@ -258,9 +318,23 @@ def make_qzdetector(name, nout = 1, inherit = (QSoftTrigger, Device)):
 MyAreaDetector = make_detector("MyAreaDetector")
 BaseAreaDetector = make_detector\
     ("BaseAreaDetector", image1 = None, monitor = None)
-QZDetector = make_qzdetector("QZDetector")
+QDetector = make_qdetector("QDetector")
+QDetector0 = make_qdetector("QDetector", 0)
+QDetector2 = make_qdetector("QDetector", 2)
 
 class DxpTrigger(MyTriggerBase):
+    def warmup(self):
+        self.cam.stop_all.put(1, use_complete = True)
+        time.sleep(0.5)
+        self.stage_sigs.update({"collect_mode": STAGE_KEEP,
+            "ignore_gate": STAGE_KEEP, "pixels_per_run": STAGE_KEEP})
+        cfg = {"collect_mode": 0, "ignore_gate": 1,
+            "pixels_per_run": 1, "preset_mode": 1, "preset_real": 0.1}
+        if hasattr(self.cam, "ndarray_mode"):
+            self.stage_sigs.update({"pixel_advance_mode": STAGE_KEEP})
+            cfg.update({"pixel_advance_mode": 0, "ndarray_mode": 1})
+        self.cam.configure(cfg)
+
     def wait_finish(self):
         self.cam.erase_start.put(1)
         time.sleep(self.cam.preset_real.get())
@@ -296,40 +370,37 @@ class DxpDetectorBase(MyDetectorBase):
 class CptHDF5Dxp(CptHDF5):
     get_frames_per_point = lambda self: 1
 
-class DxpCam(ADBase):
-    _default_configuration_attrs = ADBase._default_configuration_attrs + (
+class DxpCam(MyCamBase):
+    collect_mode, ignore_gate, input_logic_polarity, \
+        pixel_advance_mode, pixels_per_run, \
+        pixels_per_buffer, auto_pixels_per_buffer = [
+        Component(EpicsSignalWithRBV, suffix) for suffix in [
+            "CollectMode", "IgnoreGate", "InputLogicPolarity",
+            "PixelAdvanceMode", "PixelsPerRun",
+            "PixelsPerBuffer", "AutoPixelsPerBuffer",
+        ]
+    ]
+    preset_mode, preset_real, erase_start, stop_all, next_pixel = [
+        Component(EpicsSignal, suffix) for suffix in
+        ["PresetMode", "PresetReal", "EraseStart", "StopAll", "NextPixel"]
+    ]
+    acquiring = ADComponent(EpicsSignalRO, "Acquiring")
+    _default_configuration_attrs = MyCamBase._default_configuration_attrs + (
         "collect_mode", "ignore_gate", "input_logic_polarity",
         "pixel_advance_mode", "pixels_per_run", "pixels_per_buffer",
-        "auto_pixels_per_buffer", "preset_mode", "preset_real"
+        "auto_pixels_per_buffer", "preset_mode", "preset_real",
     )
 
-    port_name = ADComponent(EpicsSignalRO, "Asyn.PORT", string = True)
-    array_counter = ADComponent(EpicsSignalWithRBV, "ArrayCounter")
-    array_callbacks = ADComponent(EpicsSignalWithRBV, "ArrayCallbacks")
-    collect_mode = ADComponent(EpicsSignalWithRBV, "CollectMode")
-    ignore_gate = ADComponent(EpicsSignalWithRBV, "IgnoreGate")
-    input_logic_polarity = ADComponent(EpicsSignalWithRBV, "InputLogicPolarity")
-    pixel_advance_mode = ADComponent(EpicsSignalWithRBV, "PixelAdvanceMode")
-    pixels_per_run = ADComponent(EpicsSignalWithRBV, "PixelsPerRun")
-    pixels_per_buffer = ADComponent(EpicsSignalWithRBV, "PixelsPerBuffer")
-    auto_pixels_per_buffer = \
-        ADComponent(EpicsSignalWithRBV, "AutoPixelsPerBuffer")
-    preset_mode = ADComponent(EpicsSignal, "PresetMode")
-    preset_real = ADComponent(EpicsSignal, "PresetReal")
-    erase_start = ADComponent(EpicsSignal, "EraseStart")
-    stop_all = ADComponent(EpicsSignal, "StopAll")
-    next_pixel = ADComponent(EpicsSignal, "NextPixel")
-    acquiring = ADComponent(EpicsSignal, "Acquiring")
-
     def warmup(self):
+        self.array_callbacks.put(1)
         self.erase_start.put(1)
         time.sleep(min(2.0, self.preset_real.get()))
         self.stop_all.put(1)
 
 class SitoroCam(DxpCam):
+    ndarray_mode = ADComponent(EpicsSignalWithRBV, "NDArrayMode")
     _default_configuration_attrs = \
         DxpCam._default_configuration_attrs + ("ndarray_mode",)
-    ndarray_mode = ADComponent(EpicsSignalWithRBV, "NDArrayMode")
 
 def make_dxp(name, cam, nchan = 0):
     ids = [i + 1 for i in range(nchan)]
@@ -341,18 +412,21 @@ def make_dxp(name, cam, nchan = 0):
         ("ch%d_live" % i,
             ADComponent(EpicsSignalRO, "dxp%d:ElapsedLiveTime" % i)),
     ] for i in ids], []))
+    def warmup(obj):
+        DxpTrigger.warmup(obj)
+        BaseAreaDetector.warmup(obj)
     return make_detector(
         name, (DxpTrigger, DxpDetectorBase), cam = Component(cam, ""),
         hdf1 = Component(CptHDF5Dxp, "HDF1:", write_path_template = "/"),
-        image1 = None, monitor = None, **attrs
+        image1 = None, monitor = None, warmup = warmup, **attrs
     )
 
-DxpDetector = lambda *args, nchan = 0, **kwargs: \
-    make_dxp("DxpDetector", DxpCam, nchan = nchan)(*args, **kwargs)
-SitoroDetector = lambda *args, nchan = 0, **kwargs: \
-    make_dxp("SitoroDetector", SitoroCam, nchan = nchan)(*args, **kwargs)
+NDDxp = lambda *args, nchan = 0, **kwargs: \
+    make_dxp("NDDxp", DxpCam, nchan = nchan)(*args, **kwargs)
+NDSitoro = lambda *args, nchan = 0, **kwargs: \
+    make_dxp("NDSitoro", SitoroCam, nchan = nchan)(*args, **kwargs)
 
-class Xsp3Trigger(SoftTrigger):
+class Xspress3Trigger(SoftTrigger):
     def use_trig(self, val):
         if val:
             self._acquisition_signal = self.cam.soft_trigger
@@ -365,6 +439,19 @@ class Xsp3Trigger(SoftTrigger):
             self.stage_sigs.update({"cam.trigger_mode": 1,
                 "cam.num_images": 1, "cam.acquire": 0})
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.use_trig(False)
+        self.stage_sigs.move_to_end("cam.acquire")
+
+    def warmup(self):
+        self.cam.acquire.set(0, timeout = 10.0).wait()
+        self.cam.configure\
+            ({"trigger_mode": 1, "num_images": 1, "acquire_time": 0.1})
+
+    def config_fly(self, atime = None, period = None):
+        return {"cam.trigger_mode": 3}
+
     def _maybe_erase(self):
         if not self.cam.erase_on_start.get():
             self.cam.erase.put(1, use_complete = True)
@@ -374,7 +461,7 @@ class Xsp3Trigger(SoftTrigger):
         if self._counter_signal:
             assert self.cam.num_images.get() > 0
             if self._orig_acquire:
-                self._acquire.set(0).wait()
+                self._acquire.set(0, timeout = 10.0).wait()
             self._acquisition_signal.put(0)
             self._maybe_erase()
         (self._counter_signal or self._acquisition_signal)\
@@ -385,9 +472,9 @@ class Xsp3Trigger(SoftTrigger):
         if not self._counter_signal:
             self._maybe_erase()
         elif self.cam.array_counter.get() >= self.cam.num_images.get():
-            self._acquire.set(0).wait()
+            self._acquire.set(0, timeout = 10.0).wait()
             self._maybe_erase()
-            self._acquire.set(1).wait()
+            self._acquire.set(1, timeout = 10.0).wait()
         return super().trigger()
 
     def _acquire_changed(self, *, value, old_value, **kwargs):
@@ -400,25 +487,505 @@ class Xsp3Trigger(SoftTrigger):
                 self._acquisition_signal.put(0)
             status.set_finished()
 
-class Xsp3Cam(MyCam):
-    erase = ADComponent(EpicsSignal, "ERASE", kind = "omitted")
-    soft_trigger = ADComponent(EpicsSignal, "SoftTrigger", kind = "omitted")
-    num_images = ADComponent(EpicsSignalWithRBV, "NumImages")
-    array_counter = ADComponent(EpicsSignalWithRBV, "ArrayCounter")
+class Xspress3Cam(MyCam):
+    erase = ADComponent(EpicsSignal, "ERASE")
+    soft_trigger = ADComponent(EpicsSignal, "SoftTrigger")
     erase_on_start = ADComponent(EpicsSignal, "EraseOnStart")
-    warmup_sleep = 2.0, 1.0
+    _warmup_sleep = 2.0, 1.0
 
-def make_xsp3(name, nchan = 0):
+def make_xspress3(name, nchan = 0):
     ids = [i + 1 for i in range(nchan)]
     attrs = {"_default_read_attrs": ["ch%d_dtperc" % i for i in ids] + ["hdf1"]}
     attrs.update([("ch%d_dtperc" % i,
         ADComponent(EpicsSignalRO, "ch%d:DeadTime_RBV" % i)) for i in ids])
+    def warmup(obj):
+        Xspress3Trigger.warmup(obj)
+        BaseAreaDetector.warmup(obj)
     return make_detector(
-        name, (Xsp3Trigger, MyDetectorBase),
-        cam = Component(Xsp3Cam, "cam1:"),
-        image1 = None, monitor = None, **attrs
+        name, (Xspress3Trigger, MyDetectorBase),
+        cam = Component(Xspress3Cam, "cam1:"),
+        image1 = None, monitor = None, warmup = warmup, **attrs
     )
 
-Xsp3Detector = lambda *args, nchan = 0, **kwargs: \
-    make_xsp3("Xsp3Detector", nchan = nchan)(*args, **kwargs)
+ADXspress3 = lambda *args, nchan = 0, **kwargs: \
+    make_xspress3("ADXspress3", nchan = nchan)(*args, **kwargs)
+
+class CoreTrigger(SoftTrigger):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stage_sigs.update({"cam.trigger_mode": STAGE_KEEP,
+            "cam.image_mode": STAGE_KEEP, "cam.num_images": STAGE_KEEP})
+        self.stage_sigs.move_to_end("cam.acquire")
+
+    def warmup(self):
+        self.cam.acquire.set(0, timeout = 10.0).wait()
+        self.cam.configure({"trigger_mode": 0, "image_mode": 1,
+            "num_images": 1, "acquire_time": 0.1})
+        super().warmup()
+
+class MythenCam(MyCam):
+    threshold_energy = ADComponent(EpicsSignalWithRBV,
+        "ThresholdEnergy", rtolerance = 1e-6)
+    _default_configuration_attrs = MyCam._default_configuration_attrs + \
+        ("threshold_energy",)
+
+class ADMythen(CoreTrigger, BaseAreaDetector):
+    cam = Component(MythenCam, "cam1:")
+
+class ADPandABlocks(BaseAreaDetector):
+    def warmup(self):
+        self.cam.acquire.set(0, timeout = 10.0).wait()
+        self.cam.configure({"image_mode": 1, "num_images": 1})
+        super().warmup()
+        self.cam.configure({"image_mode": 2})
+
+class QDPanda(QDetector2):
+    def warmup(self):
+        self.acquire.set(0, timeout = 10.0).wait()
+        self.configure({"num_images": 0})
+
+class CoreMonitor(SoftTrigger):
+    def prep_monitor(self, lnotify = None):
+        self.stage_sigs.update\
+            ({"cam.image_mode": 1, "cam.acquire_period": 0.101})
+        self.stage_sigs.move_to_end("cam.acquire")
+        self.configure({
+            "image1.monitor_period": 0.100, "image1.enable": 1,
+            "cam.image_mode": 2, "cam.acquire_period": 0.101,
+        }, action = True)
+        if lnotify:
+            self.monitor(lnotify)
+
+class AtimeMonitor(SoftTrigger):
+    def prep_monitor(self, lnotify = None):
+        self.stage_sigs.update\
+            ({"cam.image_mode": 1, "cam.acquire_time": 0.101})
+        self.stage_sigs.move_to_end("cam.acquire")
+        self.configure({
+            "image1.monitor_period": 0.100, "image1.enable": 1,
+            "cam.image_mode": 2, "cam.acquire_time": 0.101,
+        }, action = True)
+        if lnotify:
+            self.monitor(lnotify)
+
+class ADCore(CoreMonitor, CoreTrigger, MyAreaDetector): pass
+class ADAtime(AtimeMonitor, CoreTrigger, MyAreaDetector): pass
+
+class ADAndor3(CoreTrigger, MyAreaDetector):
+    def warmup(self):
+        self.cam.acquire.set(0, timeout = 10.0).wait()
+        self.cam.configure({"trigger_mode": "Internal",
+            "image_mode": "Fixed", "num_images": 1, "acquire_time": 0.1})
+        MyAreaDetector.warmup(self)
+
+    def prep_monitor(self, lnotify = None):
+        self.stage_sigs.update\
+            ({"cam.image_mode": "Fixed", "cam.acquire_period": 0.101})
+        self.stage_sigs.move_to_end("cam.acquire")
+        self.configure({
+            "image1.monitor_period": 0.100, "image1.enable": 1,
+            "cam.image_mode": "Continuous", "cam.acquire_period": 0.101,
+        }, action = True)
+        if lnotify:
+            self.monitor(lnotify)
+
+    def config_fly(self, atime = None, period = None):
+        return {"cam.trigger_mode": "External Exposure"}
+
+class HamamatsuCam(MyCam):
+    trigger_source = ADComponent(EpicsSignalWithRBV, "TriggerSource")
+    trigger_active = ADComponent(EpicsSignalWithRBV, "TriggerActive")
+    software_trigger = ADComponent(EpicsSignal, "DCAMSoftwareTrigger")
+    _default_configuration_attrs = MyCam._default_configuration_attrs + \
+        ("trigger_source", "trigger_active")
+    _warmup_sleep = 2.0, 1.0
+
+class ADHamamatsu(AtimeMonitor, MyAreaDetector):
+    cam = Component(HamamatsuCam, "cam1:")
+
+    def use_trig(self, val):
+        if val:
+            self._acquisition_signal = self.cam.software_trigger
+            self._counter_signal = self.hdf1.array_counter
+            self.stage_sigs.update({"cam.trigger_source": 2,
+                "cam.image_mode": 2, "cam.acquire": 1})
+        else:
+            self._acquisition_signal = self.cam.acquire
+            self._counter_signal = None
+            self.stage_sigs.update({"cam.trigger_source": 0,
+                "cam.image_mode": 1, "cam.acquire": 0})
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.use_trig(False)
+        self.stage_sigs.update({"cam.num_images": STAGE_KEEP})
+        self.stage_sigs.move_to_end("cam.acquire")
+
+    def warmup(self):
+        self.cam.acquire.set(0, timeout = 10.0).wait()
+        self.cam.configure({
+            "trigger_mode": 0, "trigger_source": 0, "trigger_active": 1,
+            "image_mode": 1, "num_images": 1, "acquire_time": 0.1,
+        })
+        super().warmup()
+
+    def config_fly(self, atime = None, period = None):
+        return {"cam.trigger_source": 1}
+
+class ADIRay(CoreMonitor, MyAreaDetector):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cam._warmup_sleep = 5.0, 5.0
+        self.stage_sigs.update({
+            "cam.trigger_mode": STAGE_KEEP, "cam.image_mode": STAGE_KEEP,
+            "cam.num_images": STAGE_KEEP, "cam.acquire_period": STAGE_KEEP,
+        })
+        self.stage_sigs.move_to_end("cam.acquire")
+
+    def warmup(self):
+        self.cam.acquire.set(0, timeout = 10.0).wait()
+        self.cam.configure({"trigger_mode": 2, "image_mode": 1,
+            "num_images": 1, "acquire_period": 0.1})
+        super().warmup()
+
+    def config_fly(self, atime, period):
+        return {"cam.trigger_mode": 1, "cam.acquire_period": atime}
+
+class LambdaCam(MyCam):
+    gating_mode, dual_mode, operating_mode = [
+        ADComponent(EpicsSignalWithRBV, suffix)
+        for suffix in ["GatingMode", "DualMode", "OperatingMode"]
+    ]
+    energy_threshold, dual_threshold = [
+        ADComponent(EpicsSignalWithRBV, suffix, rtolerance = 1e-6)
+        for suffix in ["EnergyThreshold", "DualThreshold"]
+    ]
+    _default_configuration_attrs = MyCam._default_configuration_attrs + (
+        "gating_mode", "dual_mode", "operating_mode",
+        "energy_threshold", "dual_threshold",
+    )
+
+class ADLambda(MyAreaDetector):
+    cam = Component(LambdaCam, "cam1:")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stage_sigs.update\
+            ({"cam.gating_mode": STAGE_KEEP, "cam.num_images": STAGE_KEEP})
+        self.stage_sigs.move_to_end("cam.acquire")
+
+    def warmup(self):
+        self.cam.acquire.set(0, timeout = 10.0).wait()
+        self.cam.configure({"trigger_mode": 0, "gating_mode": 0,
+            "num_images": 1, "acquire_time": 0.1})
+        super().warmup()
+
+    def config_fly(self, atime = None, period = None):
+        return {"cam.gating_mode": 1}
+
+class MinipixCam(MyCam):
+    operation_mode = ADComponent(EpicsSignalWithRBV, "OperationMode")
+    threshold_energy = ADComponent(EpicsSignalWithRBV,
+        "ThresholdEnergy", rtolerance = 1e-6)
+    _default_configuration_attrs = MyCam._default_configuration_attrs + \
+        ("operation_mode", "threshold_energy", "bias")
+
+class ADMinipix(CoreTrigger, MyAreaDetector):
+    cam = Component(MinipixCam, "cam1:")
+
+class ADPICam(MyAreaDetector):
+    def warmup(self):
+        self.cam.acquire.set(0, timeout = 10.0).wait()
+        self.cam.configure({"trigger_mode": 0, "image_mode": 1,
+            "num_images": 1, "acquire_time": 0.1e3})
+        super().warmup()
+
+class TucsenCam(MyCam):
+    trig_soft = ADComponent(EpicsSignalWithRBV, "TUTrigSoftSignal")
+    trig_exp_type = ADComponent(EpicsSignalWithRBV, "TrigExpType")
+    bin_mode = ADComponent(EpicsSignalWithRBV, "BinMode")
+    frame_rate = ADComponent(EpicsSignalWithRBV,
+        "AcquisitionFrameRate", tolerance = 1.0)
+    _default_configuration_attrs = MyCam._default_configuration_attrs + \
+        ("trig_exp_type", "bin_mode", "frame_rate")
+
+class ADTucsen(AtimeMonitor, MyAreaDetector):
+    cam = Component(TucsenCam, "cam1:")
+
+    def use_trig(self, val):
+        if val:
+            self._acquisition_signal = self.cam.trig_soft
+            self._counter_signal = self.hdf1.array_counter
+            self.stage_sigs.update\
+                ({"cam.trigger_mode": 2, "cam.image_mode": 2, "cam.acquire": 1})
+        else:
+            self._acquisition_signal = self.cam.acquire
+            self._counter_signal = None
+            self.stage_sigs.update\
+                ({"cam.trigger_mode": 0, "cam.image_mode": 1, "cam.acquire": 0})
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.use_trig(False)
+        self.stage_sigs.update({"cam.num_images": STAGE_KEEP})
+        self.stage_sigs.move_to_end("cam.acquire")
+
+    def warmup(self):
+        self.cam.acquire.set(0, timeout = 10.0).wait()
+        self.cam.trigger_mode.set(1, timeout = 10.0).wait()
+        self.cam.trig_exp_type.set(1, timeout = 10.0).wait()
+        self.cam.trigger_mode.set(0, timeout = 10.0).wait()
+        self.cam.configure({"image_mode": 1,
+            "num_images": 1, "acquire_time": 0.1})
+        super().warmup()
+
+    def config_fly(self, atime = None, period = None):
+        return {"cam.trigger_mode": 1}
+
+class XimeaCam(MyCam):
+    acquire_time = ADComponent(EpicsSignalWithRBV,
+        "AcquireTime", rtolerance = 1e-3)
+    acquire_period = ADComponent(EpicsSignalWithRBV,
+        "AcquirePeriod", rtolerance = 1e-3)
+    acq_timing_mode = ADComponent(EpicsSignalWithRBV, "GC_AcqTimingMode")
+    trg_source = ADComponent(EpicsSignalWithRBV, "GC_TrgSource")
+    trg_selector = ADComponent(EpicsSignalWithRBV, "GC_TrgSelector")
+    _default_configuration_attrs = MyCam._default_configuration_attrs + \
+        ("acq_timing_mode", "trg_source", "trg_selector")
+
+class ADXimea(MyAreaDetector):
+    cam = Component(XimeaCam, "cam1:")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stage_sigs.update({
+            "cam.acq_timing_mode": STAGE_KEEP, "cam.trg_source": STAGE_KEEP,
+            "cam.image_mode": STAGE_KEEP, "cam.num_images": STAGE_KEEP,
+            "cam.acquire_time": STAGE_KEEP, "cam.acquire_period": STAGE_KEEP,
+        })
+        self.stage_sigs.move_to_end("cam.acquire")
+
+    def warmup(self):
+        self.cam.acquire.set(0, timeout = 10.0).wait()
+        self.cam.configure({
+            "acq_timing_mode": 1, "trg_source": 0,
+            "trg_selector": 0, "image_mode": 1, "num_images": 1,
+            "acquire_time": 0.1, "acquire_period": 0.2,
+        })
+        super().warmup()
+
+    def prep_monitor(self, lnotify = None):
+        self.stage_sigs.update({"cam.image_mode": 1,
+            "cam.acquire_time": 0.1, "cam.acquire_period": 0.201})
+        self.configure({
+            "image1.monitor_period": 0.200, "image1.enable": 1,
+            "cam.image_mode": 2, "cam.acquire_period": 0.201,
+        }, action = True)
+        if lnotify:
+            self.monitor(lnotify)
+
+    def config_fly(self, atime = None, period = None):
+        return {"cam.acq_timing_mode": 0,
+            "cam.trg_source": 1, "cam.acquire_time": atime}
+
+    def unstage(self):
+        for sig in ["trg_source", "acq_timing_mode", "acquire"]:
+            if sig in self._original_vals:
+                self._original_vals.move_to_end(getattr(self.cam, sig))
+        super().unstage()
+
+class QDEiger1(QDetector2):
+    edet_trigger, = [
+        Component(EpicsSignal, suffix, kind = "omitted")
+        for suffix in ["edet_trigger"]
+    ]
+    manual_trigger, edet_ntrigger = [
+        Component(EpicsSignal, suffix, kind = "config")
+        for suffix in ["manual_trigger", "edet_ntrigger"]
+    ]
+    zaddr, trigger_mode = [
+        Component(EpicsSignal, suffix, kind = "config", string = True)
+        for suffix in ["zaddr", "trigger_mode"]
+    ]
+    acquire_time, acquire_period, photon_energy, threshold_energy = [
+        Component(EpicsSignal, suffix, kind = "config", rtolerance = 1e-6)
+        for suffix in
+        ["acquire_time", "acquire_period", "photon_energy", "threshold_energy"]
+    ]
+
+    def cfg_trans(self, dev, cfg):
+        cfg, _cfg = {}, cfg
+        for k, v in _cfg.items():
+            if k in ["cam.num_images", "cam.num_triggers"]:
+                k = "edet_ntrigger"
+            cfg[k] = v
+        return super().cfg_trans(dev, cfg)
+
+    def use_trig(self, val):
+        if val:
+            self._acquisition_signal = self.edet_trigger
+            self._counter_signal = self.num_images_counter
+            self.stage_sigs.update\
+                ({"manual_trigger": 1, "edet_ntrigger": 10000000, "acquire": 1})
+        else:
+            self._acquisition_signal = self.acquire
+            self._counter_signal = None
+            self.stage_sigs.update\
+                ({"manual_trigger": 0, "edet_ntrigger": 1, "acquire": 0})
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.use_trig(False)
+        self.stage_sigs.update({
+            "trigger_mode": STAGE_KEEP, "edet_ntrigger": STAGE_KEEP,
+            "acquire_time": STAGE_KEEP, "acquire_period": STAGE_KEEP,
+        })
+        self.stage_sigs.move_to_end("acquire")
+
+    def warmup(self):
+        self.acquire.set(0, timeout = 10.0).wait()
+        self.configure({
+            "manual_trigger": 0, "num_images": 1, "edet_ntrigger": 1,
+            "trigger_mode": "ints", "acquire_time": 0.1, "acquire_period": 0.1,
+        })
+
+    def config_fly(self, atime, period):
+        return {"trigger_mode": "exte",
+            "acquire_time": atime, "acquire_period": period}
+
+class QDEiger2(QDEiger1):
+    threshold_1_mode, threshold_2_mode, threshold_diff_mode = [
+        Component(EpicsSignal, suffix, kind = "config", string = True)
+        for suffix in
+        ["threshold_1_mode", "threshold_2_mode", "threshold_diff_mode"]
+    ]
+    threshold_2_energy, = [
+        Component(EpicsSignal, suffix, kind = "config", rtolerance = 1e-6)
+        for suffix in ["threshold_2_energy"]
+    ]
+
+    def warmup(self):
+        super().warmup()
+        self.configure({
+            "threshold_1_mode": "enabled", "threshold_2_mode": "enabled",
+            "threshold_diff_mode": "enabled",
+        })
+
+class QDPeak(QDetector):
+    acquire_time, dwell_time, pass_energy, \
+        x_step, x_min, x_max, x_center, x_width, x_delta, \
+        y_step, y_min, y_max, y_center, y_width, y_delta, \
+        z_step, z_min, z_max, z_center, z_width, z_delta = [
+        Component(EpicsSignal, suffix, rtolerance = 1e-6,
+            kind = "config", put_complete = True) for suffix in [
+            "acquire_time", "dwell_time", "pass_energy",
+            "x_step", "x_min", "x_max", "x_center", "x_width", "x_delta",
+            "y_step", "y_min", "y_max", "y_center", "y_width", "y_delta",
+            "z_step", "z_min", "z_max", "z_center", "z_width", "z_delta",
+        ]
+    ]
+    trigger_enable, x_num, y_num, z_num = [
+        Component(EpicsSignal, suffix, kind = "config", put_complete = True)
+        for suffix in ["trigger_enable", "x_num", "y_num", "z_num"]
+    ]
+    lens_mode, x_mode, y_mode, z_mode = [
+        Component(EpicsSignal, suffix, string = True,
+            kind = "config", put_complete = True) for suffix in
+        ["lens_mode", "x_mode", "y_mode", "z_mode"]
+    ]
+    reset, software_trigger = [
+        Component(EpicsSignal, suffix, kind = "omitted", put_complete = True)
+        for suffix in ["reset", "software_trigger"]
+    ]
+
+    def use_trig(self, val = None):
+        if val is not None:
+            self._use_trig = val
+        val = self._use_trig and all(a.get().title() == "Fixed"
+            for a in [self.x_mode, self.y_mode, self.z_mode])
+        if val:
+            self._acquisition_signal = self.software_trigger
+            self._counter_signal = self.num_images_counter
+            self.stage_sigs.update\
+                ({"trigger_enable": 1, "num_images": 0, "acquire": 1})
+        else:
+            self._acquisition_signal = self.acquire
+            self._counter_signal = None
+            self.stage_sigs.update\
+                ({"trigger_enable": 0, "num_images": 1, "acquire": 0})
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.use_trig(False)
+        self.stage_sigs.move_to_end("acquire")
+
+    def warmup(self):
+        self.acquire.set(0, timeout = 10.0).wait()
+        self.configure({"trigger_enable": 0, "num_images": 1})
+
+class QDUhss(QDetector):
+    _auto_delete, _config_timeouts = 40, {"acquire": 30.0}
+    acquire = Component(AttributeSignal,
+        attr = "_acquire_attr", kind = "omitted")
+    _acquire_raw = Component(EpicsSignal, "acquire", kind = "omitted")
+    _acquire_rbv = Component(EpicsSignalRO, "acquire", kind = "omitted")
+    detector_state = Component(EpicsSignalRO, "detector_state", string = True)
+    num_datasets = Component(EpicsSignalRO, "NumDatasets")
+    delete_datasets = Component(EpicsSignal,
+        "DeleteDatasets", put_complete = True, kind = "omitted")
+    acquisition_mode, output_mode, imaging_mode, \
+        calib_label, side_channel, file_path = [
+        Component(EpicsSignal, suffix, string = True, kind = "config")
+        for suffix in [
+            "AcquisitionMode", "OutputMode", "ImagingMode",
+            "CalibLabel", "SideChannel", "FilePath",
+        ]
+    ]
+    acquire_time, exposure_interval, lower_energy, upper_energy = [
+        Component(EpicsSignal, suffix, kind = "config") for suffix in
+        ["acquire_time", "ExposureInterval", "LowerEnergy", "UpperEnergy"]
+    ]
+
+    @property
+    def _acquire_attr(self):
+        return self._acquire_raw.get()
+
+    @_acquire_attr.setter
+    def _acquire_attr(self, x):
+        if x and not self._acquire_raw.get():
+            if self.num_datasets.get() >= self._auto_delete > 0:
+                self.delete_datasets.set(1, timeout = 10.0).wait()
+            if self.side_channel.get() != "DISABLE":
+                try:
+                    uid, idx = self.file_path.get().split("_")
+                    self.file_path.set("%s_%06d" % (uid, int(idx) + 1),
+                        timeout = 10.0).wait()
+                except ValueError:
+                    pass
+        self._acquire_raw.put(x)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.stage_sigs.update({
+            "acquisition_mode": STAGE_KEEP, "side_channel": STAGE_KEEP,
+            "num_images": STAGE_KEEP, "acquire_time": STAGE_KEEP,
+            "exposure_interval": STAGE_KEEP,
+        })
+        self.stage_sigs.move_to_end("acquire")
+
+    def warmup(self):
+        self.acquire.set(0, timeout = 10.0).wait()
+        self.configure({
+            "imaging_mode": "B8_1S", "output_mode": "UNSIGNED_8BIT",
+            "acquisition_mode": "FIXED_TIME", "side_channel": "DISABLE",
+            "num_images": 1, "acquire_time": 0.1, "exposure_interval": 0.1,
+        })
+
+    def stage(self):
+        self.file_path.set(
+            "" if self.side_channel.get() == "DISABLE" else "%s_%06d" %
+                ("-".join(str(uuid.uuid4()).split("-")[:-1]), -1),
+            timeout = 10.0
+        ).wait()
+        super().stage()
 
